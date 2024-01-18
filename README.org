@@ -12,7 +12,7 @@ Codex has notably been used for automated verification of security properties of
 
 * Seeing it in action
 
-The repository example contains the results of a simple program (computing the absolute value of an integer) in both C and machine code analysis.  The results of the analysis can be presented as a standalone html file, that you can find for the C analysis [[./examples/abs.c.html][here]]. The binary analysis example ([[./examples/abs.exe.html][here]]) analyses the machine code version of same file, but is also given a type specification (which can be found [[./example/abs.types][here]]) that restricts the possible values at the start of the program to be in some interval.
+The repository example contains the results of a simple program (computing the absolute value of an integer) in both C and machine code analysis.  The results of the analysis can be presented as a standalone html file, that you can find for the C analysis [[./examples/abs.c.html][here]]. The binary analysis example ([[./examples/abs.exe.html][here]]) analyses the machine code version of same file, but is also given a type specification (which can be found [[./examples/abs.types][here]]) that restricts the possible values at the start of the program to be in some interval.
 
 Codex is capable of handling much more than these simple examples! We will soon provide tutorials to help you perform your own analyses, but you can already try Codex by replacing these examples by your own code.
 
