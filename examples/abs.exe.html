@@ -1,0 +1,438 @@
+
+  <!DOCTYPE html>
+  <html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script src="https://unpkg.com/htmx.org@1.7.0/dist/htmx.min.js"></script>
+    <script src="https://unpkg.com/hyperscript.org@0.9.5/dist/_hyperscript_web.min.js"></script>
+    <script src="https://d3js.org/d3.v5.min.js"></script>
+    <script src="https://unpkg.com/@hpcc-js/wasm@0.3.11/dist/index.min.js"></script>
+    <script src="https://unpkg.com/d3-graphviz@3.0.5/build/d3-graphviz.js"></script>
+    <script>
+      results = {};
+  results["0x08049164"] = [];
+results["0x08049164"].push(`ecx -> [-2000..999]
+`);
+results["0x0804916b"] = [];
+results["0x0804916b"].push(`eax -> [0..2000]
+`);
+results["0x08049168"] = [];
+results["0x08049168"].push(`res32 -> [-999..2000]
+`);
+results["0x08049168"].push(`OF -> {0}
+`);
+results["0x08049168"].push(`SF -> [--..--]
+`);
+results["0x08049168"].push(`ZF -> [--..--]
+`);
+results["0x08049168"].push(`CF -> [--..--]
+`);
+results["0x08049168"].push(`eax -> [-999..2000]
+`);
+results["0x08049166"] = [];
+results["0x08049166"].push(`eax -> [-2000..999]
+`);
+
+      var dotSrc = `
+  digraph G {
+node[fillcolor=white style="filled,solid" shape=none margin=0];
+"0x08049160" -> "0x08049164";
+subgraph "cluster_abs" {
+  style="filled,solid";
+  color=black;
+  fillcolor=lightgrey;
+  label="abs";"0x08049164" [label=<<TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0"><TR><TD>0x08049164</TD></TR><HR/><TR><TD>0x0804916b</TD></TR></TABLE>> fillcolor=lightblue];
+  "0x08049160" [label=<<TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0"><TR><TD>0x08049160</TD></TR><HR/><TR><TD>0x08049160</TD></TR></TABLE>>];
+  }
+
+}
+      `;
+      
+      var ranges = [];
+      var repeat;
+
+          
+      function linkGraph() {
+        var graphviz = d3.select("#graph").graphviz();
+        graphviz.renderDot(dotSrc).on("end", function () {
+          var nodes = document.getElementsByClassName("node");
+          for (let i = 0; i < nodes.length; i++) {
+            repeat = undefined;
+            ranges.forEach(range => {
+              if (range[0] == nodes[i].children[2].innerHTML && range[1] == nodes[i].children[3].innerHTML) {
+                nodes[i].children[1].classList.add(range[2]);
+                repeat = range[2];
+              }
+            });
+
+            if (repeat == undefined) {
+              ranges.push([nodes[i].children[2].innerHTML, nodes[i].children[3].innerHTML, nodes[i].id]);
+              repeat = nodes[i].id;
+            }
+
+            nodes[i].setAttribute("group", repeat);
+
+            nodes[i].addEventListener('mouseover', () => {
+              if (selected == undefined || getNodeClass(selected) != nodes[i].getAttribute("group")) {
+                highlightGroup(nodes[i].getAttribute("group"), '#FED6BA');
+              }
+            });
+            nodes[i].addEventListener('mouseout', () => {
+              if (getNodeClass(selected) != nodes[i].getAttribute("group")) {
+                highlightGroup(nodes[i].getAttribute("group"), 'white');
+              }
+            });
+            nodes[i].addEventListener('click', () => {
+              if(document.getElementsByClassName(nodes[i].getAttribute("group")).length != 0) {
+                document.getElementsByClassName(nodes[i].getAttribute("group"))[0].scrollIntoView({ behavior: 'smooth', block: 'center' })
+              }
+            });
+
+          }
+          addTagsToLines();
+        });
+      }
+
+      function addTagsToLines() {
+        const lines = document.querySelectorAll('.line');
+        lines.forEach(line => {
+          range = searchRange(line.children[0].innerHTML);
+          if (range != undefined) {
+            line.classList.add(range);
+            line.style.color = "#FFF8EB";
+          }
+        });
+      }
+
+      function searchRange(element) {
+        var res = undefined;
+        element = element.trim();
+        ranges.forEach(function (range, i) {
+            if (element >= range[0] && element <= range[1]) {
+                res = range[2];
+            }
+        })
+        return res;
+      };
+
+      function paintNode(node, color) {
+        if (node != undefined) {
+          document.getElementById(node).children[1].style.fill = color;
+        }
+      }
+
+      function highlightGroup(name, color) {
+        var elements = document.getElementsByClassName(name);
+        Array.from(elements).forEach(element => {
+          if (element.tagName == "polygon") {
+            element.style.fill = color;
+          } else {
+            element.style.color = color;
+          }
+        });
+        paintNode(name, color);
+      }
+
+      function getNodeClass(node) {
+      if (node != undefined) {
+        return node.classList[2]
+      }
+    }
+
+    function loadDhunk(instructions) {
+      let res = "";
+      JSON.parse(instructions).forEach((instr, i) => {
+        res += i + ": " + dhunk[instr] + "\n";
+      })
+      return res;
+    }
+
+    let selected = undefined;
+    function loadExplanations() {
+      const lines = document.querySelectorAll('.line');
+      const explanationBox = document.querySelector('.middle-column .explanation');
+      const resultsBox = document.querySelector('.middle-column .results');
+
+      let maintain = false;
+      
+      lines.forEach(line => {
+
+        line.addEventListener('mouseover', () => {
+          if (getNodeClass(line) != getNodeClass(selected)) {
+            highlightGroup(getNodeClass(line), '#FED6BA');
+          }
+          if (!maintain){
+            explanationBox.textContent = loadDhunk(line.getAttribute('data-explanation'));
+            explanationBox.style.display = 'block';
+            var res = results[line.children[0].innerHTML.trim()];
+            if (res != undefined){
+              resultsBox.textContent = results[line.children[0].innerHTML.trim()].join("");
+              resultsBox.style.display = 'block';
+            }
+          }
+        });
+
+        line.addEventListener('mouseout', () => {
+          if (!maintain){
+            explanationBox.style.display = 'none';
+            resultsBox.style.display = 'none';
+          }
+          if (getNodeClass(line) != getNodeClass(selected)) {
+            highlightGroup(getNodeClass(line), 'white');
+          }
+        });
+
+        line.addEventListener('click', () => {
+          if (!maintain) {
+            highlightGroup(getNodeClass(line), '#FFAC70');
+            selected = line;
+            line.style.color = '#bf7947';
+            explanationBox.textContent = loadDhunk(line.getAttribute('data-explanation'));
+            explanationBox.style.display = 'block';
+            var res = results[line.children[0].innerHTML.trim()];
+            if (res != undefined){
+              resultsBox.textContent = results[line.children[0].innerHTML.trim()].join("");
+              resultsBox.style.display = 'block';
+            }
+            maintain = true;
+          } else {
+            if (selected == line) {
+              if (getNodeClass(line) != undefined) {
+                highlightGroup(getNodeClass(line), '#FED6BA');
+              } else {
+                line.style.removeProperty('color');
+              }
+              maintain = false;
+              selected = undefined;
+            } else {
+              if (getNodeClass(selected) != getNodeClass(line)) {
+                if (getNodeClass(selected) == undefined) {
+                  selected.style.removeProperty('color');
+                  highlightGroup(getNodeClass(line), '#FFAC70');
+                } else {
+                  highlightGroup(getNodeClass(selected), 'white');
+                  highlightGroup(getNodeClass(line), '#FFAC70');
+                  selected.style.color = 'white';
+                }
+              } else {
+                if (getNodeClass(selected) == undefined) {
+                  selected.style.removeProperty('color');
+                } else {
+                  selected.style.color = '#FFAC70'
+                }
+              }
+              selected = line;
+              line.style.color = '#bf7947';
+              explanationBox.textContent = loadDhunk(line.getAttribute('data-explanation'));
+              explanationBox.style.display = 'block';
+              var res = results[line.children[0].innerHTML.trim()];
+              if (res != undefined){
+                resultsBox.textContent = results[line.children[0].innerHTML.trim()].join("");
+                resultsBox.style.display = 'block';
+              } else {
+                resultsBox.textContent = "";
+                resultsBox.style.display = 'none';
+              }
+            }
+          }
+        });
+
+      });
+
+    }
+    const dhunk = {
+  "13" : "esp<32> := (esp<32> + 4<32>);",
+"41" : "CF<1> := (((extu edi<32> 33) + (extu edi<32> 33)) + (extu CF<1> 33)){32};",
+"11" : "eax<32> := (SF<1> <> OF<1>) ? ecx<32> : eax<32>;",
+"1" : "goto (0x08049164, 0) ",
+"3" : "goto (0x08049166, 0) ",
+"39" : "OF<1> := (edi<32>{31} <> res32<32>{31});",
+"15" : "goto (0x0804916d, 0) ",
+"2" : "eax<32> := ecx<32>;",
+"32" : "@[(ebx<32> + -125<32>),1] := res8<8>;",
+"12" : "goto (0x0804916b, 0) ",
+"7" : "ZF<1> := (0<32> = res32<32>);",
+"36" : "eax<32>{0, 7} := res8<8>;",
+"42" : "edi<32> := res32<32>;",
+"21" : "AF<1> := 0<1>;",
+"25" : "res8<8> := (@[(ebx<32> + -125<32>),1] + edx<32>{0,7});",
+"31" : "CF<1> := ((extu @[(ebx<32> + -125<32>),1] 9) + (extu edx<32>{0,7} 9)){8};",
+"35" : "res8<8> := (eax<32>{0,7} | ecx<32>{8,15});",
+"27" : "SF<1> := (res8<8> <s 0<8>);",
+"0" : "ecx<32> := @[(esp<32> + 4<32>),4];",
+"26" : "OF<1> :=\n ((@[(ebx<32> + -125<32>),1]{7} = edx<32>{7}) &\n  (@[(ebx<32> + -125<32>),1]{7} <> res8<8>{7}));",
+"6" : "SF<1> := (res32<32> <s 0<32>);",
+"33" : "goto (0x08049176, 0) ",
+"38" : "res32<32> := (edi<32> + (edi<32> + (extu CF<1> 32)));",
+"9" : "eax<32> := res32<32>;",
+"19" : "res32<32> := 0<32>;",
+"23" : "CF<1> := 0<1>;",
+"37" : "goto (0x08049179, 0) ",
+"18" : "goto (0x08049170, 0) ",
+"43" : "goto (0x0804917b, 0) ",
+"5" : "OF<1> := (0x80000000 = eax<32>);",
+"28" : "ZF<1> := (0<8> = res8<8>);",
+"16" : "goto (0x0804916e, 0) ",
+"20" : "OF<1> := 0<1>;",
+"34" : "#unsupported ec",
+"10" : "goto (0x08049168, 0) ",
+"8" : "CF<1> := (0<32> <> eax<32>);",
+"30" : "PF<1> :=\n !\n ((((((((res8<8>{0} ^ res8<8>{1}) ^ res8<8>{2}) ^ res8<8>{3}) ^ res8<8>{4}) ^\n     res8<8>{5}) ^ res8<8>{6}) ^ res8<8>{7}));",
+"22" : "PF<1> :=\n !\n ((((((((res32<32>{0} ^ res32<32>{1}) ^ res32<32>{2}) ^ res32<32>{3}) ^\n      res32<32>{4}) ^ res32<32>{5}) ^ res32<32>{6}) ^ res32<32>{7}));",
+"17" : "goto (0x0804916f, 0) ",
+"40" : "AF<1> :=\n ((extu edi<32>{0,3} 5) + ((extu edi<32>{0,3} 5) + (extu AF<1> 5))){4};",
+"24" : "goto (0x08049172, 0) ",
+"4" : "res32<32> := - (eax<32>);",
+"14" : "goto @[(esp<32> - 4<32>),4] #return",
+"29" : "AF<1> := ((extu @[(ebx<32> + -125<32>),1]{0,3} 5) + (extu edx<32>{0,3} 5)){4}\n ;",
+
+    }
+    </script>
+    <style>
+    body {
+      font-family: Menlo, Consolas, Monaco, Liberation Mono, Lucida Console, monospace;
+      background-color: #001B2E;
+      color: #FFF8EB;
+      font-size: 12px;
+    }
+
+    tr {
+      color: gray;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    /* Create two equal columns that floats next to each other */
+    .column {
+      float: left;
+      width: 33%;
+      padding: 10px;
+      box-shadow: 0 3px 5px rgba(0, 0, 0, 0.2);
+    }
+
+    .scrollbar::-webkit-scrollbar-track
+    {
+      border: 1px solid black;
+      background-color: #FFF8EB;
+    }
+
+    .scrollbar::-webkit-scrollbar
+    {
+      width: 10px;
+    }
+
+    .scrollbar::-webkit-scrollbar-thumb
+    {
+      background-color: #ADB6C4;	
+    }
+
+    .hoverable:hover {
+      color: #FED6BA;
+    }
+
+    .row:after {
+      content: "";
+      display: table;
+      clear: both;
+    }
+
+    th {
+      padding-right: 20px;
+      text-align: left;
+    }
+
+    .explanation, .results {
+      font-family: Menlo, Consolas, Monaco, Liberation Mono, Lucida Console, monospace;
+      display: none;
+      padding: 10px;
+      border-radius: 5px;
+      background-color: #294C60;
+      color: #FFF8EB;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      margin-top: 10px;
+      overflow: auto;
+      line-height: 1.5em;
+    }
+
+    .alarms {
+      font-family: Menlo, Consolas, Monaco, Liberation Mono, Lucida Console, monospace;
+      padding: 10px;
+      border-radius: 5px;
+      background-color: #294C60;
+      color: #FFF8EB;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      margin-top: 10px;
+      overflow: auto;
+    }
+
+    .left-column:hover + .middle-column .explanation {
+      display: block;
+    }
+
+    .left-column:hover + .middle-column .results {
+      display: block;
+    }
+
+    svg {
+      width: 100%;
+      height: 80%;
+    }
+
+    .right-column {
+      background-color: #294C60;
+      max-height: 90vh;
+      overflow: hidden;
+    }
+    </style>
+    <title>Binsec/Codex Analysis</title>
+  </head>
+
+  <body onload="loadExplanations(); linkGraph();">
+  <h2>Binsec/Codex Analysis</h2>
+  <div class="row">
+    <div class="column scrollbar" style="background-color:#294C60; overflow-y: scroll; height: 90vh;">
+      <h2>Disassembly Results</h2>
+      <table id="disasmTable">
+  <tr class="line hoverable" data-explanation="[0,1]"> <th> 0x08049160 </th> <th> 8b 4c 24 04 </th> <th> mov ecx, [esp + 0x4] </th> </tr>
+<tr class="line hoverable" data-explanation="[2,3]"> <th> 0x08049164 </th> <th> 89 c8 </th> <th> mov eax, ecx </th> </tr>
+<tr class="line hoverable" data-explanation="[4,5,6,7,8,9,10]"> <th> 0x08049166 </th> <th> f7 d8 </th> <th> neg eax </th> </tr>
+<tr class="line hoverable" data-explanation="[11,12]"> <th> 0x08049168 </th> <th> 0f 4c c1 </th> <th> cmovl eax, ecx </th> </tr>
+<tr class="line hoverable" data-explanation="[13,14]"> <th> 0x0804916b </th> <th> c3 </th> <th> ret </th> </tr>
+<tr class="line hoverable" data-explanation="[15]"> <th> 0x0804916c </th> <th> 90 </th> <th> nop </th> </tr>
+<tr class="line hoverable" data-explanation="[16]"> <th> 0x0804916d </th> <th> 90 </th> <th> nop </th> </tr>
+<tr class="line hoverable" data-explanation="[17]"> <th> 0x0804916e </th> <th> 90 </th> <th> nop </th> </tr>
+<tr class="line hoverable" data-explanation="[18]"> <th> 0x0804916f </th> <th> 90 </th> <th> nop </th> </tr>
+<tr class="line hoverable" data-explanation="[19,20,6,7,21,22,23,9,24]"> <th> 0x08049170 </th> <th> 31 c0 </th> <th> xor eax, eax </th> </tr>
+<tr class="line hoverable" data-explanation="[13,14]"> <th> 0x08049172 </th> <th> c3 </th> <th> ret </th> </tr>
+<tr class="line hoverable" data-explanation="[25,26,27,28,29,30,31,32,33]"> <th> 0x08049173 </th> <th> 00 53 83 </th> <th> add [ebx + 0xffffff83], dl </th> </tr>
+<tr class="line hoverable" data-explanation="[34]"> <th> 0x08049176 </th> <th> ec </th> <th> unsupported in al dx </th> </tr>
+<tr class="line hoverable" data-explanation="[35,20,27,28,21,30,23,36,37]"> <th> 0x08049177 </th> <th> 08 e8 </th> <th> or al, ch </th> </tr>
+<tr class="line hoverable" data-explanation="[38,39,6,7,40,22,41,42,43]"> <th> 0x08049179 </th> <th> 13 ff </th> <th> adc edi, edi </th> </tr>
+
+  </table>
+  </div>
+  <div class="column middle-column" style="background-color:#001B2E;">
+  <div style="height: 30vh;">
+    <h2>DBA blocks</h2>
+    <pre style="overflow: auto; max-height: 80%;" class="explanation scrollbar">Explanation will appear here.</pre>
+  </div>
+  <div style="height: 30vh;">
+    <h2>Analysis Result</h2>
+    <pre style="overflow: auto; max-height: 80%;" class="results scrollbar"></pre>
+  </div>
+  <div style="height: 21vh;">
+  <h2>Alarms</h2>
+  <div class="alarms scrollbar" style="max-height: 21vh; overflow: auto;">
+  Phase: _none_</br>-total alarm count-,0
+  </div>
+  </div>
+  </div>
+  <div id="graph" class="column right-column" style="text-align: center;">
+  </div>
+  </div>
+  </body>
+  </html>
+  

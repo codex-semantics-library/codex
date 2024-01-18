@@ -1,0 +1,145 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;  This file is part of the Codex semantics library.                     ;;
+;;                                                                        ;;
+;;  Copyright (C) 2013-2024                                               ;;
+;;    CEA (Commissariat à l'énergie atomique et aux énergies              ;;
+;;         alternatives)                                                  ;;
+;;                                                                        ;;
+;;  you can redistribute it and/or modify it under the terms of the GNU   ;;
+;;  Lesser General Public License as published by the Free Software       ;;
+;;  Foundation, version 2.1.                                              ;;
+;;                                                                        ;;
+;;  It is distributed in the hope that it will be useful,                 ;;
+;;  but WITHOUT ANY WARRANTY; without even the implied warranty of        ;;
+;;  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         ;;
+;;  GNU Lesser General Public License for more details.                   ;;
+;;                                                                        ;;
+;;  See the GNU Lesser General Public License version 2.1                 ;;
+;;  for more details (enclosed in the file LICENSE).                      ;;
+;;                                                                        ;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(library
+ (public_name "codex.extstdlib")
+ (name extstdlib)
+ (modules Extstdlib)
+ (libraries camlp-streams)
+)
+
+(library
+ (public_name "codex.datatype_sig")
+ (name datatype_sig)
+ (modules Datatype_sig)
+ (libraries codex.extstdlib)
+)
+
+(library
+ (public_name "codex.bdd")
+ (name bdd)
+ (modules Bdd)
+)
+
+(library
+ (public_name "codex.immutable_dynamic_array")
+ (name immutable_dynamic_array)
+ (modules Immutable_dynamic_array)
+)
+
+(library
+ (public_name "codex.utils.immutable_array")
+ (name immutable_array)
+ (modules Immutable_array)
+)
+
+
+(library
+ (public_name "codex.smallmap")
+ (name smallmap)
+ (modules Smallmap)
+)
+
+
+(library
+ (public_name "codex.treemap")
+ (name treemap)
+ (modules Treemap)
+)
+
+(library
+ (public_name "codex.utils.mutable_radix_trie")
+ (name mutable_radix_trie)
+ (modules mutable_radix_trie)
+)
+
+
+(library
+ (public_name "codex.utils.okasakimap")
+ (name okasakimap)
+ (libraries zarith)
+ (modules Okasakimap)
+)
+
+(library
+ (public_name "codex.utils.okasakiset")
+ (name okasakiset)
+ (libraries okasakimap)
+ (modules Okasakiset)
+)
+
+
+(library
+ (public_name "codex.interval_map")
+ (name interval_map)
+ (modules Interval_map)
+ (libraries codex.codex_log)
+)
+
+(library
+ (public_name "codex.int_builtins")
+ (name int_builtins)
+ (modules int_builtins)
+ (foreign_stubs (language c) (names int_builtins_c))
+)
+
+(library
+ (public_name "codex.record_time")
+ (name record_time)
+ (modules record_time)
+ (foreign_stubs (language c) (names record_time))
+)
+
+
+(library
+ (public_name "codex.online_nearest_common_ancestor_skiplist")
+ (name online_nearest_common_ancestor_skiplist)
+ (modules online_nearest_common_ancestor_skiplist)
+ (libraries codex.int_builtins)
+)
+
+
+
+(library
+ (public_name "codex.condition_map")
+ (name condition_map)
+ (libraries codex.codex_log codex.smallmap)
+ (modules Condition_map)
+)
+(library
+  (name PatriciaTree)
+  (public_name codex.PatriciaTree)
+  (inline_tests
+   (libraries qcheck-core))
+  (preprocess (pps ppx_inline_test))
+  (libraries zarith qcheck-core)
+  (modules PatriciaTree)
+)
+
+;; For test purposes only.
+(library
+  (name PatriciaTreeTest)
+  (inline_tests
+   (libraries qcheck-core))
+  (preprocess (pps ppx_inline_test))
+  (libraries PatriciaTree zarith qcheck-core)
+  (modules PatriciaTreeTest)
+)

@@ -1,0 +1,120 @@
+This repository serves as a mirror for the source code of Codex. Codex is two things:
+- *Codex semantics Library*: An OCaml library to write static analysers based on abstract interpretation;
+- *Sound static analysers* based on this library. Two are currently available:
+  - *BINSEC/Codex* : An analyzer for machine code using [[https://binsec.github.io/][BINSEC]] as a front-end.
+  - *Frama-C/Codex* : An analyzer for C using [[https://frama-c.com/][Frama-C]] as its front-end.
+
+Codex has notably been used for automated verification of security properties of a whole embedded kernels directly from its binary executable [RTAS'21], to verify the absence of spatial memory corruption in challenging code manipulating data structure libraries [VMCAI'22]. The structure of the analysis is based on the relational composition of expressions, and we are in the early stages of establishing its theoretical foundations, as detailed in [POPL'23].
+
+- [RTAS'21] ::  [[https://binsec.github.io/nutshells/rtas-21.html][No Crash, No Exploit: Automated Verification of Embedded Kernels]]. O. Nicole, M. Lemerre, S. Bardin, X. Rival /(Best paper)/
+- [VMCAI'22] ::   [[ https://binsec.github.io/nutshells/vmcai-22.html][Lightweight Shape Analysis based on Physical Types]], O. Nicole, M. Lemerre, X. Rival
+- [POPL'23] :: [[https://dl.acm.org/doi/10.1145/3571258][SSA Translation Is an Abstract Interpretation]], M. Lemerre /(Distinguished paper)/.
+
+* Seeing it in action
+
+The repository example contains the results of a simple program (computing the absolute value of an integer) in both C and machine code analysis.  The results of the analysis can be presented as a standalone html file, that you can find for the C analysis [[./examples/abs.c.html][here]]. The binary analysis example ([[./examples/abs.exe.html][here]]) analyses the machine code version of same file, but is also given a type specification (which can be found [[./example/abs.types][here]]) that restricts the possible values at the start of the program to be in some interval.
+
+Codex is capable of handling much more than these simple examples! We will soon provide tutorials to help you perform your own analyses, but you can already try Codex by replacing these examples by your own code.
+
+* Warning
+
+This is our first beta release, not intended to be a plug-and-play static analysis tool. The theory is sound and the tool has been used in several important case studies, but please be aware of the current lack of comprehensive documentation or polished user interface. Codex is rapidly evolving and the interface of some internal components and command line options  may also change in the future. If you are require assistance, feel free to reach out (matthieu dot lemerre at cea dot fr).
+
+We have now entered a phase where the primary objective is to enhance the tool's usability beyond our internal team, so anticipate forthcoming improvements in user-friendliness and updates to the documentation.
+
+Additionally, with this release, we aim to initiate the exportation of abstract interpretation components that may prove beneficial to other static analysis developers. We welcome feedback to aid us in refining and enhancing the tool.
+
+* Installation
+
+The installation instructions is summarized in the Dockerfile (that you can use to build with docker).
+
+** Release binaries
+
+The simplest way to try Binsec/Codex and Frama-C/Codex is to download the compiled version.  It should work on any platform supporting the execution of x86-64bit linux executables (including WSL)
+
+(note that framac_codex.exe is a stripped version of Frama-C, with no plugins and support for compiler builtins removed)
+
+** From source code
+
+*** Prerequisites
+
+Install opam:
+
+#+begin_src shell
+  sudo apt install opam # For debian
+  opam init --compiler 4.14.1 # Takes a while
+  eval $(opam env)
+#+end_src
+
+Install the dependencies:
+
+#+begin_src shell
+opam install frama-c binsec lmdb llvm qcheck-core ppx_inline_test sexplib mlcuddidl bheap
+#+end_src
+
+*** Installing the codex library
+
+#+begin_src shell
+dune build
+#+end_src
+
+*** Installing Binsec/Codex
+
+#+begin_src shell
+  opam install binsec
+  dune build binsec/binsec_codex.exe
+  dune install binsec/binsec_codex.exe
+#+end_src
+
+*** Installing Frama-C/Codex
+
+We need a patched version of Frama-C to link statically with cudd,
+that cannot be loaded dynamically.
+
+You can do it manually by adding "cudd" in the "libraries" field for
+the "frama_c_kernel" target in the file src/dune in Frama-C, which you
+should do if you otherwise use Frama-C.
+
+Otherwise, you can install a stripped-down version of Frama-C using this command:
+
+#+begin_src shell
+  make opam-install-frama-c-with-cudd
+#+end_src
+
+** Building a Docker image
+
+You can build the docker image with
+
+	docker build -t codex -f Dockerfile.debian .
+
+(replace with Dockerfile.alpine for the alpine version).
+        
+You can then run the docker image with
+
+        docker run -ti --network host codex bash
+
+* Structure of the source code        
+
+We describe the structure of the library top-down:
+
+
+#+CAPTION: This is the caption for the next figure link (or table)
+#+NAME:   fig:SED-HR4049
+[[./dependency_graph.png]]
+
+- binsec :: The BINSEC/Codex plugin, doing binary code analysis using BINSEC as a frontend.
+- frama_c :: The Frama-C/Codex plugin, doing C code analysis using Frama-C as a frontend.
+- codex :: The main library, used to implement static analyses.
+- codex.fixpoint :: Fixpoint engines (for forward flow-sensitive analyses).
+- codex.domains :: Memory and numerical domains of Codex.
+- codex.types :: Code used by the type-based abstract domains , e.g. parser or types
+- codex.single_value_abstraction :: Abstraction of scalar values (e.g. interval, congruence, tristate/bitwise abstraction, etc.) including transfer functions.
+- codex.lattices ::  Lattices used in single_value_abstraction.
+- codex.constraints :: Symbolic expressions; this corresponds to the SSA expressions described in the "SSA Translation Is an Abstract Interpretation" POPL 2023 paper.
+- codex.smtbackend :: Translating the SSA/Symbolic constraints into a SMT formula for symbolic model-checking.
+- codex.transfer_functions :: Definitions of function symbols, syntax and semantics and their implementation in the concrete. The main file is Transfer_functions_sig.ml. Transfer_functions/term allows building terms containing Codex expressions.
+- codex.codex_log  :: Logging facilities.
+- codex.codex_config  :: Compile-time configuration options.
+- utils ::  a collection of reusable datastructures and algorithms suitable to abstract interpretation, such as maps, sets etc.
+  We are in the process of outsourcing some of them to make them more easily reusable.
+- ext :: is a collection of code taken from other projects, and the place where we install the patched version of Frama-C.

@@ -1,0 +1,43 @@
+--- a/src/kernel_services/ast_queries/file.ml	2024-01-12 22:44:28.140139150 +0100
++++ b/src/kernel_services/ast_queries/ofile.ml	2024-01-12 22:52:54.602187024 +0100
+@@ -270,27 +270,20 @@
+       (if m.has__builtin_va_list then "has" else "has not") ;
+   end
+ 
+-let machdep_dir () = Kernel.Share.get_dir ~mode:`Must_exist "machdeps"
++(* let machdep_dir () = Kernel.Share.get_dir ~mode:`Must_exist "machdeps" *)
+ 
+ let regexp_machdep = Str.regexp "^machdep_\\([^.]*\\).yaml$"
+ 
+ let default_machdep_file machdep =
+   let filename = "machdep_" ^ machdep ^ ".yaml" in
+-  Filepath.Normalized.concat (machdep_dir()) filename
++  Obj.magic filename
+ 
+ let is_default_machdep machdep =
+-  Filepath.Normalized.is_file (default_machdep_file machdep)
++  List.mem ((default_machdep_file machdep):>string) Internalized_machdeps.default_machdeps
+ 
+ let mem_machdep s = is_default_machdep s || Sys.file_exists s
+ 
+-let default_machdeps () =
+-  Array.fold_right
+-    (fun s acc ->
+-       if Str.string_match regexp_machdep s 0 then
+-         Str.matched_group 1 s :: acc
+-       else acc)
+-    (Sys.readdir (machdep_dir() :> string))
+-    []
++let default_machdeps () = Internalized_machdeps.default_machdeps
+ 
+ let pretty_machdeps fmt =
+   List.iter (fun s -> Format.fprintf fmt "@ %s" s) (default_machdeps())
+@@ -403,7 +398,7 @@
+   in
+   let res =
+     Result.bind
+-      (Yaml_unix.of_file (Fpath.v (file:>string)))
++      (Yaml.of_string @@ Internalized_machdeps.get_machdep_content (Filename.basename (file:>string)))
+       mach_of_yaml
+   in
+   match res with

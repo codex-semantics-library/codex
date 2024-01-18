@@ -1,0 +1,3 @@
+_build
+ext/frama_c_with_cudd/frama-c*
+.dockerignore

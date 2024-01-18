@@ -1,0 +1,15 @@
+abs.c:3.5-10: `i < 0' -> {0; 1}
+abs.c:3.5-6: `i' -> [--..--]
+abs.c:4.10-12: `- i' -> [1..0x7FFFFFFF]
+abs.c:4.11-12: `i' -> [-0x80000000..-1]
+abs.c:7.10-11: `i' -> [0..0x7FFFFFFF]
+abs.c:9.2-16: `res + 0 / res' -> [1..0x7FFFFFFF]
+abs.c:9.2-5: `res' -> [0..0x7FFFFFFF]
+abs.c:9.9-16: `0 / res' -> {0}
+abs.c:9.13-16: `res' -> [0..0x7FFFFFFF]
+abs.c:10.9-12: `res' -> [1..0x7FFFFFFF]
+Unproved alarms:
+abs.c:9: Division_by_zero(res) {true;false}
+Proved 0/1 alarms
+Unproved 1 regular alarms and 0 additional alarms.
+Solved 0/0 user assertions, proved 0

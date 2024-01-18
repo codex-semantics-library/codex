@@ -1,0 +1,10 @@
+/* -*- mode:c -*- */
+struct foo {
+  (int with self = 3)  i;
+  (int with self >= 5) j;
+};
+
+def a = struct foo 		/* With a comment. */
+
+int main(struct foo? p);
+

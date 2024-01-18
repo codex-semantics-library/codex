@@ -1,0 +1,5 @@
+archive(byte) = "Codex.cma"
+archive(native) = "Codex.cmxa"
+plugin(byte) = "Codex.cma"
+plugin(native) = "Codex.cmxs"
+requires = "cudd zarith ocamlgraph"

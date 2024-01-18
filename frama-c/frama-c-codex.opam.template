@@ -1,0 +1,12 @@
+name: "frama-c-codex"
+version: "0.8"
+synopsis: "Frama-C Codex"
+description: """
+A plugin for using the Codex abstract interpreter on as a Frama-C plug-in.
+"""
+maintainer: "https://git.frama-c.com/lemerre/libase-c"
+authors: [
+  "Matthieu Lemerre"
+]
+homepage: "None"
+bug-reports: "https://git.frama-c.com/lemerre/libase"

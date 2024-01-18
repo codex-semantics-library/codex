@@ -1,0 +1,38 @@
+ext/framac_ival/abstract_interp.cmo : codex_log.cmi \
+    ext/framac_ival/abstract_interp.cmi
+ext/framac_ival/abstract_interp.cmx : codex_log.cmx \
+    ext/framac_ival/abstract_interp.cmi
+ext/framac_ival/abstract_interp.cmi :
+ext/framac_ival/aliases.cmi :
+ext/framac_ival/floating_point.cmo : codex_log.cmi \
+    ext/framac_ival/floating_point.cmi
+ext/framac_ival/floating_point.cmx : codex_log.cmx \
+    ext/framac_ival/floating_point.cmi
+ext/framac_ival/floating_point.cmi :
+ext/framac_ival/bottom.cmo ext/framac_ival/bottom.cmx : ext/framac_ival/bottom.cmi
+ext/framac_ival/fval.cmo ext/framac_ival/fval.cmx : codex_log.cmi \
+    ext/framac_ival/fval.cmi
+ext/framac_ival/fval.cmx : codex_log.cmx \
+    ext/framac_ival/fval.cmi
+ext/framac_ival/float_interval.cmo ext/framac_ival/float_interval.cmx: ext/framac_ival/float_interval.cmi
+ext/framac_ival/float_interval.cmi: ext/framac_ival/float_sig.cmi ext/framac_ival/float_interval_sig.cmi
+ext/framac_ival/float_interval_sig.cmi: ext/framac_ival/float_sig.cmi    
+ext/framac_ival/fval.cmi : ext/framac_ival/float_interval_sig.cmi ext/framac_ival/float_sig.cmi
+ext/framac_ival/fc_float.cmi : ext/framac_ival/floating_point.cmi ext/framac_ival/float_sig.cmi
+ext/framac_ival/fc_float.cmo ext/framac_ival/fc_float.cmx : ext/framac_ival/fc_float.cmi ext/framac_ival/floating_point.cmi
+ext/framac_ival/ival.cmo : codex_log.cmi \
+    ext/framac_ival/ival.cmi
+ext/framac_ival/ival.cmx : codex_log.cmx \
+    ext/framac_ival/ival.cmi
+ext/framac_ival/ival.cmi : \
+   ext/framac_ival/abstract_interp.cmi \
+   ext/framac_ival/fval.cmi
+ext/framac_ival/ival_noinf.cmo : codex_log.cmi \
+    ext/framac_ival/ival_noinf.cmi
+ext/framac_ival/ival_noinf.cmx : codex_log.cmx \
+    ext/framac_ival/ival_noinf.cmi
+ext/framac_ival/ival_noinf.cmi : \
+   ext/framac_ival/abstract_interp.cmi \
+   ext/framac_ival/fval.cmi
+ext/framac_ival/integer.cmo ext/framac_ival/integer.cmx : ext/framac_ival/integer.cmi
+ext/framac_ival/pretty_utils.cmo ext/framac_ival/pretty_utils.cmx : ext/framac_ival/pretty_utils.cmi

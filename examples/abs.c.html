@@ -1,0 +1,336 @@
+
+<!DOCTYPE HTML>
+<html lang="en">
+
+<head>
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+  <script type='text/javascript'>
+    clicked = [];
+    
+    $(document).ready(function () {
+ 
+      $(".expnest").mouseup(function () {
+        $(this).css({"background-color": $(this).css("background-color"), "color": "black"});
+        $("#eidinfo" + $(this).attr("data-eid")).show();
+        clicked.push($(this));
+      });
+      
+      $(".expnest").hover(
+          function () {
+            if (clicked.length == 0) {
+                $(this).css({"background-color": $(this).css("background-color"), "color": "black"});
+                $("#eidinfo" + $(this).attr("data-eid")).show();
+            }
+          }, 
+          function () {
+            if (clicked.length == 0) {
+                $(this).removeAttr('style');
+                $("#eidinfo" + $(this).attr("data-eid")).hide();
+            }
+      });
+      
+    $(".code-container").mousedown(function (e) {
+        if ((e.offsetX <= e.target.clientWidth && e.offsetY <= e.target.clientHeight) || 
+            (e.target.clientWidth == 0 && e.target.clientHeight == 0)) {
+          clicked.forEach(c => {c.removeAttr('style'); $("#eidinfo" + c.attr("data-eid")).hide();});
+          clicked = [];
+        }
+    });
+    
+    });
+  </script>
+  <style>
+    a {
+      color: #d0a14b;
+    }
+
+    .def {
+      display: none;
+    }
+
+    .expnest:hover+.expinfo>.def {
+      display: inline-block;
+    }
+
+    .expinfo {
+      border: 1px solid black;
+      border-radius: 12px;
+    }
+
+    .expinfo>.eidinfo {
+      display: none;
+    }
+
+    .expnest0:hover {
+      background-color: #DDFFD6;
+      color: #000000;
+    }
+
+    .expnest1:hover {
+      background-color: #FFC2C2;
+      color: #000000;
+    }
+
+    .expnest2:hover {
+      background-color: #ADF8FF;
+      color: #000000;
+    }
+
+    .expnest3:hover {
+      background-color: #FEFFD6;
+      color: #000000;
+    }
+
+    .expnest4:hover {
+      background-color: #DCD6FF;
+      color: #000000;
+    }
+
+    .expnest5:hover {
+      background-color: #FFE3C2;
+      color: #000000;
+    }
+
+    .expnest6:hover {
+      background-color: #C2D9FF;
+      color: #000000;
+    }
+
+    .expnest7:hover {
+      background-color: #F9C8E0;
+      color: #000000;
+    }
+
+    .expnest8:hover {
+      background-color: #DCD6FF;
+      color: #000000;
+    }
+
+    .expnest9:hover {
+      background-color: #BDB2FF;
+      color: #000000;
+    }
+
+    .expnest10:hover {
+      background-color: #FFECD6;
+      color: #000000;
+    }
+
+    .expnest11:hover {
+      background-color: #FFD6A5;
+      color: #000000;
+    }
+
+    .expnest12:hover {
+      background-color: #D6E6FF;
+      color: #000000;
+    }
+
+    .expnest13:hover {
+      background-color: #A0C4FF;
+      color: #000000;
+    }
+
+    .expnest14:hover {
+      background-color: #FBDAEB;
+      color: #000000;
+    }
+
+    .expnest15:hover {
+      background-color: #F7B6D7;
+      color: #000000;
+    }
+
+    .expnest0 {
+      background-color: #444444;
+    }
+
+    .font-expnest0 {
+      background-color: #DDFFD6;
+    }
+
+    .font-expnest1 {
+      background-color: #FFC2C2;
+    }
+
+    .font-expnest2 {
+      background-color: #ADF8FF;
+    }
+
+    .font-expnest3 {
+      background-color: #FEFFD6;
+    }
+
+    .font-expnest4 {
+      background-color: #DCD6FF;
+    }
+
+    .font-expnest5 {
+      background-color: #FFE3C2;
+    }
+
+    .font-expnest6 {
+      background-color: #C2D9FF;
+    }
+
+    .font-expnest7 {
+      background-color: #F9C8E0;
+    }
+  
+    .font-expnest8 {
+      background-color: #DCD6FF;
+    }
+
+    .font-expnest9 {
+      background-color: #BDB2FF;
+    }
+
+    .font-expnest10 {
+      background-color: #FFECD6;
+    }
+
+    .font-expnest11 {
+      background-color: #FFD6A5;
+    }
+
+    .font-expnest12 {
+      background-color: #D6E6FF;
+    }
+
+    .font-expnest13 {
+      background-color: #A0C4FF;
+    }
+
+    .font-expnest14 {
+      background-color: #FBDAEB;
+    }
+
+    .font-expnest15 {
+      background-color: #F7B6D7;
+    }
+
+    body {
+      background-color: #001B2E;
+    }
+
+    .code-container {
+      font-family: monospace;
+      font-size: 14px;
+      line-height: 1.5;
+      color: #FFF8EB;
+      overflow: auto;
+      height: 92vh;
+    }
+
+    .expinfo {
+      background-color: #ADB6C4;
+      padding: 10px;
+      font-family: sans;
+      font-size: 14px;
+      line-height: 1.5;
+      color: #000;
+    }
+
+    .column {
+      float: left;
+      box-shadow: 0 3px 5px rgba(0, 0, 0, 0.2);
+      overflow: auto;
+    }
+
+    .row:after {
+      content: "";
+      display: table;
+      clear: both;
+    }
+
+    /* Syntax highlighting for C keywords */
+    .code-container .keyword {
+      color: #579dd6;
+      /* blue */
+      font-weight: bold;
+    }
+
+    /* Syntax highlighting for C comments */
+    .code-container .comment {
+      color: #6a9955;
+      /* green */
+      font-style: italic;
+    }
+
+    /* Syntax highlighting for C strings */
+    .code-container .string {
+      color: #ce9079;
+      /* red */
+    }
+
+    /* Syntax highlighting for C numbers */
+    .code-container .number {
+      color: #b5cea8;
+      /* orange */
+    }
+
+    /* Syntax highlighting for C preprocessor directives */
+    .code-container .preprocessor {
+      color: #c586c0;
+      /* gray */
+    }
+
+    /* Syntax highlighting for C functions */
+    .code-container .functions {
+      color: #d6b257;
+      /* yellow */
+    }
+
+    #style-8::-webkit-scrollbar-track
+    {
+      border: 1px solid black;
+      background-color: #FFF8EB;
+    }
+
+    #style-8::-webkit-scrollbar
+    {
+      width: 10px;
+    }
+
+    #style-8::-webkit-scrollbar-thumb
+    {
+      background-color: #ADB6C4;	
+    }
+  </style>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+  <title>Analysis results</title>
+</head>
+
+<body>
+  <div class="row">
+    <pre id="style-8" class="column code-container" style="width: 45%; margin: 0px;">
+/* Generated by Frama-C */
+<a name="vi-global-abs"></a><span class="keyword">int</span> <a data-eid="0" href="#vi-global-abs" class="expnest expnest0">abs</a>(<span class="keyword">int</span> i)
+{
+  <span class="keyword">int</span> res;
+  if (<span data-eid="1" class="expnest expnest0"><span data-eid="2" class="expnest expnest1"><span data-eid="3" class="expnest expnest1">i</span></span> &lt; <span data-eid="4" class="expnest expnest1">0</span></span>) <span class="statement"><span data-eid="5" class="expnest expnest0">res</span> = <span data-eid="6" class="expnest expnest0">- <span data-eid="7" class="expnest expnest1"><span data-eid="8" class="expnest expnest1">i</span></span></span>;</span> else <span class="statement"><span data-eid="9" class="expnest expnest0">res</span> = <span data-eid="10" class="expnest expnest0"><span data-eid="11" class="expnest expnest0">i</span></span>;</span>
+  <span class="statement"><span data-eid="12" class="expnest expnest0">res</span> += <span data-eid="13" class="expnest expnest0"><span data-eid="14" class="expnest expnest1">0</span> / <span data-eid="15" class="expnest expnest1"><span data-eid="16" class="expnest expnest1">res</span></span></span>;</span>
+  return <span data-eid="17" class="expnest expnest0"><span data-eid="18" class="expnest expnest0">res</span></span>;
+}
+
+
+</pre><div id="style-8" class="column expinfo" style="height: 92vh; width: 54%; padding: 0px;"><table style="width: 100%"> <tr> <th style="font-style: italic">/</th> <th>Name</th> <th>Type</th> <th>Value</th> </tr><tr class="font-expnest0 eidinfo" id="eidinfo1" style="display: none"><td>Expr</td> <td>i < 0</td> <td>int</td> <td>{0; 1}</td></tr>
+<tr class="font-expnest1 eidinfo" id="eidinfo2" style="display: none"><td>Expr</td> <td>i</td> <td>int</td> <td>[--..--]</td></tr>
+<tr class="font-expnest1 eidinfo" id="eidinfo3" style="display: none"><td>Lval</td> <td>i</td> <td>int</td></tr>
+<tr class="font-expnest1 eidinfo" id="eidinfo4" style="display: none"><td>Expr</td> <td>0</td> <td>int</td> <td>{0}</td></tr>
+<tr class="font-expnest0 eidinfo" id="eidinfo5" style="display: none"><td>Lval</td> <td>res</td> <td>int</td></tr>
+<tr class="font-expnest0 eidinfo" id="eidinfo6" style="display: none"><td>Expr</td> <td>- i</td> <td>int</td> <td>[1..0x7FFFFFFF]</td></tr>
+<tr class="font-expnest1 eidinfo" id="eidinfo7" style="display: none"><td>Expr</td> <td>i</td> <td>int</td> <td>[-0x80000000..-1]</td></tr>
+<tr class="font-expnest1 eidinfo" id="eidinfo8" style="display: none"><td>Lval</td> <td>i</td> <td>int</td></tr>
+<tr class="font-expnest0 eidinfo" id="eidinfo9" style="display: none"><td>Lval</td> <td>res</td> <td>int</td></tr>
+<tr class="font-expnest0 eidinfo" id="eidinfo10" style="display: none"><td>Expr</td> <td>i</td> <td>int</td> <td>[0..0x7FFFFFFF]</td></tr>
+<tr class="font-expnest0 eidinfo" id="eidinfo11" style="display: none"><td>Lval</td> <td>i</td> <td>int</td></tr>
+<tr class="font-expnest0 eidinfo" id="eidinfo12" style="display: none"><td>Lval</td> <td>res</td> <td>int</td></tr>
+<tr class="font-expnest0 eidinfo" id="eidinfo13" style="display: none"><td>Expr</td> <td>0 / res</td> <td>int</td> <td>{0}</td></tr>
+<tr class="font-expnest1 eidinfo" id="eidinfo14" style="display: none"><td>Expr</td> <td>0</td> <td>int</td> <td>{0}</td></tr>
+<tr class="font-expnest1 eidinfo" id="eidinfo15" style="display: none"><td>Expr</td> <td>res</td> <td>int</td> <td>[0..0x7FFFFFFF]</td></tr>
+<tr class="font-expnest1 eidinfo" id="eidinfo16" style="display: none"><td>Lval</td> <td>res</td> <td>int</td></tr>
+<tr class="font-expnest0 eidinfo" id="eidinfo17" style="display: none"><td>Expr</td> <td>res</td> <td>int</td> <td>[1..0x7FFFFFFF]</td></tr>
+<tr class="font-expnest0 eidinfo" id="eidinfo18" style="display: none"><td>Lval</td> <td>res</td> <td>int</td></tr>
+<tr class="font-expnest0 eidinfo" id="eidinfo0" style="display: none"><td>Func</td> <td>abs</td> <td>undefined ctype</td></tr>
+</table></div></body></html>

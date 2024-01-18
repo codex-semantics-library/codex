@@ -1,0 +1,60 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;  This file is part of the Codex semantics library.                     ;;
+;;                                                                        ;;
+;;  Copyright (C) 2013-2024                                               ;;
+;;    CEA (Commissariat à l'énergie atomique et aux énergies              ;;
+;;         alternatives)                                                  ;;
+;;                                                                        ;;
+;;  you can redistribute it and/or modify it under the terms of the GNU   ;;
+;;  Lesser General Public License as published by the Free Software       ;;
+;;  Foundation, version 2.1.                                              ;;
+;;                                                                        ;;
+;;  It is distributed in the hope that it will be useful,                 ;;
+;;  but WITHOUT ANY WARRANTY; without even the implied warranty of        ;;
+;;  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         ;;
+;;  GNU Lesser General Public License for more details.                   ;;
+;;                                                                        ;;
+;;  See the GNU Lesser General Public License version 2.1                 ;;
+;;  for more details (enclosed in the file LICENSE).                      ;;
+;;                                                                        ;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(dirs :standard \ cfg tests bench benchmarks unused )
+(vendored_dirs odvtk)
+
+(env
+ (dev 
+  (flags (:standard -warn-error -a+31 -w -16-32-26-9-27-34-20)))
+ (staticrelease 
+  (flags (:standard -ccopt -static -warn-error -a+31 -w -16-32-26-9-27-34-20)))  
+ (release
+   (flags (:standard ))) 
+;    (flags (:standard -O3)))
+ )
+
+
+(library
+ (public_name "codex.codex_log")
+ (name codex_log)
+ (libraries tracelog)
+ (modules codex_log)
+)
+
+
+(library
+ (public_name "codex.codex_config")
+ (name codex_config)
+ (modules codex_config)
+ (libraries zarith)
+)
+
+(library
+ (public_name "codex")
+ (name codex)
+ (modules codex)
+ (libraries codex.transfer_functions codex.fixpoint codex.codex_config
+            codex.codex_log codex.types
+            codex.utils.mutable_radix_trie codex.domains
+)
+)
+
