@@ -1,0 +1,12 @@
+flexible.c:16.6-12: `0 <= i' -> {0x1}
+flexible.c:16.11-12: `i' -> [0..0x7FFFFFFF]
+flexible.c:17.5-8: `res' -> ([1..0xFFFFFFFF] : ({self : int(4)[{0}].(0)* | (self != 0)}))
+flexible.c:17.11-20: `p->arr[i]' -> [--..--]
+flexible.c:17.11-12: `p' -> ([1..0xFFFFFFFF] : ({self : vector("#1")[{0}].(0)* | (self != 0)}))
+flexible.c:17.18-19: `i' -> [0..0x7FFFFFFF]
+Unproved regular alarms:
+Unproved additional alarms:
++ flexible.c:17 : { *res = p->arr[i]; } -> array_offset_access ;
+Proved 2/2 regular alarms
+Unproved 0 regular alarms and 1 additional alarms.
+Solved 0/0 user assertions, proved 0

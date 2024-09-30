@@ -20,4 +20,4 @@
 (**************************************************************************)
 
 (* Print varinfo with their enclosing function; useful when inlining. *)
-val pretty: Format.formatter -> Cil_types.varinfo -> unit
+val pretty: Format.formatter -> Frama_c_kernel.Cil_types.varinfo -> unit

@@ -24,12 +24,12 @@
 
 (env
  (dev 
-  (flags (:standard -warn-error -a+31 -w -16-32-26-9-27-34-20)))
+  (flags (:standard -warn-error -a+31 -w -16-32-26-9-27-34-20-67-70)))
  (staticrelease 
-  (flags (:standard -ccopt -static -warn-error -a+31 -w -16-32-26-9-27-34-20)))  
+  (flags (:standard -ccopt -static -warn-error -a+31 -w -16-32-26-9-27-34-20-67-70)))  
  (release
-   (flags (:standard ))) 
-;    (flags (:standard -O3)))
+;   (flags (:standard ))) 
+    (ocamlopt_flags (:standard -O3)))
  )
 
 
@@ -52,9 +52,19 @@
  (public_name "codex")
  (name codex)
  (modules codex)
- (libraries codex.transfer_functions codex.fixpoint codex.codex_config
-            codex.codex_log codex.types
-            codex.utils.mutable_radix_trie codex.domains
-)
-)
+ (libraries (re_export codex.transfer_functions)
+	    (re_export codex.fixpoint)
+	    (re_export codex.codex_config)
+	    (re_export codex.datatype_sig)
+	    (re_export codex.extstdlib)
+	    (re_export codex.framac_ival)	    
+	    (re_export codex.constraints)	    
+	    (re_export codex.lattices)
+	    (re_export codex.single_value_abstraction)
+	    (re_export codex.smtbackend)
+	    (re_export codex.codex_log)
+	    (re_export tracelog)
+	    (re_export codex.types)
+	    (re_export codex.utils.mutable_radix_trie)
+	    (re_export codex.domains)))
 

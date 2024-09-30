@@ -161,7 +161,7 @@ module Memory
 
   let join_values ~size ctx v1 v2 =
     let Context.Result(_,tup,deserialize) = Value.serialize ~size ctx v1 ctx v2
-        (true, Context.empty_tuple) in
+        (true, Context.empty_tuple ()) in
     let res_tup = Value.nondet_same_context ctx tup in
     let res,(_: Context.empty_tuple Context.out_tuple) = deserialize ctx res_tup in
     res
@@ -177,10 +177,11 @@ module Memory
     let region_size = Memory.get_size region in
     let c = not @@ in_bounds ~size sub_ctx offset ~inf:0 ~sup:region_size in
     if c then ( 
-      Codex_log.alarm "region_offset_access" ;
+      (* Codex_log.alarm "region_offset_access" ; *)
+      Codex_log.alarm "load_param_nonptr" ;
       Codex_log.error "@[<hov 2>Out-of-bounds access at offset %a in region of size %d.@]"
           (Offset.offset_pretty ~size:(8 * size) sub_ctx) offset
-          region_size
+          region_size ;
     ) ;
     let loaded = fold_on_values ~size sub_ctx offset ~sup:(region_size - size/8) [] (fun offset acc ->
         let v = Memory.load ~size:(size/8) ctx region offset in
@@ -223,7 +224,7 @@ module Memory
 
   let join_memories ctx v1 v2 =
     let Context.Result(included,tup,deserialize) =
-      Memory.serialize ctx v1 ctx v2 (true, Context.empty_tuple) in
+      Memory.serialize ctx v1 ctx v2 (true, Context.empty_tuple ()) in
     let res_tup = Value.nondet_same_context ctx tup in
     let res,(_:Context.empty_tuple Context.out_tuple) = deserialize ctx res_tup in
     res
@@ -251,13 +252,14 @@ module Memory
   let serialize = Memory.serialize
   let initial = Memory.initial
   let pretty = Memory.pretty
-  type memory = Memory.t
+  type block = Memory.t
 
 
   let may_alias ~ptr_size:_ _ = assert false
   let should_focus ~size:_ _ = assert false
+  let is_weak ~size _ctx value = assert false
 
-  let memory_empty ctx = Memory.{map = IntervalMap.create ~size:0 @@ (Value.binary_empty ctx ~size:0)}
+  let block_empty ctx = Memory.{map = IntervalMap.create ~size:0 @@ (Value.binary_empty ctx ~size:0)}
 
   let free _ = assert false
 
@@ -272,5 +274,11 @@ module Memory
 
   let typed_load ~size ctx mem x typ = assert false ;;
   let typed_store ~size ctx mem at typ value = assert false ;;
+
+  let sizeof _ = assert false
+  let concat ~size1 ~size2 _ = assert false
+  let binary_to_block ~size _ = assert false
+
+  let shared_addresses ctxa a ctxb a = [] (* assert false *)
 
 end

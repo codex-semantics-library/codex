@@ -19,8 +19,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
-open Codex
 open Codex.Fixpoint.Region_analysis
+open Frama_c_kernel
 
 (* Helper function to make region analysis on Frama-C stmts. *)
 module MakeNode(M:sig
@@ -30,8 +30,8 @@ module MakeNode(M:sig
   type abstract_value
   val compile_node: stmt -> abstract_value -> (stmt edge * abstract_value) list
   val mu: (abstract_value -> abstract_value) -> abstract_value -> abstract_value
-  val join: abstract_value list -> abstract_value    
-    
+  val join: abstract_value list -> abstract_value
+
 end):Node with type abstract_value = M.abstract_value
           and type node = Cil_types.stmt =
 struct
@@ -41,7 +41,7 @@ struct
   let pretty = Cil_datatype.Stmt.pretty
   let equal = Cil_datatype.Stmt.equal
   module Set = Set.Make(Cil_datatype.Stmt);;
-    
+
   module Graph = struct
     let stmts = (Kernel_function.get_definition M.kf).Cil_types.sallstmts;;
     let iter_nodes f = List.iter f stmts
@@ -49,7 +49,7 @@ struct
 
     let size = List.length stmts
 
-    let entry_node = Kernel_function.find_first_stmt M.kf 
+    let entry_node = Kernel_function.find_first_stmt M.kf
     let all_nodes = List.fold_right Set.add stmts Set.empty
     let exit_nodes = [Kernel_function.find_return M.kf]
 
@@ -59,7 +59,7 @@ struct
 
   module Dict = struct
     open Cil_datatype.Stmt
-      
+
     type 'a t = 'a Hashtbl.t * 'a
     let get (hash,default) x =
       try Hashtbl.find hash x
@@ -100,7 +100,7 @@ struct
       let find_or_empty x =
         try Hashtbl.find dom_tree x
         with Not_found -> [] in
-      
+
       Graph.iter_nodes (fun x ->
         match Dominators.get_idom x with
         | None -> ()
@@ -115,6 +115,6 @@ struct
       in traverse Graph.entry_node
     ;;
   end
-    
-    
+
+
 end

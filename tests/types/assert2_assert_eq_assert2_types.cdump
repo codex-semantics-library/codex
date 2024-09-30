@@ -1,0 +1,9 @@
+assert2.c:8.20-26: `a == b' -> {0; 1}
+assert2.c:8.20-21: `a' -> {0} or ([1..0xFFFFFFFF] : (int(4))[{0}].0*)
+assert2.c:8.25-26: `b' -> {0} or ([1..0xFFFFFFFF] : (int(4))[{0}].0*)
+Unproved regular alarms:
+Unproved additional alarms:
+Proved 0/0 regular alarms
+Unproved 0 regular alarms and 0 additional alarms.
+assert2.c:8: assertion is FALSE (counter-example exists) (proved with smt solving)
+Solved 1/1 user assertions, proved 0

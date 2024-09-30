@@ -29,6 +29,10 @@ type access_type =
 | Read                          (* Loading from memory. *)
 | Write                         (* Storing into memory. *)
 
+type arith_type =
+| Plus                          (* Addition operation *)
+| Minus                         (* Substraction operation *)
+
 
 (* Symbols and their arities. 'r represents the result type. *)
 module type Arity = sig
@@ -195,7 +199,7 @@ module type Binary_Backward = sig
   val valid: size:int -> access_type -> (binary,boolean) Arity.ar1
   (* valid_ptr_arith(a,b) where a is a ptr and b an integer returns true if a + b is in-bound. 
      MAYBE: Could be replaced by a new \valid access types, and overflow assertions on addition. *)
-  val valid_ptr_arith: size:int -> (binary,binary,boolean) Arity.ar2
+  val valid_ptr_arith: size:int -> arith_type -> (binary,binary,boolean) Arity.ar2
 
   (* [max], if not None, limits further pointer arithmetics: one cannot go beyond max. *)
   (* MAYBE: separate this between bshift and a new operator [bnarrow]. *)
@@ -220,20 +224,50 @@ module type Binary_Forward = sig
 end
 
 (****************************************************************)
+(* Block transfer functions.  *)
+
+module type Block_Backward = sig
+  type boolean
+  type offset
+  type value
+  type block
+  module Arity: Arity
+
+  (** Size of a block in bytes *)
+  val sizeof: (block,value) Arity.ar1
+  (** Concatenates two blocks *)
+  val concat: size1:offset -> size2:offset -> (block,block,block) Arity.ar2
+  (** Loads (extracts) a value of a fixed size at a given index from a block *)
+  val load: size:int -> (block,offset,value) Arity.ar2
+  (** Stores (writes) a fixed size value of a given index in a block *)
+  val store: size:int -> (block,offset,value,block) Arity.ar3
+  (** Converts a fixed size value to a block *)
+  val binary_to_block: size:int -> (value,block) Arity.ar1
+end
+
+module type Block_Forward = sig
+  include Block_Backward
+end 
+
+(****************************************************************)
 (* Memory transfer functions.  *)
   
 module type Memory_Backward = sig
+  type block
   type memory
-  type binary
+  type address
+  type value
   type boolean
   module Arity: Arity
-  val load: size:int -> (memory, binary, binary * memory) Arity.ar2
-  val store: size:int -> (memory,binary,binary,memory) Arity.ar3
+  val load: size:int -> (memory, address, value * memory) Arity.ar2
+  val store: size:int -> (memory,address,value,memory) Arity.ar3
+  val load_block: (memory, address, block * memory) Arity.ar2
+  val store_block: (memory,address,block,memory) Arity.ar3
   (* Fixed-size memcpy(store,from_,to_). *)
-  val memcpy: size:int -> (memory,binary,binary,memory) Arity.ar3
+  val memcpy: size:int -> (memory,address,address,memory) Arity.ar3
   val malloc: id:Malloc_id.t -> malloc_size:int ->
-    (memory,binary * memory) Arity.ar1
-  val free: (memory,binary,memory) Arity.ar2
+    (memory,address * memory) Arity.ar1
+  val free: (memory,address,memory) Arity.ar2
   val unknown: level:int -> memory Arity.ar0
 end
 

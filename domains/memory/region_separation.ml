@@ -19,11 +19,12 @@
 (*                                                                        *)
 (**************************************************************************)
 
+module Log = Tracelog.Make(struct let category = "Domains.Region_separation" end);;
 module BaseAddress = struct
 
   type t =
     (* malloc_size. TODO: Should probably be stored in the region. *)
-    | Malloc of Transfer_functions.Malloc_id.t * int 
+    | Malloc of Transfer_functions.Malloc_id.t * int
     | Null
 
   let compare a b = match a, b with
@@ -47,7 +48,9 @@ module BaseAddress = struct
   let size_of = function
     | Null ->
       begin match Codex_config.valid_absolute_addresses() with
-        | None -> assert false
+        | None ->
+          Log.fatal (fun p -> p "Trying to use an integer as an address \
+without setting the range of valid absolute addresses.")
         | Some (_,max) -> (Z.to_int max)
       end
     | Malloc(id,size) -> size
@@ -76,12 +79,12 @@ end
 module MakePrev
     (BR:Offset)
     (Offset2Scalar:Memory_sig.Offset_to_Scalar with module Offset := BR and module Scalar := BR.Scalar) = struct
-  
+
   module Operable_Value:sig
     include Fixed_size_value_domain
       with type boolean = BR.boolean
        and module Context = BR.Context
-       and module Scalar = BR.Scalar                              
+       and module Scalar = BR.Scalar
     val fold:BR.Context.t ->
       binary -> (BaseAddressMap.key -> BR.offset -> 'a -> 'a) -> 'a -> 'a
   end
@@ -89,7 +92,6 @@ module MakePrev
   struct
     include BR
     module Context = BR.Context
-    open Context
 
     let offset2scalar x = fst @@ Offset2Scalar.ctx x
 
@@ -151,8 +153,8 @@ module MakePrev
       (* Format.fprintf fmt "(id %d)" x.id *)
     ;;
 
-                
-                
+
+
     module Binary = struct
       type t = binary
 
@@ -187,7 +189,7 @@ module MakePrev
       module Binary_Lattice = struct
 
         type br_query_binarylattice_t = unit (* BR.Query.Binary_Lattice.t  *)
-        
+
         type t = {
             null: Scalar.Query.Binary_Lattice.t option;
             map: br_query_binarylattice_t BaseAddressMap.t;
@@ -250,7 +252,7 @@ module MakePrev
 
       end
 
-                            
+
 
       let binary ~size ctx x =
         let scalar_ctx = offset2scalar ctx in
@@ -267,7 +269,7 @@ module MakePrev
         let exception Top in
         let open Binary_Lattice in
         try if x.invalid || x.unknown || not (BaseAddressMap.is_empty x.map) then raise Top
-        else 
+        else
           match x.null with
           | None -> raise Top
           | Some x -> Scalar.Query.binary_to_known_bits ~size x
@@ -293,14 +295,14 @@ module MakePrev
           | Some x -> Scalar.Query.binary_is_singleton ~size x
         else None
         ;;
-        
+
     end
 
     let binary_pretty ~size ctx = pp (Scalar.binary_pretty ~size @@ offset2scalar ctx) (BR.offset_pretty ~size ctx)
-    
+
     let serialize ~size ctxa a ctxb b (included, acc) =
-      let scalar_ctxa = offset2scalar ctxa in
-      let scalar_ctxb = offset2scalar ctxb in      
+      (* let scalar_ctxa = offset2scalar ctxa in
+      let scalar_ctxb = offset2scalar ctxb in *)
       (* Codex_log.feedback "Region_separation serialize2 %a %a"
        *   (binary_pretty ~size ctx) a (binary_pretty ~size ctx) b; *)
       let f ctx = function
@@ -317,7 +319,7 @@ module MakePrev
              match a,b with
              | Some a, Some b when a == b || BR.Offset.equal a b -> res
              | None, None -> res
-             | _ -> 
+             | _ ->
                let a = f ctxa a and b = f ctxb b in
                let Context.Result(inc,acc,d_offset) = BR.serialize_offset ~size ctxa a ctxb b
                 (inc,acc) in
@@ -395,7 +397,7 @@ module MakePrev
             | a::b ->
               let nondet_boolean x y =
                 let Context.Result(_,tup,d) =
-                  BR.serialize_boolean ctx x ctx y (true,Context.empty_tuple)
+                  BR.serialize_boolean ctx x ctx y (true,Context.empty_tuple ())
                 in
                 fst @@ d ctx @@ BR.nondet_same_context ctx tup
               in
@@ -441,7 +443,7 @@ module MakePrev
                else false_
             (* Else: We cannot rule false_ out, which happens when comparing different bases. *)
              | _ -> pred (beq ~size) (BR.offset_eq ~size) [false_] ctx a b)
-          | _ -> 
+          | _ ->
             pred (beq ~size) (BR.offset_eq ~size) [false_] ctx a b
         end
       ;;
@@ -450,11 +452,11 @@ module MakePrev
          indices is done using biadd/bisub, rather than
          bshift/bindex. *)
       (* module Untyped_pointers = struct
-       * 
-       * 
-       * 
+       *
+       *
+       *
        *   let biadd ~size ctx (a:binary) (b:binary) =
-       *     (\* Kernel.feedback "adding %a %b %a %b" 
+       *     (\* Kernel.feedback "adding %a %b %a %b"
        *        (binary_pretty ~size ctx) a a.invalid (binary_pretty ~size ctx) b b.invalid; *\)
        *     (\* We remove null from b, because we don't want to add Null->a to Null->b twice. *\)
        *     let null = match a.null,b.null with
@@ -464,7 +466,7 @@ module MakePrev
        *       match null with
        *       | None -> BaseAddressMap.empty
        *       | Some x -> map |> BaseAddressMap.map (fun off ->
-       *           BR.Binary_Forward.biadd ~size ctx off x) 
+       *           BR.Binary_Forward.biadd ~size ctx off x)
        *     in
        *     (\* Assertion is unlikely in real programs. *\)
        *     let map = BaseAddressMap.union (fun addr v1 v2 -> assert false)
@@ -477,7 +479,7 @@ module MakePrev
        *       unknown = a.unknown || b.unknown;
        *       invalid }
        *   ;;
-       * 
+       *
        *   let bisub ~size ctx a b =
        *     let sub a b = BR.Binary_Forward.bisub ~size ctx a b in
        *     let sub_from null map f =
@@ -525,8 +527,8 @@ module MakePrev
           | a::b -> assert false               (* nondet *)
       ;;
 
-      
-      
+
+
       let ptrsize = Codex_config.ptr_size()
 
       let valid ~size _acc_type ctx (ptr:binary) =
@@ -559,12 +561,12 @@ module MakePrev
               Boolean_Forward.(&&) ctx
                 (between_min_max Z.zero off max)
                 (BR.offset_within_bounds ~size ctx off)
-                
+
               (* | BaseAddress.Unknown -> assert false *)
           ) ptr.map @@ Boolean_Forward.true_ ctx
       ;;
 
-      let valid_ptr_arith ~size:_ ctx _x _y = (* Scalar.Boolean_Forward.true_ ctx *) assert false
+      let valid_ptr_arith ~size:_ _arith_type ctx _x _y = (* Scalar.Boolean_Forward.true_ ctx *) assert false
 
       let bshift ~size ~offset ~max ctx x =
         let scalar_ctx = offset2scalar ctx in
@@ -573,7 +575,7 @@ module MakePrev
             | None -> None
             | Some x -> Some(
                 let k = Scalar.Binary_Forward.biconst ~size (Z.of_int offset) scalar_ctx in
-                Scalar.Binary_Forward.biadd ~size ~nsw:false ~nuw:true ~nusw:true scalar_ctx x k));
+                Scalar.Binary_Forward.biadd ~size ~nsw:false ~nuw:false ~nusw:true scalar_ctx x k));
         map = BaseAddressMap.map (BR.offset_shift ~size ~offset ~max ctx) x.map;
         unknown = x.unknown;
         invalid = x.invalid;
@@ -582,7 +584,7 @@ module MakePrev
 
 
       let bindex ~size k ctx x e =
-        let scalar_ctx = offset2scalar ctx in        
+        (* let scalar_ctx = offset2scalar ctx in *)
         (* Codex_log.debug "Region_separation.bindex %a %a" (binary_pretty ~size ctx) x (binary_pretty ~size ctx) e ;         *)
         let invalid = x.invalid || not (BaseAddressMap.is_empty e.map) in
         match e.null with
@@ -596,8 +598,8 @@ module MakePrev
                   | Some x -> Some(
                       let scalar_ctx = offset2scalar ctx in
                       let k = Scalar.Binary_Forward.biconst ~size (Z.of_int k) scalar_ctx in
-                      let off =Scalar.Binary_Forward.bimul ~size ~nsw:false ~nuw:false scalar_ctx k e in
-                      Scalar.Binary_Forward.biadd ~size ~nsw:false ~nuw:true ~nusw:true scalar_ctx x off));
+                      let off = Scalar.Binary_Forward.bimul ~size ~nsw:true ~nuw:false scalar_ctx k e in
+                      Scalar.Binary_Forward.biadd ~size ~nsw:false ~nuw:false ~nusw:true scalar_ctx x off));
               map = BaseAddressMap.map (fun x -> BR.offset_index ~size k ctx x e) x.map;
               unknown = x.unknown;
               invalid = x.invalid;
@@ -667,14 +669,14 @@ module MakePrev
 
       let bashr ~size ctx a b = ar2 (Scalar.Binary_Forward.bashr) ~size ctx a b
       let blshr ~size ctx a b = ar2 (Scalar.Binary_Forward.blshr) ~size ctx a b
-      let bshl ~size ~nsw ~nuw ctx a b = ar2 (Scalar.Binary_Forward.bshl ~nsw ~nuw)   ~size ctx a b                    
+      let bshl ~size ~nsw ~nuw ctx a b = ar2 (Scalar.Binary_Forward.bshl ~nsw ~nuw)   ~size ctx a b
 
       let bisdiv ~size ctx a b = ar2 (Scalar.Binary_Forward.bisdiv) ~size ctx a b
-      let bismod ~size ctx a b = ar2 (Scalar.Binary_Forward.bismod) ~size ctx a b        
+      let bismod ~size ctx a b = ar2 (Scalar.Binary_Forward.bismod) ~size ctx a b
       let biudiv ~size ctx a b = ar2 (Scalar.Binary_Forward.biudiv) ~size ctx a b
-      let biumod ~size ctx a b = ar2 (Scalar.Binary_Forward.biumod) ~size ctx a b        
+      let biumod ~size ctx a b = ar2 (Scalar.Binary_Forward.biumod) ~size ctx a b
 
-      let bconcat ~size1 ~size2 ctx a b =    
+      let bconcat ~size1 ~size2 ctx a b =
         let invalid = a.invalid || b.invalid || (not @@ BaseAddressMap.is_empty a.map) || (not @@ BaseAddressMap.is_empty b.map) in
         let unknown = a.unknown || b.unknown in
         let null = match a.null, b.null with
@@ -689,7 +691,7 @@ module MakePrev
 
     (* An unknown (i.e. outside-constructed) value may either be a
          constant, or point to the unknown part of the memory. *)
-    (* XXX: The offset for unknown is essentially useless, and we create a lot of them. 
+    (* XXX: The offset for unknown is essentially useless, and we create a lot of them.
          Maybe it is important to optimize unknown, i.e. add a special "Unknown" variable. *)
     (* XXX: I should generate assumptions based on the type:
          if an integer, state that it must be in some interval, and the base is null;
@@ -707,7 +709,7 @@ module MakePrev
 
     let binary_unknown_typed ~size ctx _typ = binary_unknown ~size ctx;;
     let has_type ~size ctx _typ v = assert false;;
-    
+
     let new_baddr addr ctx ~max =
       { null = None;
         id = fresh_id ();
@@ -729,7 +731,7 @@ module MakePrev
 
       (* For now, I copied that from bindex. *)
       let bindex ~size k ctx x e =
-        assert(k != 0);
+        (* assert(k != 0); *)
         (* Codex_log.debug "Region_separation.bindex offset:%d %a %a" k (binary_pretty ~size ctx) x (Scalar.binary_pretty ~size ctx) e ; *)
         let invalid = x.invalid in
           {
@@ -737,10 +739,10 @@ module MakePrev
             null = (match x.null with
                 | None -> None
                 | Some x -> Some(
-                    let scalar_ctx = offset2scalar ctx in 
+                    let scalar_ctx = offset2scalar ctx in
                     let k = Scalar.Binary_Forward.biconst ~size (Z.of_int k) scalar_ctx in
-                    let off = Scalar.Binary_Forward.bimul ~size ~nsw:false ~nuw:false scalar_ctx k e in
-                      Scalar.Binary_Forward.biadd ~size ~nsw:false ~nuw:true ~nusw:true scalar_ctx x off
+                    let off = Scalar.Binary_Forward.bimul ~size ~nsw:true ~nuw:false scalar_ctx k e in
+                      Scalar.Binary_Forward.biadd ~size ~nsw:false ~nuw:false ~nusw:true scalar_ctx x off
                     ));
             map = BaseAddressMap.map (fun x -> BR.offset_index ~size k ctx x e) x.map;
             unknown = x.unknown;
@@ -760,67 +762,74 @@ module MakePrev
       | None -> Scalar.binary_empty ~size @@ offset2scalar ctx
       | Some v -> v
 
-    let assume_type ~size _ctx value typ = assert false   
+    let assume_type ~size _ctx value typ = assert false
+    let type_of ~size _ctx value = None
+
+    let analyze_summary _ctx funtyp args = assert false
 
     let global_symbol ctx symb = assert false
     let add_global_symbol ~size ctx name binary = assert false
-    let add_global_scalar_symbol ~size ctx name binary = assert false
-    let satisfiable _ = assert false    
+    let satisfiable ctx cond = Scalar.satisfiable ctx (boolean2scalar_bool ctx cond)
+
+    let contained_addresses ~size _ = assert false
 
   end
   module Address = Operable_Value
 
   module Memory
-      (Region:Memory_sig.Region with module Offset = BR)
+      (AddressBlock:Memory_sig.Block with module Offset = BR)
+      (Block: Memory_sig.Block with module Value = AddressBlock.Value)
       (Lift:Memory_sig.Value_to_address
-       with module Value := Region.Value
+       with module Value := Block.Value
         and module Address := Address)
     :Memory_sig.Memory
     with module Address = Operable_Value
-     and module Value = Region.Value
-     and type boolean = Region.boolean
+     and module Block.Value = AddressBlock.Value
+     and module Block = Block
+     and type boolean = AddressBlock.boolean
   = struct
 
     let to_sub x = fst @@ Lift.ctx x
     module Address = Address
     module Domain:Domain_sig.Minimal
-      with module Context = Region.Context
-       and type boolean = Region.boolean
-      = Region
-    include Domain      
+      with module Context = AddressBlock.Context
+       and type boolean = AddressBlock.boolean
+      = AddressBlock
+    include Domain
 
-    
     module Scalar = BR.Scalar
-    module Value = Region.Value
+    module Value = AddressBlock.Value
     type address = Operable_Value.binary
 
-    type region = Region.memory
+    type block = AddressBlock.block
+    type offset = Block.offset
+
     type memory = {
       (* TODO: for recency: a pair of recent,older regions. *)
-      known: region BaseAddressMap.t; 
+      known: block BaseAddressMap.t;
       escaped: unit (* set of bases that escaped. *);
       (* TODO: as we have regions here, I can associate to each region
          the addresses that may have been written in this region. And
          implement efficiently load(store(x)=x) *)
     }
 
-    let pretty ctx fmt {known} = BaseAddressMap.mk_pretty BaseAddress.pretty (Region.pretty ctx) fmt known
+    let pretty ctx fmt {known} = BaseAddressMap.mk_pretty BaseAddress.pretty (AddressBlock.pretty ctx) fmt known
 
     let memory_empty ctx = {
       known = BaseAddressMap.empty;
-      escaped = ()  
+      escaped = ()
     }
 
     let serialize_known ctxa a ctxb b (included, acc) =
       let f ctx addr = function
         | Some x -> x
-        | None -> Region.initial ctx (BaseAddress.size_of addr)
+        | None -> AddressBlock.initial ctx (BaseAddress.size_of addr)
       in
       (* Note: we do not reconstruct in the order in which we iterate,
          which is perfectly OK. *)
       BaseAddressMap.fold_on_diff2 a b (Context.Result(included,acc,fun _ctx tup -> a,tup))
         (fun addr a b (Context.Result(inc,acc,d_map)) ->
-           let Context.Result(inc,acc,d_region) = Region.serialize ctxa (f ctxa addr a) ctxb (f ctxb addr b)
+           let Context.Result(inc,acc,d_region) = AddressBlock.serialize ctxa (f ctxa addr a) ctxb (f ctxb addr b)
             (inc,acc) in
            Context.Result(inc,acc,fun ctx tup ->
                let region,tup = d_region ctx tup in
@@ -837,7 +846,7 @@ module MakePrev
 
     let join_values ~size ctx v1 v2 =
       let Context.Result(_,tup,deserialize2) = Value.serialize ~size ctx v1 ctx v2
-        (true, Context.empty_tuple) in
+        (true, Context.empty_tuple ()) in
       let res_tup = Value.nondet_same_context ctx tup in
       fst @@ deserialize2 ctx res_tup
     ;;
@@ -848,7 +857,7 @@ module MakePrev
           let v =
             match BaseAddressMap.find addr mem.known with
             | exception Not_found -> Value.binary_empty ~size ctx
-            | region -> Region.load ~size ctx region offset
+            | region -> AddressBlock.load ~size ctx region offset
           in v::acc
         ) [] in
       match r with
@@ -860,18 +869,18 @@ module MakePrev
     let _load ~size ctx mem at =
       let res = load ~size ctx mem at in
       (* Codex_log.feedback "load result: %a" (Value.binary_pretty ~size ctx) res; *)
-      Codex_log.debug "load result: %a" (Value.binary_pretty ~size ctx) res;
+      Log.debug (fun p -> p "load result: %a" (Value.binary_pretty ~size ctx) res);
       res
     ;;
 
     let typed_load ~size ctx mem at typ =
-      Codex_log.debug "Region_separation.typed_load of type %a" Types.Ctypes.pp typ ;
+      Log.debug (fun p -> p "Region_separation.typed_load of type %a" Types.Ctypes.pp typ);
       let r = Operable_Value.fold (to_sub ctx) at (fun addr offset acc ->
           (* Codex_log.feedback "load addr %a"  (Operable_Value.binary_pretty ~size ctx) at; *)
           let v =
             match BaseAddressMap.find addr mem.known with
             | exception Not_found -> Value.binary_unknown_typed ~size ctx typ
-            | region -> Region.load ~size ctx region offset
+            | region -> AddressBlock.load ~size ctx region offset
           in v::acc
         ) [] in
       match r with
@@ -884,20 +893,20 @@ module MakePrev
       let res = load ~size ctx mem at in
       Codex_log.feedback "load result: %a" (Value.binary_pretty ~size ctx) res;
       res
-    
+
     let store_single ~size ctx mem addr offset value =
         let region =
           try BaseAddressMap.find addr mem.known
-          with Not_found -> Region.initial ctx (BaseAddress.size_of addr)
+          with Not_found -> AddressBlock.initial ctx (BaseAddress.size_of addr)
         in
-        let region = Region.store ~size ctx region offset value in
+        let region = AddressBlock.store ~size ctx region offset value in
         let result = { mem with known = BaseAddressMap.add addr region mem.known } in
         result
     ;;
 
     let join_memories ctx v1 v2 =
       let Context.Result(_,tup,deserialize2) = serialize ctx v1 ctx v2
-        (true,Context.empty_tuple) in
+        (true,Context.empty_tuple ()) in
       let res_tup = Value.nondet_same_context ctx tup in
       fst @@ deserialize2 ctx res_tup
     ;;
@@ -908,7 +917,7 @@ module MakePrev
          whole memory. We could be joining the regions instead,
          but it's probably not worth it. *)
       let r = Operable_Value.fold (to_sub ctx) at (fun addr offset acc ->
-          try 
+          try
             let v = store_single ~size ctx mem addr offset value in
             v::acc
           with Memory_Empty -> acc
@@ -917,7 +926,7 @@ module MakePrev
        | [] -> (* memory_empty ctx *) raise Memory_Empty
        | [hd] -> hd         (*  Most common case. *)
        | hd::tl -> List.fold_left (join_memories ctx) hd tl
-    ;;    
+    ;;
 
     let store ~(size:int) ctx mem at value =
       (* Codex_log.feedback "before store value %a at: %a " (pretty ctx) mem (Operable_Value.binary_pretty ~size:32 ctx) at; *)
@@ -930,10 +939,10 @@ module MakePrev
     let typed_store_single ~size (ctx:Context.t) mem addr offset typ value =
       try
         let region = BaseAddressMap.find addr mem.known in
-        let region = Region.store ~size ctx region offset value in
+        let region = AddressBlock.store ~size ctx region offset value in
         let result = { mem with known = BaseAddressMap.add addr region mem.known } in
         result
-        
+
       with Not_found ->
         let _ = Value.has_type ~size ctx typ value in
         (* This should not be done here *)
@@ -942,7 +951,7 @@ module MakePrev
 
     let typed_store ~size ctx mem at typ value =
       let r = Operable_Value.fold (to_sub ctx) at (fun addr offset acc ->
-        try 
+        try
           let v = typed_store_single ~size ctx mem addr offset typ value in
           v::acc
         with Memory_Empty -> acc
@@ -952,14 +961,14 @@ module MakePrev
      | [hd] -> hd         (*  Most common case. *)
      | hd::tl -> List.fold_left (join_memories ctx) hd tl
     ;;
-    
-    
+
+
     let malloc ~id ~malloc_size ctx mem =
       let addr = BaseAddress.Malloc (id,malloc_size) in
       (if BaseAddressMap.mem addr mem.known
        then Codex_log.fatal "Malloc in a loop is not yet supported");
       let mem' = {
-        known = BaseAddressMap.add addr (Region.initial ctx malloc_size) mem.known;
+        known = BaseAddressMap.add addr (AddressBlock.initial ctx malloc_size) mem.known;
         escaped = mem.escaped;
       }
       in
@@ -967,7 +976,7 @@ module MakePrev
     ;;
 
     let free ctx mem ptr =
-      
+
       match Operable_Value.is_precise (to_sub ctx) ptr with
       | Empty -> mem
       | Imprecise -> Codex_log.fatal "Can only handle precise frees for now"
@@ -995,7 +1004,26 @@ module MakePrev
       assert false
       (*addr1,addr2*)
 
+    let is_weak ~size _ctx value = assert false
+
     let initial _ = assert false
+
+    let shared_addresses ctxa mema ctxb memb : (Value.binary * Value.binary) list =
+      let a = mema.known in
+      let b = memb.known in
+      BaseAddressMap.fold2 a b []
+        (fun addr a b lst ->
+           match a, b with
+           | Some x, Some y -> (AddressBlock.shared_addresses ctxa x ctxb y) @ lst
+           | _ -> lst
+        )
+    ;;
+
+    module Block = Block
+
+    let load_block ~size:_ _ = assert false
+
+    let store_block ~size:_ _ = assert false
   end
 end
 
@@ -1021,17 +1049,17 @@ module Make
        and module Value := Value
     = Lift
   module Memory
-      (Value:Memory_sig.Value)
-      (Lift:Value_to_address with module Address := Address and module Value := Value)
+      (Block:Memory_sig.Block)
+      (Lift:Value_to_address with module Address := Address and module Value := Block.Value)
     :Memory_sig.Memory
-    with module Value = Value
-     and module Address = Address
-     and type boolean = Sub.Memory(Value)(SubLift(Value)(Lift)).boolean
+    with module Address = Address
+     and module Block = Block
+     and type boolean = Sub.Memory(Block.Value)(SubLift(Block.Value)(Lift)).boolean
   = struct
-    module S = SubLift(Value)(Lift)
-    module Region = Sub.Memory(Value)(S)
-    include M.Memory(Region)(Lift)
-  end  
+    module S = SubLift(Block.Value)(Lift)
+    module SubMemory = Sub.Memory(Block.Value)(S)
+    include M.Memory(SubMemory)(Block)(Lift)
+  end
 
 
 end

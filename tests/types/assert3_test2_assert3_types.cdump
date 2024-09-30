@@ -1,0 +1,17 @@
+assert3.c:12.18-22: `*ptr' -> Concat [{ 32 -> [--..--] of size 32 }; { 0 -> [--..--] of size 32 }]
+assert3.c:12.19-22: `ptr' -> ([1..0xFFFFFFFF] : ({self : Name(paireq)[{0}].(0)* | (self != 0)}))
+assert3.c:13.6-17: `ptr + 4 > (struct pair *)0' -> {0; 1}
+assert3.c:13.6-13: `ptr + 4' -> ([1..0xFFFFFFFF] : ({self : Name(paireq)[{0}].(0)* | (self != 0)})) + 0x20
+assert3.c:13.6-9: `ptr' -> ([1..0xFFFFFFFF] : ({self : Name(paireq)[{0}].(0)* | (self != 0)}))
+assert3.c:14.12-18: `ptr->b' -> [--..--]
+assert3.c:14.12-15: `ptr' -> ([1..0xFFFFFFDF] : ({self : Name(paireq)[{0}].(0)* | (self != 0)}))
+assert3.c:15.23-34: `ptr->a == b' -> {0x1}
+assert3.c:15.23-29: `ptr->a' -> [--..--]
+assert3.c:15.23-26: `ptr' -> ([1..0xFFFFFFDF] : ({self : Name(paireq)[{0}].(0)* | (self != 0)}))
+assert3.c:15.33-34: `b' -> [--..--]
+Unproved regular alarms:
+Unproved additional alarms:
+Proved 3/3 regular alarms
+Unproved 0 regular alarms and 0 additional alarms.
+assert3.c:15: assertion is TRUE (valid) (proved with abstract interpretation)
+Solved 1/1 user assertions, proved 1

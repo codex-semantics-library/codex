@@ -383,7 +383,7 @@ module Html = struct
   let logger_hashtable fmt hashtable =
     Hashtbl.iter (fun str id -> fprintf fmt "\"%d\" : \"%s\",\n" id
       (Str.global_replace (Str.regexp "\n") "\\n" 
-      (Str.global_replace (Str.regexp "\undef") "\\undef" str))
+      (Str.global_replace (Str.regexp "\\undef") "\\undef" str))
       ) hashtable
   ;;
 

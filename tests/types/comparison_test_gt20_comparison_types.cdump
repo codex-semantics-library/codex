@@ -1,0 +1,12 @@
+comparison.c:27.9-13: `*num' -> [--..--]
+comparison.c:27.10-13: `num' -> ([1..0xFFFFFFFF] : ({self : int(4)[{0}].(0)* | (self != 0)}))
+comparison.c:28.5-11: `i > 20' -> {0; 1}
+comparison.c:28.5-6: `i' -> [--..--]
+comparison.c:29.22-28: `i > 20' -> {0x1}
+comparison.c:29.22-23: `i' -> [21..0x7FFFFFFF]
+Unproved regular alarms:
+Unproved additional alarms:
+Proved 1/1 regular alarms
+Unproved 0 regular alarms and 0 additional alarms.
+comparison.c:29: assertion is TRUE (valid) (proved with abstract interpretation)
+Solved 1/1 user assertions, proved 1

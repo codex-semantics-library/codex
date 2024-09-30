@@ -19,6 +19,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
+module Log = Tracelog.Make(struct let category = "Single_value_abstraction.Noop" end);;
 (* TODO: backward transfer functions from usage of the inverse
    function + inter. E.g. use - when there was a +, etc. *)
 
@@ -31,7 +32,7 @@ let past_warnings = ref StringSet.empty
 let warn_once what =
   if not (StringSet.mem what !past_warnings) then begin
     past_warnings := StringSet.add what !past_warnings;
-    Codex_log.warning "No backpropagation for '%s'" what
+    Log.warning (fun p -> p "No backpropagation for '%s'" what)
   end
 
 module Integer_Backward = struct
@@ -78,11 +79,20 @@ module Binary_Backward = struct
   let biumod ~size _ _ _  = warn_once "biumod"; (None,None)
   let bextract ~size ~index ~oldsize _ _  = warn_once "bextract"; (None)
   let valid ~size _ _ _ = warn_once "valid"; (None)
-  let valid_ptr_arith ~size _ _ _ = warn_once "valid_ptr_arith"; (None,None)
+  let valid_ptr_arith ~size _ _ _ _ = warn_once "valid_ptr_arith"; (None,None)
   let bshift ~size ~offset ~max _ _  = warn_once "bshift"; (None)
   let bindex ~size _ _k _ _  = warn_once "bindex"; (None,None)
 
 end
+
+module Block_Forward = struct
+  let sizeof _ = assert false
+  let concat ~size1 ~size2 _ = assert false
+  let load ~size _ = assert false
+  let store ~size _ = assert false
+  let binary_to_block ~size _ = assert false
+end
+module Block_Backward = Block_Forward;;
 
 
 module Memory_Forward = struct
@@ -92,6 +102,8 @@ module Memory_Forward = struct
   let store ~size _ = assert false
   let memcpy ~size _ = assert false    
   let load ~size _ = assert false
+  let load_block _ = assert false
+  let store_block _ = assert false
   let builtin _ = assert false
   let malloc ~id ~malloc_size = assert false
   let free _ = assert false

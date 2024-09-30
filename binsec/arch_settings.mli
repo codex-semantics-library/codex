@@ -33,8 +33,7 @@ module type Registers = sig
 end
 
 module type S = functor
-  (Domain : Codex.With_focusing.S_with_types)
-  (EvalPred : Codex.Type_domain.EvalPred.Sig with module Domain := Domain) -> sig
+  (Domain : Codex.With_focusing.S_with_types) -> sig
 
   module Registers : Registers with module Domain = Domain
 end

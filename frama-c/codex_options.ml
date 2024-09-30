@@ -19,6 +19,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
+open Frama_c_kernel
 let help_msg = "analyze using codex"
 
 include Plugin.Register
@@ -72,14 +73,14 @@ module PrintValue =
        let help = "when on (on by default), print values at the end of the main function"
      end)
 
-  module TypeConfigurationFile =
-    String
-      (struct
-        let option_name = "-codex-type-file"
-        let arg_name = "<file>"
-        let default = ""
-        let help = "Path to the file containing the type definitions"
-      end)
+module TypeConfigurationFile =
+  String
+    (struct
+      let option_name = "-codex-type-file"
+      let arg_name = "<file>"
+      let default = ""
+      let help = "Path to the file containing the type definitions"
+    end)
 
 module HtmlDump =
   String
@@ -154,15 +155,85 @@ module Focusing =
       let help = "activate focusing (off by default)"
     end)
 
+module UseLoopDomain =
+  False
+    (struct
+      let option_name = "-codex-use-loop-domain"
+      let help = "when on (off by default), use the loop domain (experimental)"
+    end)
 
 
+module FixpointUseRegexp =
+  True
+    (struct
+      let option_name = "-codex-fixpoint-use-regexp"
+      let help = "when on (on by default), use the fixpoint engine based on regular expressions. Otherwise, use WTO."
+    end)
 
-let performance = register_category "performance";;    
+
+module SparseNonRelationalDomain =
+  False
+    (struct
+      let option_name = "-codex-use-sparse-nonrelational-domain"
+      let help = "when on (off by default), use the sparse nonrelational domain"
+    end)
+
+module SerializeCache =
+  False
+    (struct
+      let option_name = "-codex-serialize-cache"
+      let help = "when on (off by default), serializes the cache with the rest of the
+          memory, though it can cause problem with SSA contraint domain(experimental)"
+    end)
+
+module UseWeakTypes =
+  False
+    (struct
+      let option_name = "-codex-use-weak-types"
+      let help = "when on (off by default), malloc uses weak types (experimental)"
+    end)
+
+module OverflowAlarms =
+  False
+    (struct
+        let option_name = "-codex-overflow-alarms"
+        let help = "when on (off by default), add alarms for signed integer addition/subtraction over/underflow."
+      end)
+
+
+let performance = register_category "performance";;
 let performance_warning x = feedback ~dkey:performance x;;
 
-let emitter = 
+let emitter =
   Emitter.create
     "Codex"
-    [ Emitter.Property_status; Emitter.Alarm ] 
+    [ Emitter.Property_status; Emitter.Alarm ]
     ~correctness:[]
     ~tuning:[]
+
+
+module Location = struct
+
+  include struct
+    include (Tracelog:sig type location = Tracelog.location = .. end)
+    type location +=
+      | Function of Kernel_function.t
+      | Instruction of Cil_types.instr
+      | JoinPoint of Cil_types.kinstr
+      | Expression of Cil_types.exp
+  end
+  type t = location
+
+  let pp_loc fmt location = match location with
+    | Function kf -> Format.fprintf fmt "In function `%a':@ " Kernel_function.pretty kf
+    | Instruction i -> Format.fprintf fmt "In instruction `%a':@ " Cil_datatype.Instr.pretty i
+    | Expression e -> Format.fprintf fmt "In expression `%a':@ " Cil_datatype.Exp.pretty e
+    | _ -> assert false
+
+  let pp_loc_stack fmt stack = match stack with
+    | [] -> () (* Format.fprintf fmt "At <toplevel>" *)
+    | _ -> Format.fprintf fmt "@[<hv>"; List.iter (pp_loc fmt) (List.rev stack); Format.fprintf fmt "@]"
+
+  let () = Tracelog.set_pp_location_stack pp_loc_stack
+end
+(* Cil_datatype.Instr.loc will be useful. *)

@@ -1,0 +1,14 @@
+flexible.c:24.6-12: `0 <= i' -> {0x1}
+flexible.c:24.11-12: `i' -> [0..0x7FFFFFFF]
+flexible.c:24.16-26: `i < p->len' -> {0; 1}
+flexible.c:24.16-17: `i' -> [0..0x7FFFFFFF]
+flexible.c:24.20-26: `p->len' -> [1..0x7FFFFFFF]
+flexible.c:24.20-21: `p' -> ([1..0xFFFFFFFF] : ({self : vector("#1")[{0}].(0)* | (self != 0)}))
+flexible.c:25.4-5: `p' -> ([1..0xFFFFFFFF] : ({self : vector("#1")[{0}].(0)* | (self != 0)}))
+flexible.c:25.11-12: `i' -> [0..0x7FFFFFFE]
+flexible.c:25.16-17: `v' -> [--..--]
+Unproved regular alarms:
+Unproved additional alarms:
+Proved 2/2 regular alarms
+Unproved 0 regular alarms and 0 additional alarms.
+Solved 0/0 user assertions, proved 0

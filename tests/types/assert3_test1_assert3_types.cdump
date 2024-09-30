@@ -1,0 +1,11 @@
+assert3.c:7.21-37: `ptr->a == ptr->b' -> {0x1}
+assert3.c:7.21-27: `ptr->a' -> [--..--]
+assert3.c:7.21-24: `ptr' -> ([1..0xFFFFFFFF] : ({self : Name(paireq)[{0}].(0)* | (self != 0)}))
+assert3.c:7.31-37: `ptr->b' -> [--..--]
+assert3.c:7.31-34: `ptr' -> ([1..0xFFFFFFFF] : ({self : Name(paireq)[{0}].(0)* | (self != 0)}))
+Unproved regular alarms:
+Unproved additional alarms:
+Proved 2/2 regular alarms
+Unproved 0 regular alarms and 0 additional alarms.
+assert3.c:7: assertion is TRUE (valid) (proved with abstract interpretation)
+Solved 1/1 user assertions, proved 1

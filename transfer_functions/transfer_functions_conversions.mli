@@ -55,13 +55,24 @@ module Convert_Binary_Forward
                   and type boolean = F.boolean
                   and type binary = F.binary
 
+module Convert_Block_Forward
+  (C:Conversion)
+  (F:Block_Forward with module Arity := C.From_Arity):
+  Block_Forward with module Arity := C.To_Arity
+                  and type boolean = F.boolean
+                  and type value = F.value
+                  and type block = F.block
+                  and type offset = F.offset
+
 module Convert_Memory_Forward
   (C:Conversion)
   (F:Memory_Forward with module Arity := C.From_Arity):
   Memory_Forward with module Arity := C.To_Arity
                   and type boolean = F.boolean
-                  and type binary = F.binary
+                  and type address = F.address
                   and type memory = F.memory
+                  and type block = F.block
+                  and type value  = F.value
 
 
 

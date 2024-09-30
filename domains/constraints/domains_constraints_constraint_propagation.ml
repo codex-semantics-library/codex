@@ -56,7 +56,7 @@ module Sum = struct
     | Boolean of 'a
     | Integer of 'b
     | Binary of 'c
-      
+
 end;;
 
 module Constr = Constraints
@@ -66,7 +66,7 @@ module Make
      with type Condition.t = Cudd.Man.d Cudd.Bdd.t
      (* with type Condition.t = Constraints_condition.ConditionDom.t *)
     )
-    (B:Single_value_abstraction.Sig.Binary_Integer_Basis) =
+    (B:Single_value_abstraction.Sig.Numeric_Basis) =
 struct
 
   let name = "Domain_term_propagating_basis(" ^ B.name ^ ")"
@@ -88,7 +88,7 @@ struct
    * module type SConditionMap = Constraints_condition.DomPIPartition.SConditionMap;;
    * module ConditionMap = Constraints_condition.DomPIPartition.ConditionMap;;
    * module Condition = Constraints_condition.DomPIPartition.Condition;; *)
-  
+
 
   (* Fully path-sensitive version. Quite costly, but improves precision in some cases.
      (Is worse in others, which is not expected). *)
@@ -120,17 +120,17 @@ struct
   module BinaryConstraint = struct
     include (Constraints:module type of Constraints with type 'a t := 'a Constraints.t)
     type t = TC.binary Constraints.t
-    let to_int = Constraints.hash        
+    let to_int = Constraints.hash
   end
 
   module IntegerConstraint = struct
     include (Constraints:module type of Constraints with type 'a t := 'a Constraints.t)
     type t = TC.integer Constraints.t
-    let to_int = Constraints.hash        
+    let to_int = Constraints.hash
   end
 
   module BooleanConstraint = struct
-    include (Constraints:module type of Constraints with type 'a t := 'a Constraints.t)    
+    include (Constraints:module type of Constraints with type 'a t := 'a Constraints.t)
     type t = TC.boolean Constraints.t
     let to_int = Constraints.hash
   end
@@ -161,7 +161,7 @@ struct
     }
 
     let statel = ref [];;
-    let push_fresh() = 
+    let push_fresh() =
       let state = {
         boolean = BooleanConstraintHashtbl.create 30;
         integer = IntegerConstraintHashtbl.create 30;
@@ -169,7 +169,7 @@ struct
       } in
       statel := state::(!statel)
     ;;
-    push_fresh();;    
+    push_fresh();;
 
     let push_copy() =
       let old = List.hd (!statel) in
@@ -213,7 +213,7 @@ struct
       in loop l
     ;;
     let get_integer x = rget_integer x !statel
-        
+
     let set_boolean x value = BooleanConstraintHashtbl.replace (List.hd !statel).boolean x value
     let set_integer x value =
       (* Codex_log.feedback "Set integer cm %a %a" Constraints.pretty x IntegerConditionMap.pretty value; *)
@@ -271,7 +271,7 @@ struct
       try  BinaryConstraintMap.find x (List.hd !statel).binary
       with Not_found -> BinaryConditionMap.M.create_partial
     ;;
-    
+
     let set_boolean x value =
       let state = List.hd !statel in
       state.boolean <- BooleanConstraintMap.add x value state.boolean
@@ -282,14 +282,14 @@ struct
       let state = List.hd !statel in
       (* Codex_log.feedback "Set binary cm %a %a" Constraints.pretty x BinaryConditionMap.pretty value; *)
       state.binary <- BinaryConstraintMap.add x value state.binary
-    
+
   end
 
   (* StateMap is much faster. *)
   (* module State:State = StateHashtblList *)
   module State:State = StateMap
 
-  (* The domain does not store anything except the path condition. 
+  (* The domain does not store anything except the path condition.
      Everything is in State, the store. *)
   type domain = { condition: TC.boolean Constraints.t; } [@@unboxed]
   type t = domain;;
@@ -302,7 +302,7 @@ struct
   (**************** Domain interaction functions. ****************)
 
 
-  type binary = TC.binary Constraints.t  
+  type binary = TC.binary Constraints.t
   type integer = TC.integer Constraints.t
   type boolean = TC.boolean Constraints.t
 
@@ -310,21 +310,23 @@ struct
   let equal a b = Constraints.equal a.condition b.condition
   let top = { condition = Constraints.Build.Boolean.true_ }
 
-  let inter a b = assert false; (* No longer used. *)
+  let inter a b = (* No longer used. *)
     let condition = Constraints.Build.Boolean.(&&) a.condition b.condition in
     (* The way I use assume, one of the constraint is always more
        precise than the other. This is important if we want to use the
        efficient constraint propagation based on dominators. *)
     if Codex_config.assume_simple_asts () then
       assert(Constraints.equal a.condition condition || Constraints.equal b.condition condition);
-    (* This assertion is false because I sometimes add assertions on expressions. 
+    (* This assertion is false because I sometimes add assertions on expressions.
        It could probably be made true. *)
     (* assert((Constraints.equal a.condition b.condition)
      *        || (Constraints.equal a.condition condition && Constraints.equal b.condition top.condition)
      *        || (Constraints.equal b.condition condition && Constraints.equal a.condition top.condition)); *)
     { condition }
 
-  let join a b = 
+  let inter a b = assert false
+
+  let join a b =
     { condition = Constraints.Build.Boolean.(||) a.condition b.condition }
 
   (**************** Forward evaluation. ****************)
@@ -355,7 +357,7 @@ struct
       let condition = get_bdd dom in
       let cma = get_cma a in
       let cmb = get_cmb b in
-      let cmres = get_cmres res in            
+      let cmres = get_cmres res in
       let cmres' =
         ConditionMap.ar2 (module La) ~joina ~bottoma (module Lb) ~joinb ~bottomb (module Lres) ~interres condition f
           cma cmb cmres
@@ -371,7 +373,7 @@ struct
         f dom a (* ctx *) res =
       let condition = get_bdd dom in
       let cma = get_cma a in
-      let cmres = get_cmres res in            
+      let cmres = get_cmres res in
       let cmres' =
         ConditionMap.ar1 (module La) ~joina ~bottoma (module Lres) ~interres condition f
           cma cmres
@@ -385,7 +387,7 @@ struct
         set_cmres
         f dom (* ctx *) res =
       let condition = get_bdd dom in
-      let cmres = get_cmres res in            
+      let cmres = get_cmres res in
       let cmres' =
         ConditionMap.ar0 (module Lres) ~interres condition f
           cmres
@@ -394,7 +396,7 @@ struct
       dom
     ;;
 
-    
+
   end
 
   module With_Reevaluation = struct
@@ -411,11 +413,11 @@ struct
        needed, and store the result of the recomputation. *)
     let rec get_query_integer constr cond =
       let cm = State.get_integer constr in
-      try 
+      try
         IntegerConditionMap.find_join cm cond
       with Condition_map.Never_refined ->
         (* Note: it is usual to reevaluate constants, because of rewrites. *)
-        if Constraints.level constr >= 0 then        
+        if Constraints.level constr >= 0 then
           Codex_log.warning "I need to re-evaluate %a (whose computation was not saved)" Constraints.pretty constr;
         let res = match constr with
         | Constraints.(Integer{term=T0{tag=TC.Iconst k}}) ->
@@ -474,7 +476,7 @@ struct
         in State.set_boolean x @@ BooleanConditionMap.refine ~inter:(B.Boolean_Lattice.inter) cm ~cond res;
         res
 
-        
+
     let recompute_binary  constr cond = ignore @@ get_query_binary constr cond
     let recompute_integer constr cond = ignore @@ get_query_integer constr cond
 
@@ -517,12 +519,12 @@ struct
 
 
     let ar0 = No_Reevaluation.ar0
-    
+
   end
 
-  (* include No_Reevaluation *)  
+  (* include No_Reevaluation *)
   include With_Reevaluation
-    
+
   let ar2_integer_integer_boolean =
     ar2 State.get_integer get_query_integer (module IntegerConditionMap) ~joina:B.Integer_Lattice.join ~bottoma:B.Integer_Lattice.bottom ~intera:B.Integer_Lattice.inter
       State.get_integer get_query_integer  (module IntegerConditionMap) ~joinb:B.Integer_Lattice.join  ~bottomb:B.Integer_Lattice.bottom ~interb:B.Integer_Lattice.inter
@@ -542,11 +544,11 @@ struct
   let ar2_binary_binary_boolean ~sizea ~sizeb =
     (* Note: take advantage of the fact that currently, all the
        binary predicates require both arguments to have the same
-       size. *)      
+       size. *)
     assert(sizea == sizeb);
     let join = (B.Binary_Lattice.join ~size:sizea) in
-    let bottom = (B.Binary_Lattice.bottom ~size:sizea) in      
-    let inter = (B.Binary_Lattice.inter ~size:sizea) in      
+    let bottom = (B.Binary_Lattice.bottom ~size:sizea) in
+    let inter = (B.Binary_Lattice.inter ~size:sizea) in
     ar2 State.get_binary get_query_binary (module BinaryConditionMap) ~joina:join ~bottoma:bottom ~intera:inter
       State.get_binary get_query_binary  (module BinaryConditionMap) ~joinb:join ~bottomb:bottom ~interb:inter
       State.get_boolean (module BooleanConditionMap) ~interres:B.Boolean_Lattice.inter
@@ -559,11 +561,11 @@ struct
     let joina = (B.Binary_Lattice.join ~size:sizea) in
     let joinb = (B.Binary_Lattice.join ~size:sizeb) in
     let bottoma = (B.Binary_Lattice.bottom ~size:sizea) in
-    let bottomb = (B.Binary_Lattice.bottom ~size:sizeb) in      
+    let bottomb = (B.Binary_Lattice.bottom ~size:sizeb) in
     let intera = (B.Binary_Lattice.inter ~size:sizea) in
     let interb = (B.Binary_Lattice.inter ~size:sizeb) in
-    let interres = (B.Binary_Lattice.inter ~size:sizeres) in                  
-    let get_query_binary = get_query_binary (* ~join *) in      
+    let interres = (B.Binary_Lattice.inter ~size:sizeres) in
+    let get_query_binary = get_query_binary (* ~join *) in
     ar2 State.get_binary get_query_binary (module BinaryConditionMap) ~joina ~bottoma ~intera
       State.get_binary get_query_binary  (module BinaryConditionMap) ~joinb ~bottomb ~interb
       State.get_binary (module BinaryConditionMap) ~interres
@@ -586,7 +588,7 @@ struct
 
   let ar1_integer_integer =
     ar1 State.get_integer get_query_integer (module IntegerConditionMap) ~joina:B.Integer_Lattice.join ~bottoma:B.Integer_Lattice.bottom ~intera:B.Integer_Lattice.inter
-      State.get_integer (module IntegerConditionMap)  ~interres:B.Integer_Lattice.inter 
+      State.get_integer (module IntegerConditionMap)  ~interres:B.Integer_Lattice.inter
       State.set_integer
   ;;
 
@@ -641,7 +643,7 @@ struct
 
   module Boolean_Forward = struct
     let (&&) = ar2_boolean_boolean_boolean B.Boolean_Forward.(&&)
-    let (||) = ar2_boolean_boolean_boolean B.Boolean_Forward.(||)          
+    let (||) = ar2_boolean_boolean_boolean B.Boolean_Forward.(||)
     let not = ar1_boolean_boolean B.Boolean_Forward.not
     let true_ = ar0_boolean B.Boolean_Forward.true_
     let false_ = ar0_boolean B.Boolean_Forward.false_
@@ -654,7 +656,7 @@ struct
     let ieq = ar2_integer_integer_boolean B.Integer_Forward.ieq
     let ile = ar2_integer_integer_boolean B.Integer_Forward.ile
     let iadd = ar2_integer_integer_integer B.Integer_Forward.iadd
-    let isub = ar2_integer_integer_integer B.Integer_Forward.isub          
+    let isub = ar2_integer_integer_integer B.Integer_Forward.isub
     let imul = ar2_integer_integer_integer B.Integer_Forward.imul
     let idiv = ar2_integer_integer_integer B.Integer_Forward.idiv
     let imod = ar2_integer_integer_integer B.Integer_Forward.imod
@@ -686,11 +688,11 @@ struct
     let biudiv ~size = ar2_binary_binary_binary ~sizea:size ~sizeb:size ~sizeres:size @@ B.Binary_Forward.biudiv ~size
     let bismod ~size = ar2_binary_binary_binary ~sizea:size ~sizeb:size ~sizeres:size @@ B.Binary_Forward.bismod ~size
     let biumod ~size = ar2_binary_binary_binary ~sizea:size ~sizeb:size ~sizeres:size @@ B.Binary_Forward.biumod ~size
-        
+
     let bsext ~size ~oldsize = ar1_binary_binary ~sizea:oldsize ~sizeres:size @@ B.Binary_Forward.bsext ~size ~oldsize
     let buext ~size ~oldsize = ar1_binary_binary ~sizea:oldsize ~sizeres:size @@ B.Binary_Forward.buext ~size ~oldsize
     let bchoose ~size cond = ar1_binary_binary ~sizea:size ~sizeres:size @@ B.Binary_Forward.bchoose ~size cond
-    let bofbool ~size = ar1_boolean_binary ~sizeres:size @@ B.Binary_Forward.bofbool ~size                             
+    let bofbool ~size = ar1_boolean_binary ~sizeres:size @@ B.Binary_Forward.bofbool ~size
     let bconcat ~size1 ~size2 = ar2_binary_binary_binary ~sizea:size1 ~sizeb:size2 ~sizeres:(size1+size2) @@ B.Binary_Forward.bconcat ~size1 ~size2
     let bextract ~size ~index ~oldsize = ar1_binary_binary ~sizea:oldsize ~sizeres:size @@ B.Binary_Forward.bextract ~size ~index ~oldsize
     let valid ~size _ = assert false
@@ -703,14 +705,14 @@ struct
     let assume ~size _ = assert false
   end
 
-  
-  let binary_empty ~size = ar0_binary ~size (B.Binary_Lattice.bottom ~size)  
+
+  let binary_empty ~size = ar0_binary ~size (B.Binary_Lattice.bottom ~size)
   let integer_empty = ar0_integer (B.Integer_Lattice.bottom)
   let boolean_empty = ar0_boolean (B.Boolean_Lattice.bottom)
 
-  let binary_unknown ~size = ar0_binary ~size (B.Binary_Lattice.top ~size)  
+  let binary_unknown ~size = ar0_binary ~size (B.Binary_Lattice.top ~size)
   let integer_unknown = ar0_integer (B.Integer_Lattice.top)
-  let boolean_unknown = ar0_boolean (B.Boolean_Lattice.top)        
+  let boolean_unknown = ar0_boolean (B.Boolean_Lattice.top)
 
   (**************** Nondet.  ****************)
 
@@ -781,7 +783,7 @@ struct
         in
         (* Codex_log.feedback "nondet disjoint %a %a (%a) (%a) (%a) res (%a)"
          *   Condition.pretty conda
-         *   Condition.pretty condb          
+         *   Condition.pretty condb
          *   BinaryConditionMap.pretty cma
          *   BinaryConditionMap.pretty cmb
          *   BinaryConditionMap.pretty old
@@ -793,7 +795,7 @@ struct
          *   (BinaryConditionMap.pretty) (Constraints_condition.DomPIPartition.M.refine conda ~inter:(B.Binary_Lattice.inter ~size) ~join:(fun _ _ -> assert false) av old); *)
         State.set_binary res cmres
       in
-      
+
       try fonce a b res
       (* Retry once if this fails. *)
       with Condition_map.Never_refined ->
@@ -862,6 +864,10 @@ struct
     else nondet_non_disjoint ~doma ~domb ~tupa ~tupb ~tupres
   ;;
 
+  (**************** Widened fixpoint step. ****************)
+
+  let widened_fixpoint_step ~previous ~previous_tup ~next ~next_tup _bool ~res_tup = assert false
+
   (**************** Fixpoint step. ****************)
 
 
@@ -869,7 +875,7 @@ struct
     if option_push_and_pop then State.push() else ()
   ;;
 
-  let fixpoint_step ~lvl actual_dom  ~actuals arg_dom ~args final_dom ~finals =
+  let fixpoint_step ~lvl ~iteration actual_dom  ~actuals arg_dom ~args final_dom ~finals =
     let arg_cond = get_bdd arg_dom in
     let final_cond = get_bdd final_dom in
     let actual_cond = arg_cond in
@@ -885,7 +891,7 @@ struct
         | (Constraints.Bool _ as actual),
           (Constraints.Bool _ as arg),
           (Constraints.Bool _ as final) ->
-          (* backup_evaluation actual_cond actual; *)          
+          (* backup_evaluation actual_cond actual; *)
           let actualv = BooleanConditionMap.find_join (State.get_boolean actual) actual_cond in
           let argv = BooleanConditionMap.find_join (State.get_boolean arg) arg_cond in
           let finalv = BooleanConditionMap.find_join (State.get_boolean final) final_cond in
@@ -901,7 +907,7 @@ struct
           (Constraints.Integer _ as arg),
           (Constraints.Integer _ as final) ->
           let actualv = get_query_integer actual actual_cond in
-          let argv = get_query_integer arg arg_cond in          
+          let argv = get_query_integer arg arg_cond in
           let finalv = IntegerConditionMap.find_join (State.get_integer final) final_cond in
           let joined = B.Integer_Lattice.join actualv finalv in
           let (bool,widened) =
@@ -923,7 +929,7 @@ struct
           assert(sizeactual == sizefinal);
           let size = sizeactual in
           let actualv = get_query_binary actual actual_cond in
-          let argv = get_query_binary arg arg_cond in          
+          let argv = get_query_binary arg arg_cond in
           let finalv = BinaryConditionMap.find_join ~size (State.get_binary final) final_cond in
           let joined = B.Binary_Lattice.join ~size actualv finalv in
           let (bool,widened) =
@@ -961,7 +967,7 @@ struct
               State.set_integer res @@ IntegerConditionMap.refine ~inter:B.Integer_Lattice.inter IntegerConditionMap.create_partial widened ~cond:Condition.one
             | Constraints.Binary {size} as res, Sum.Binary widened ->
               State.set_binary res @@ BinaryConditionMap.refine ~inter:(B.Binary_Lattice.inter ~size) BinaryConditionMap.create_partial widened ~cond:Condition.one
-           
+
             | _ -> failwith "typing error"
           );
         (* Codex_log.feedback "fpstep: returning %a" Constraints.pretty actual_dom.condition; *)
@@ -988,7 +994,7 @@ struct
       let cmb = get_cmb b in
       let cmres = get_cmres res in
 
-      try 
+      try
         let ((conda,cma'),(condb,cmb')) =
           ConditionMap.ar2_bwd (module La) ~joina ~bottoma ~intera (module Lb) ~joinb ~bottomb ~interb (module Lres) ~joinres ~bottomres condition f
             cma cmb cmres in
@@ -1005,7 +1011,7 @@ struct
         changed
       with Condition_map.Never_refined ->
         Codex_log.warning "A backward evaluation failed";
-        []            
+        []
     ;;
 
     let ar1
@@ -1016,7 +1022,7 @@ struct
       let cma = get_cma a in
       let cmres = get_cmres res in
 
-      try 
+      try
         let (conda,cma') =
           ConditionMap.ar1_bwd (module La) ~joina ~bottoma ~intera (module Lres) ~joinres ~bottomres condition f
             cma cmres in
@@ -1040,7 +1046,7 @@ struct
       let interb = intera in
       let bottoma = B.Binary_Lattice.bottom ~size:sizea in
       let bottomb = bottoma in
-      let bottomres = B.Boolean_Lattice.bottom in            
+      let bottomres = B.Boolean_Lattice.bottom in
       ar2 State.get_binary State.set_binary (module BinaryConditionMap) ~joina ~bottoma ~intera
         State.get_binary State.set_binary (module BinaryConditionMap) ~joinb ~bottomb ~interb
         State.get_boolean (module BooleanConditionMap) ~joinres:B.Boolean_Lattice.join ~bottomres
@@ -1062,25 +1068,25 @@ struct
 
     let ar1_binary_binary ~sizea ~sizeres =
       let joina = B.Binary_Lattice.join ~size:sizea in
-      let intera = B.Binary_Lattice.inter ~size:sizea in      
+      let intera = B.Binary_Lattice.inter ~size:sizea in
       let joinres = B.Binary_Lattice.join ~size:sizeres in
       let bottoma = B.Binary_Lattice.bottom ~size:sizea in
-      let bottomres = B.Binary_Lattice.bottom ~size:sizeres in      
+      let bottomres = B.Binary_Lattice.bottom ~size:sizeres in
       ar1 State.get_binary State.set_binary (module BinaryConditionMap) ~joina ~bottoma ~intera
         State.get_binary (module BinaryConditionMap) ~joinres ~bottomres
     ;;
 
     let ar1_boolean_binary ~sizeres =
       let joina = B.Boolean_Lattice.join in
-      let intera = B.Boolean_Lattice.inter in      
+      let intera = B.Boolean_Lattice.inter in
       let joinres = B.Binary_Lattice.join ~size:sizeres in
       let bottoma = B.Boolean_Lattice.bottom in
-      let bottomres = B.Binary_Lattice.bottom ~size:sizeres in      
+      let bottomres = B.Binary_Lattice.bottom ~size:sizeres in
       ar1 State.get_boolean State.set_boolean (module BooleanConditionMap) ~joina ~bottoma ~intera
         State.get_binary (module BinaryConditionMap) ~joinres ~bottomres
     ;;
 
-    
+
     let ar2_integer_integer_boolean =
       ar2 State.get_integer State.set_integer (module IntegerConditionMap) ~joina:B.Integer_Lattice.join ~bottoma:B.Integer_Lattice.bottom ~intera:B.Integer_Lattice.inter
         State.get_integer State.set_integer (module IntegerConditionMap)   ~joinb:B.Integer_Lattice.join ~bottomb:B.Integer_Lattice.bottom ~interb:B.Integer_Lattice.inter
@@ -1112,7 +1118,7 @@ struct
     module Binary = struct
       let beq    ~size = ar2_binary_binary_boolean ~sizea:size ~sizeb:size @@ B.Binary_Backward.beq ~size
       let biule  ~size = ar2_binary_binary_boolean ~sizea:size ~sizeb:size @@ B.Binary_Backward.biule ~size
-      let bisle  ~size = ar2_binary_binary_boolean ~sizea:size ~sizeb:size @@ B.Binary_Backward.bisle ~size        
+      let bisle  ~size = ar2_binary_binary_boolean ~sizea:size ~sizeb:size @@ B.Binary_Backward.bisle ~size
       let biadd  ~size ~nsw ~nuw ~nusw = ar2_binary_binary_binary ~sizea:size ~sizeb:size ~sizeres:size @@ B.Binary_Backward.biadd ~size ~nsw ~nuw ~nusw
       let bisub  ~size ~nsw ~nuw ~nusw = ar2_binary_binary_binary ~sizea:size ~sizeb:size ~sizeres:size @@ B.Binary_Backward.bisub ~size ~nsw ~nuw ~nusw
       let bimul  ~size ~nsw ~nuw = ar2_binary_binary_binary ~sizea:size ~sizeb:size ~sizeres:size @@ B.Binary_Backward.bimul ~size ~nsw ~nuw
@@ -1128,22 +1134,22 @@ struct
       let biumod ~size = ar2_binary_binary_binary ~sizea:size ~sizeb:size ~sizeres:size @@ B.Binary_Backward.biumod ~size
       let bsext ~size ~oldsize = ar1_binary_binary ~sizea:oldsize ~sizeres:size @@ B.Binary_Backward.bsext ~size ~oldsize
       let buext ~size ~oldsize = ar1_binary_binary ~sizea:oldsize ~sizeres:size @@ B.Binary_Backward.buext ~size ~oldsize
-      let bofbool ~size = ar1_boolean_binary ~sizeres:size @@ B.Binary_Backward.bofbool ~size                                       
+      let bofbool ~size = ar1_boolean_binary ~sizeres:size @@ B.Binary_Backward.bofbool ~size
       let bconcat ~size1 ~size2 = ar2_binary_binary_binary ~sizea:size1 ~sizeb:size2 ~sizeres:(size1+size2) @@ B.Binary_Backward.bconcat ~size1 ~size2
       let bextract ~size ~index ~oldsize = ar1_binary_binary ~sizea:oldsize ~sizeres:size @@ B.Binary_Backward.bextract ~size ~index ~oldsize
       let id ~size = ar1_binary_binary ~sizea:size ~sizeres:size (fun a res ->
           let inter = B.Binary_Lattice.inter ~size a res in
           if B.Binary_Lattice.equal a inter then None
           else Some inter)
-      
+
     end
 
-    
+
     module Integer = struct
       let ieq = ar2_integer_integer_boolean B.Integer_Backward.ieq
       let ile = ar2_integer_integer_boolean B.Integer_Backward.ile
       let iadd = ar2_integer_integer_integer B.Integer_Backward.iadd
-      let isub = ar2_integer_integer_integer B.Integer_Backward.isub          
+      let isub = ar2_integer_integer_integer B.Integer_Backward.isub
       let imul = ar2_integer_integer_integer B.Integer_Backward.imul
       let idiv = ar2_integer_integer_integer B.Integer_Backward.idiv
       let imod = ar2_integer_integer_integer B.Integer_Backward.imod
@@ -1161,18 +1167,18 @@ struct
     end
     module Boolean = struct
       let (&&) = ar2_boolean_boolean_boolean B.Boolean_Backward.(&&)
-      let (||) = ar2_boolean_boolean_boolean B.Boolean_Backward.(||)          
+      let (||) = ar2_boolean_boolean_boolean B.Boolean_Backward.(||)
       let not = ar1_boolean_boolean B.Boolean_Backward.not
       let id = ar1_boolean_boolean (fun a res ->
           let inter = B.Boolean_Lattice.inter a res in
           if B.Boolean_Lattice.equal a inter then None
-          else Some inter)          
+          else Some inter)
     end
 
 
 
-    
-    
+
+
     let backward_interp condition (Constraints.Any constr) =
       let open TC in
       let open Constraints in
@@ -1184,13 +1190,13 @@ struct
       | Bool{term=(Mu_formal _|Unknown _) } -> []
       | Integer{term=(Mu_formal _|Unknown _) } -> []
       | Binary{term=(Mu_formal _|Unknown _) } -> []
-      (* Note that we cannot blindly propagate backward with nondet. 
+      (* Note that we cannot blindly propagate backward with nondet.
          The reason is the following deduction rules:
 
          nondet(x,y) = 30 |- x = 30 \/ y = 30
          x = 30 /\ y = 30 |- nondet(x,y) = 30.
 
-         "= 30" can be replaced by any predicate. To understand the first rule, we must remember 
+         "= 30" can be replaced by any predicate. To understand the first rule, we must remember
          that the condition under which nondet(x,y) = 30 imply that we have nondet(x,y) = x; in which
          case we cannot deduce anything from y.
 
@@ -1200,7 +1206,7 @@ struct
         if not option_propagate_across_nondet then []
         else
           let Constraints.Bool{bdd=conda} =conda_bool in
-          let Constraints.Bool{bdd=condb} =condb_bool in        
+          let Constraints.Bool{bdd=condb} =condb_bool in
           if not @@ Condition.disjoint conda condb then []
           else
             let constra = Constraints.Build.Tuple.get_binary ~size j a in
@@ -1212,7 +1218,7 @@ struct
         if not option_propagate_across_nondet then []
         else
           let Constraints.Bool{bdd=conda} =conda_bool in
-          let Constraints.Bool{bdd=condb} =condb_bool in        
+          let Constraints.Bool{bdd=condb} =condb_bool in
           if not @@ Condition.disjoint conda condb then []
           else
             let constra = Constraints.Build.Tuple.get_integer j a in
@@ -1224,7 +1230,7 @@ struct
         if not option_propagate_across_nondet then []
         else
           let Constraints.Bool{bdd=conda} =conda_bool in
-          let Constraints.Bool{bdd=condb} =condb_bool in        
+          let Constraints.Bool{bdd=condb} =condb_bool in
           if not @@ Condition.disjoint conda condb then []
           else
             let constra = Constraints.Build.Tuple.get_boolean j a in
@@ -1238,7 +1244,7 @@ struct
       | Integer{term=Tuple_get(j,Mu _)} -> []
       | Binary{term=Tuple_get(j,Mu _)} -> []
       | Binary{term=T1{tag=Bchoose(_,_)}} -> []
-      | Binary{term=T2{tag=Bunion(_,_);a;b}} -> []    
+      | Binary{term=T2{tag=Bunion(_,_);a;b}} -> []
 
       | Bool{term=T2{tag=And;a;b}} -> Boolean.(&&) condition a b constr
       | Bool{term=T2{tag=Or;a;b}} ->
@@ -1266,10 +1272,10 @@ struct
       | Binary{term=T2{tag=Bconcat(size1,size2);a;b}} -> Binary.bconcat ~size1 ~size2 condition a b constr
       | Binary{term=T1{tag=Bsext(size);a=Binary{size=oldsize} as a}} -> Binary.bsext ~size ~oldsize condition a constr
       | Binary{term=T1{tag=Buext(size);a=Binary{size=oldsize} as a}} -> Binary.buext ~size ~oldsize condition a constr
-      | Binary{term=T1{tag=Bofbool(size);a=Bool _ as a}} -> Binary.bofbool ~size condition a constr                                                                      
+      | Binary{term=T1{tag=Bofbool(size);a=Bool _ as a}} -> Binary.bofbool ~size condition a constr
       | Binary{term=T1{tag=Bextract{size;index;oldsize};a}} -> Binary.bextract ~size ~index ~oldsize condition a constr
 
-    
+
       | Bool{term=T2{tag=Ieq;a;b}}     -> Integer.ieq  condition a b constr
       | Bool{term=T2{tag=Ile;a;b}}     -> Integer.ile  condition a b constr
       | Integer{term=T2{tag=Iadd;a;b}} -> Integer.iadd condition a b constr
@@ -1287,16 +1293,18 @@ struct
 
       | Bool{term=Empty} -> []
       | Integer{term=Empty} -> []
-      | Binary{term=Empty} -> []                             
-    ;;    
+      | Binary{term=Empty} -> []
+
+      | _ -> assert false
+    ;;
 
   end
 
-  module MakeWorklist(Comp:sig 
-      val compare: Constraints.any -> Constraints.any -> int 
+  module MakeWorklist(Comp:sig
+      val compare: Constraints.any -> Constraints.any -> int
     end) = struct
 
-    module Heap = Binary_heap.Make(struct 
+    module Heap = Binary_heap.Make(struct
         type t = Constraints.any
         let compare = Comp.compare
       end)
@@ -1310,7 +1318,7 @@ struct
 
     (* Note that we join conditions; else this would lead to
        exponential behaviour (when there is a if, we need to
-       consider the code before or after the if only once). 
+       consider the code before or after the if only once).
 
        But this means that not using None when propagation makes no
        improvement can degrade precision (and not only degrade
@@ -1324,7 +1332,7 @@ struct
       with Not_found -> Hash.replace hash any cond
     ;;
 
-    let pop_minimum {heap;hash} = 
+    let pop_minimum {heap;hash} =
       let any = Heap.pop_minimum heap in
       let cond = Hash.find hash any in
       (* Remove from hash? Normally this is not needed, because it
@@ -1360,12 +1368,12 @@ struct
 
   end
 
-  module BackwardWorklist = MakeWorklist(struct 
+  module BackwardWorklist = MakeWorklist(struct
       open Constraints
       let compare a b = (Any.get_id_int b) - (Any.get_id_int a)
     end)
 
-  module ForwardWorklist = MakeWorklist(struct 
+  module ForwardWorklist = MakeWorklist(struct
       open Constraints
       let compare a b = (Any.get_id_int a) - (Any.get_id_int b)
     end)
@@ -1373,20 +1381,20 @@ struct
 
   let backward_propagate  worklist =
     let fwd_worklist = ForwardWorklist.create 10 in
-    begin try 
+    begin try
         let limit_count = ref 0 in
         let limit = 1000 in
         (* Possibly: also add the parents to the backward worklist;
            but make sure that elements are processed only once. *)
         while true do
-          let (Constraints.Any(max_elt) as max_any,cond) = 
-            BackwardWorklist.pop_maximum worklist 
+          let (Constraints.Any(max_elt) as max_any,cond) =
+            BackwardWorklist.pop_maximum worklist
           in
-          Constraints.Parents.iter_on_parents max_elt (fun parent ->
+          Constraints.Superterms.iter_on_superterms max_elt (fun parent ->
               ForwardWorklist.add fwd_worklist parent cond
             );
           let changed = Backward.backward_interp cond max_any in
-          changed |> List.iter (fun (cond,any) -> 
+          changed |> List.iter (fun (cond,any) ->
               let Constraints.Any x = any in
               (* Kernel.feedback "adding %a" Constraints.pretty x; *)
               assert (Constraints.Any.get_id_int any < Constraints.Any.get_id_int max_any);
@@ -1406,7 +1414,7 @@ struct
     (* Should not require assumption on already-known facts. *)
     assert (get_query_boolean cond (get_bdd dom) = Lattices.Quadrivalent.Top);
     (* This avoids repeating in every domain. *)
-    (* Codex_log.feedback "Maybe assuming on %a" Constraints.pretty cond; *)      
+    (* Codex_log.feedback "Maybe assuming on %a" Constraints.pretty cond; *)
     let rescond = Constraints.Build.Boolean.(&&) cond dom.condition in
     (* We could special case these, but they never happen in practice. *)
     (* if Constraints.equal rescond dom.condition

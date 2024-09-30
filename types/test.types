@@ -1,0 +1,53 @@
+/* Testing a comment. */
+/* A more difficult one **/
+
+// Should still print a
+type a = int
+type b = int+
+  type c = struct { int i; /* comment */ int j; }
+type d = union { int i; struct { int i;}+ n; }
+type e = int with self = 3
+
+
+int func(void);
+int func();
+int func(int i);
+int func(int i, int j);
+inline struct bar* func(int a, int b);
+
+struct foo {
+  int i;
+  int j;
+};
+
+union bar { int a; short b; };
+
+void test2 (([int] -> void)+ funptr);
+
+
+
+
+// Expressions.
+type e1 = int with self == 4 + 3
+type e2 = int with self + 1 == 4
+type e3 = int with self + 1 * 5 == 4
+type e3 = int with self * 1 + 2 * 5 == 4
+type e4 = int with self * 5 + 2 == 4
+type e5 = int with self * 5 * 6 == 4
+type e6 = int with self + 5 - 6 == 4
+type e7 = int with (self << 5) == 4
+type e8 = int with self == (4 >> 2)
+type e9 = int with self <= 8 && self >= 2
+type e10 = int with self <= 8 && self >= 2 && self % 4 == 0
+type e11 = int with self <= 8 || self >= 2 || self % 4 == 0
+type e12 = int with (self & 3) == 4
+type e13 = int(+)(int,int)
+
+
+// Those fail as we cannot compare the precedence of operators. 
+// type e = int with self << 5 == 4  
+// type e = int with self < 3 < 5
+// type a = int with self + 2 + 3 = 4 << 8
+// type e10 = int with self <= 8 && self >= 2 || self % 4 == 0
+// type e12 = int with self & 3 == 4
+// type e13 = \exists n:int. int+

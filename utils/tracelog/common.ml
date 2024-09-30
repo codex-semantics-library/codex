@@ -32,3 +32,5 @@ type Format.stag +=
 type 'a printf = ('a, Format.formatter, unit) format -> 'a
 
 type 'a log =  'a printf -> unit;;
+
+exception Fatal

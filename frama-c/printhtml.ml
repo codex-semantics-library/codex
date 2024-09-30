@@ -19,6 +19,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
+open Frama_c_kernel
 (* As the printer reconstructs some expressions (e.g. ++), the
    displayed expressions may not match the true expressions of the
    program (there are expressions that are created, and the nest level
@@ -41,9 +42,9 @@ module ExpOrLvalWithId = struct
 
   module Type = struct
     type t = (exp_or_lval * int)
-    let compare (_,a) (_,b) = Datatype.Int.compare a b
-    let hash (_,a) = Datatype.Int.hash a
-    let equal (_,a) (_,b) = Datatype.Int.equal a b
+    let compare (_,a) (_,b) = compare (a:int) b
+    let hash (_,a) = a
+    let equal (_,a) (_,b) = a == b
     let pretty (a,_) = assert false
   end
 
@@ -130,6 +131,32 @@ module PrintHtmlCode = struct
         super#instr fmt instr;
         Format.pp_print_as fmt 0 "</span>";
 
+      method! pp_keyword fmt keyword =
+        Format.pp_print_as fmt 0 "<span class=\"keyword\">";
+        super#pp_keyword fmt keyword;
+        Format.pp_print_as fmt 0 "</span>";
+
+      (*  the foo in struct foo. *)
+      method! compname fmt compinfo =
+        Format.pp_print_as fmt 0 "<span class=\"type\">";
+        super#compname fmt compinfo;
+        Format.pp_print_as fmt 0 "</span>";
+
+        
+        
+      method! typ ?fundecl f fmt typ =
+        let f = match f with
+          | None -> None
+          | Some f -> Some(fun fmt ->
+            Format.pp_print_as fmt 0 "<span class=\"vardecl\">";
+            f fmt;
+            Format.pp_print_as fmt 0 "</span>")
+        in
+        Format.pp_print_as fmt 0 "<span class=\"type\">";
+        super#typ ?fundecl f fmt typ;
+        Format.pp_print_as fmt 0 "</span>";
+
+        
       method! binop fmt = function
         | Shiftlt -> Format.pp_print_as fmt 2 "&lt;&lt;"
         | Shiftrt -> Format.pp_print_as fmt 2 "&gt;&gt;"
@@ -141,28 +168,29 @@ module PrintHtmlCode = struct
         | x -> super#binop fmt x
 
       method! ikind fmt = function
-        | IBool -> Format.pp_print_as fmt 1 "<span class=\"keyword\">_Bool</span>"
-        | IChar -> Format.pp_print_as fmt 1 "<span class=\"keyword\">char</span>"
-        | ISChar -> Format.pp_print_as fmt 1 "<span class=\"keyword\">signed char</span>"
-        | IUChar -> Format.pp_print_as fmt 1 "<span class=\"keyword\">unsigned char</span>"
-        | IInt -> Format.pp_print_as fmt 1 "<span class=\"keyword\">int</span>"
-        | IUInt -> Format.pp_print_as fmt 1 "<span class=\"keyword\">unsigned int</span>"
-        | IShort -> Format.pp_print_as fmt 1 "<span class=\"keyword\">short</span>"
-        | IUShort -> Format.pp_print_as fmt 1 "<span class=\"keyword\">unsigned short</span>"
-        | ILong -> Format.pp_print_as fmt 1 "<span class=\"keyword\">long</span>"
-        | IULong -> Format.pp_print_as fmt 1 "<span class=\"keyword\">unsigned long</span>"
-        | ILongLong -> Format.pp_print_as fmt 1 "<span class=\"keyword\">long long</span>"
-        | IULongLong -> Format.pp_print_as fmt 1 "<span class=\"keyword\">unsigned long long</span>"
+        | IBool -> Format.pp_print_as fmt 1 "<span class=\"type\">_Bool</span>"
+        | IChar -> Format.pp_print_as fmt 1 "<span class=\"type\">char</span>"
+        | ISChar -> Format.pp_print_as fmt 1 "<span class=\"type\">signed char</span>"
+        | IUChar -> Format.pp_print_as fmt 1 "<span class=\"type\">unsigned char</span>"
+        | IInt -> Format.pp_print_as fmt 1 "<span class=\"type\">int</span>"
+        | IUInt -> Format.pp_print_as fmt 1 "<span class=\"type\">unsigned int</span>"
+        | IShort -> Format.pp_print_as fmt 1 "<span class=\"type\">short</span>"
+        | IUShort -> Format.pp_print_as fmt 1 "<span class=\"type\">unsigned short</span>"
+        | ILong -> Format.pp_print_as fmt 1 "<span class=\"type\">long</span>"
+        | IULong -> Format.pp_print_as fmt 1 "<span class=\"type\">unsigned long</span>"
+        | ILongLong -> Format.pp_print_as fmt 1 "<span class=\"type\">long long</span>"
+        | IULongLong -> Format.pp_print_as fmt 1 "<span class=\"type\">unsigned long long</span>"
 
         method! fkind fmt = function
-        | FFloat -> Format.pp_print_as fmt 1 "<span class=\"keyword\">float</span>"
-        | FDouble -> Format.pp_print_as fmt 1 "<span class=\"keyword\">double</span>"
-        | FLongDouble -> Format.pp_print_as fmt 1 "<span class=\"keyword\">long double</span>"
+        | FFloat -> Format.pp_print_as fmt 1 "<span class=\"type\">float</span>"
+        | FDouble -> Format.pp_print_as fmt 1 "<span class=\"type\">double</span>"
+        | FLongDouble -> Format.pp_print_as fmt 1 "<span class=\"type\">long double</span>"
 
       (* Just add a link to jump to. *)
       method! varinfo fmt vi =
         if vi.vglob then begin
-          Format.pp_print_as fmt 0 (Printf.sprintf "<a data-eid=\"%d\" href=\"#vi-global-%s\" class=\"expnest expnest%d\">" !exp_unique_id vi.vname !current_level);
+          let classname = if Cil.isFunctionType vi.vtype then "function-name" else "vardecl" in
+          Format.pp_print_as fmt 0 (Printf.sprintf "<a data-eid=\"%d\" href=\"#vi-global-%s\" class=\"expnest expnest%d %s\">" !exp_unique_id vi.vname !current_level classname);
           let name = (Format.asprintf "%s" vi.vname) in
           add_exp (Function name) !exp_unique_id !current_level;
           incr exp_unique_id;
@@ -241,9 +269,6 @@ let prefixe = {prefixe|
     });
   </script>
   <style>
-    a {
-      color: #d0a14b;
-    }
 
     .def {
       display: none;
@@ -343,7 +368,7 @@ let prefixe = {prefixe|
     }
 
     .expnest0 {
-      background-color: #444444;
+      background-color: #f0f0f0;
     }
 
     .font-expnest0 {
@@ -411,30 +436,28 @@ let prefixe = {prefixe|
     }
 
     body {
-      background-color: #001B2E;
+      /* background-color: #001B2E; */
     }
 
     .code-container {
       font-family: monospace;
-      font-size: 14px;
       line-height: 1.5;
-      color: #FFF8EB;
+      color: /* #FFF8EB; */ #000000;
       overflow: auto;
       height: 92vh;
     }
 
     .expinfo {
-      background-color: #ADB6C4;
+      /* background-color: #ADB6C4; */
+      background-color: #eeeeee;
       padding: 10px;
-      font-family: sans;
-      font-size: 14px;
+      font-family: monospace;
       line-height: 1.5;
       color: #000;
     }
 
     .column {
       float: left;
-      box-shadow: 0 3px 5px rgba(0, 0, 0, 0.2);
       overflow: auto;
     }
 
@@ -446,9 +469,16 @@ let prefixe = {prefixe|
 
     /* Syntax highlighting for C keywords */
     .code-container .keyword {
-      color: #579dd6;
-      /* blue */
-      font-weight: bold;
+      color: #800080 /* 579dd6; 
+      font-weight: bold; */
+    }
+
+    .code-container .type {
+      color: #228b22;
+    }
+
+    .code-container .vardecl {
+      color: #a0522d;
     }
 
     /* Syntax highlighting for C comments */
@@ -477,23 +507,22 @@ let prefixe = {prefixe|
     }
 
     /* Syntax highlighting for C functions */
-    .code-container .functions {
-      color: #d6b257;
-      /* yellow */
+    .code-container .function-name {
+      color: #0000ff;
     }
 
-    #style-8::-webkit-scrollbar-track
+    .scrollbar::-webkit-scrollbar-track
     {
       border: 1px solid black;
       background-color: #FFF8EB;
     }
 
-    #style-8::-webkit-scrollbar
+    .scrollbar::-webkit-scrollbar
     {
       width: 10px;
     }
 
-    #style-8::-webkit-scrollbar-thumb
+    .scrollbar::-webkit-scrollbar-thumb
     {
       background-color: #ADB6C4;	
     }
@@ -504,16 +533,16 @@ let prefixe = {prefixe|
 
 <body>
   <div class="row">
-    <pre id="style-8" class="column code-container" style="width: 45%; margin: 0px;">
+    <pre class="scrollbar column code-container" style="width: 45%; margin: 0px;">
 |prefixe};;
 
-let suffixe1 = "</pre><div id=\"style-8\" class=\"column expinfo\" style=\"height: 92vh; width: 54%; padding: 0px;\">";;
+let suffixe1 = "</pre><div class=\"column expinfo\" style=\"height: 92vh; width: 54%; padding: 0px;\">";;
 let suffixe2 = "</div></body></html>";;
 
 (* Note: si on veut  rajouter des liens, attention on ne peut pas les nester. *)
 (*    <a href="tutu">nesting</a><a href="toto">not</a><a href="tutu">permitted</a> *)
 
-let print filename print_expinfo print_lvalinfo print_function =
+let print filename print_expinfo print_lvalinfo print_function print_alarms =
 
   let print_exp_or_lval_info fmt = function
     | Exp (ki,e) -> print_expinfo fmt (ki,e)
@@ -533,6 +562,8 @@ let print filename print_expinfo print_lvalinfo print_function =
   Format.pp_print_flush outfmt ();
   output_string outfile suffixe1;
   flush outfile;
+
+  print_alarms outfile;
 
   (* Print the "informations" frame. *)
   Printf.fprintf outfile "<table style=\"width: 100%%\"> <tr> <th style=\"font-style: italic\">/</th> <th>Name</th> <th>Type</th> <th>Value</th> </tr>";

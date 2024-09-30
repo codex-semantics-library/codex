@@ -1,0 +1,7 @@
+fun_ptr.c:27.4-10: `funptr' -> ([1..0xFFFFFFFF] :
+                                 ({self : Function (void, [int(4)])[{0}].(0)* | (self != 0)}))
+Unproved regular alarms:
+Unproved additional alarms:
+Proved 0/0 regular alarms
+Unproved 0 regular alarms and 0 additional alarms.
+Solved 0/0 user assertions, proved 0

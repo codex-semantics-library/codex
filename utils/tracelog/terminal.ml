@@ -385,10 +385,11 @@ let printf category ~last  formatstring =
       parse_for_empty_beginning (newtc,newline_and_indent) string idx
     in
     let (terminal_command,_newline_and_indent) = List.fold_left do_symbolic_output_item ((true,AnsiSgrCodes.reset_code),None) symbolic_item_list in
-    (* Note that we do not consider th final newline_and_indent. *)
+    (* Note that we do not consider the final newline_and_indent. *)
     output_string stdout "\n";
-    (* Normally the final terminal commmand should be a reset command. *)
-    assert (snd terminal_command = AnsiSgrCodes.reset_code);
+    (* Normally the final terminal command should be a reset command. *)
+    (* Note: sometimes it is not, when there is a @. in the middle of the printing command. *)
+    (* assert (snd terminal_command = AnsiSgrCodes.reset_code); *)
     let _ = output_terminal_command terminal_command in
     ()
   in Format.kfprintf k ppf formatstring

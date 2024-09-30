@@ -1,0 +1,17 @@
+assume.c:8.5-18: `ptr->tag == 0' -> {0; 1}
+assume.c:8.5-13: `ptr->tag' -> [--..--]
+assume.c:8.5-8: `ptr' -> {0} or ([1..0xFFFFFFFF] : (Name(struct foo))[{0}].0*)
+assume.c:9.21-37: `ptr->data == 100' -> {0; 1}
+assume.c:9.21-30: `ptr->data' -> [--..--]
+assume.c:9.21-24: `ptr' -> ([1..0xFFFFFFFF] : (Name(struct foo))[{0}].0*)
+assume.c:12.21-37: `ptr->data == 200' -> {0; 1}
+assume.c:12.21-30: `ptr->data' -> [--..--]
+assume.c:12.21-24: `ptr' -> ([1..0xFFFFFFFF] : (Name(struct foo))[{0}].0*)
+Unproved regular alarms:
+assume.c:8: Memory_access(ptr->tag, read) {true;false}
+Unproved additional alarms:
+Proved 2/3 regular alarms
+Unproved 1 regular alarms and 0 additional alarms.
+assume.c:9: assertion is FALSE (counter-example exists) (proved with smt solving)
+assume.c:12: assertion is FALSE (counter-example exists) (proved with smt solving)
+Solved 2/2 user assertions, proved 0

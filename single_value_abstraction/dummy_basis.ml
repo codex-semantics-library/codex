@@ -36,6 +36,11 @@ module Complete_Binary(B:Binary_Basis):All_Basis
   module Memory_Backward = Basis_noop_transfer_functions.Memory_Backward
   module Memory_Forward = Basis_noop_transfer_functions.Memory_Forward
 
+  module Block_Lattice = Lattices.Unit
+  type block = Memory_Lattice.t
+  module Block_Backward = Basis_noop_transfer_functions.Block_Backward
+  module Block_Forward = Basis_noop_transfer_functions.Block_Forward
+
   module Integer_Lattice = struct
     include Lattices.Unit (* TODO: Should be in Binary_Basis. *)
     let singleton _ = assert false
@@ -57,6 +62,11 @@ module Complete_Integer(B:Integer_Basis):All_Basis
   type memory = Memory_Lattice.t
   module Memory_Backward = Basis_noop_transfer_functions.Memory_Backward
   module Memory_Forward = Basis_noop_transfer_functions.Memory_Forward
+
+  module Block_Lattice = Lattices.Unit
+  type block = Memory_Lattice.t
+  module Block_Backward = Basis_noop_transfer_functions.Block_Backward
+  module Block_Forward = Basis_noop_transfer_functions.Block_Forward
 
   module Binary_Lattice = struct
     include Lattices.Unit
@@ -126,5 +136,10 @@ module Dummy_All_Basis:All_Basis = struct
   type memory = Memory_Lattice.t
   module Memory_Backward = Basis_noop_transfer_functions.Memory_Backward
   module Memory_Forward = Basis_noop_transfer_functions.Memory_Forward
+
+  module Block_Lattice = Lattices.Unit
+  type block = Memory_Lattice.t
+  module Block_Backward = Basis_noop_transfer_functions.Block_Backward
+  module Block_Forward = Basis_noop_transfer_functions.Block_Forward
 
 end

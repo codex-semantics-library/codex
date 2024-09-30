@@ -35,18 +35,18 @@
 
 (** Functional union find
     - with generic types (parameterised by 'a)
-    - with relations [('a, 'b) Relation.t] on edges between terms and representatives
+    - with relations [('a, 'b) Relation.t] on edges between elements and representatives
     - with values attached to each representative
     This interface can easily be reused to remove any of the above features if needed.
 
     This is functional and immutable *)
 module GenericRelationalValued
-    (Term : Parameters.GENERIC_TERM)
+    (Elt : Parameters.GENERIC_ELT)
     (Relation : Parameters.GENERIC_GROUP)
     (Value : Parameters.GENERIC_VALUE with type ('a,'b) relation = ('a,'b) Relation.t) :
 sig
-  module TermSet : PatriciaTree.HeterogeneousSet_S with type 'a BaseMap.key = 'a Term.t
-  (** Set of ['a Term.t] *)
+  module EltSet : PatriciaTree.HETEROGENEOUS_SET with type 'a elt = 'a Elt.t
+  (** Set of ['a Elt.t] *)
 
   type t
   (** Type of the union-find structure *)
@@ -63,50 +63,51 @@ sig
 
   (** {2 Existential wrappers for the return type of find operations} *)
 
-  type 'a term_through_relation =
-    TermThroughRel : 'b Term.t * ('a, 'b) Relation.t -> 'a term_through_relation
+  type 'a elt_through_relation =
+    EltThroughRel : 'b Elt.t * ('a, 'b) Relation.t -> 'a elt_through_relation
   type 'a value_through_relation =
     ValueThroughRelation : 'b Value.t option * ('a, 'b) Relation.t -> 'a value_through_relation
   type 'a all_through_relation =
-    AllThroughRelation : 'b Term.t * 'b Value.t option * TermSet.t * ('a, 'b) Relation.t -> 'a all_through_relation
+    AllThroughRelation : 'b Elt.t * 'b Value.t option * EltSet.t * ('a, 'b) Relation.t -> 'a all_through_relation
 
   (** {2 Find operations} *)
 
-  val find_representative : t -> 'a Term.t -> 'a term_through_relation
-  (** Returns the representative of the given terms, along with the relation
-      between the given term and its representative. O(1) complexity *)
+  val find_representative : t -> 'a Elt.t -> 'a elt_through_relation
+  (** Returns the representative of the given element, along with the relation
+      between the given element and its representative. O(1) complexity *)
 
-  val find_class : t -> 'a Term.t -> TermSet.t
-  (** Returns the class of the given term, O(1) complexity *)
+  val find_class : t -> 'a Elt.t -> EltSet.t
+  (** Returns the class of the given element, O(1) complexity *)
 
-  val find_value : t -> 'a Term.t -> 'a value_through_relation
-  (** Returns the value of the given term's representative ([None] for top), along with the relation
-      between the given term and its representative. O(1) complexity *)
+  val find_value : t -> 'a Elt.t -> 'a value_through_relation
+  (** Returns the value of the given element's representative ([None] for top), along with the relation
+      between the given element and its representative. O(1) complexity *)
 
-  val find : t -> 'a Term.t -> 'a all_through_relation
-  (** Returns the given term's representative, associated value ([None] for top),
-      along with the relation between the given term and its representative. O(1) complexity *)
+  val find : t -> 'a Elt.t -> 'a all_through_relation
+  (** Returns the given element's representative, associated value ([None] for top),
+      along with the relation between the given element and its representative. O(1) complexity *)
 
-  val check_related : t -> 'a Term.t -> 'b Term.t -> ('a, 'b) Relation.t option
+  val check_related : t -> 'a Elt.t -> 'b Elt.t -> ('a, 'b) Relation.t option
   (** [check_related uf a b] returns the relation between [a] and [b]
       if they are in the same class. *)
 
-  val add_value : t -> 'a Term.t -> 'a Value.t -> t
+  val add_value : t -> 'a Elt.t -> 'a Value.t -> t
   (** [add_value uf a v] is [uf] with the value [v] added to [a]
       (Or more precisely, the value is added to the representative of [a],
       via the relation between [a] and its representative).
-      Intersects with previous value via [Value.meet] if one is present *)
+      Intersects with previous value via {!Value.meet} if one is present *)
 
   (** {2 Union and join} *)
 
-  val union : t -> 'a Term.t -> 'b Term.t -> ('a, 'b) Relation.t -> t
+  val union : t -> 'a Elt.t -> 'b Elt.t -> ('a, 'b) Relation.t -> (t, ('a, 'b) Relation.t) result
   (** [union uf a b r] adds the [r a b] relation in [uf].
-      Does nothing if [a] and [b] are already related *)
+      Returns [Ok uf'] with the new value if successful, and [Error rel]
+      if [a] and [b] are already related by [rel] and [r != rel]. *)
 
   val join : t -> t -> t
   (** [join a b] joins the two union find-structures:
       - The new classes are the intersection of the old classes
-      - The new values are the [Value.join] of the old values *)
+      - The new values are the {!Value.join} of the old values *)
 
   (**/**)
 

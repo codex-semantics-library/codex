@@ -21,7 +21,6 @@
 
 module Make
     (Domain : Codex.With_focusing.S_with_types)
-    (EvalPred : Codex.Type_domain.EvalPred.Sig with module Domain := Domain)
 = struct
   let bunknown ~size ctx =
     Domain.binary_unknown ~size ctx

@@ -19,47 +19,77 @@
 #                                                                        #
 ##########################################################################
 
-.PHONY: all build clean
+# See "make help" for a list of targets and brief documentation
 
 FRAMAC_SHARE:=$(shell frama-c -print-share-path)
 
 sinclude ${FRAMAC_SHARE}/Makefile.common
 
+# set to ON/OFF to toggle ANSI escape sequences
+COLOR = ON
+
+# padding for help on targets
+# should be > than the longest target
+HELP_PADDING = 15
+
+ifeq ($(COLOR),ON)
+	color_yellow = \033[93;1m
+	color_orange = \033[33m
+	color_red    = \033[31m
+	color_green  = \033[32m
+	color_blue   = \033[34;1m
+	color_reset  = \033[0m
+endif
+
 ##########################################################################
 # Build
 
-all:: build frama-c-codex.opam
+all: build
+.PHONY: all
 
-frama-c-codex.opam: frama-c-codex.opam.template dune-project
-	rm -f $@
-	dune build $@
+build: codex ## Build frama_c_codex
+	cd .. && dune build frama_c_codex.install --display=short
+.PHONY: build
 
-build:: codex
-	dune build @install  --display=short
-
-clean:: purge-tests
+clean: purge-tests ## Remove build files
 	dune clean
 	rm -rf _build .merlin
+.PHONY: clean
 
-codex::
+codex: ## Build codex
 	cd .. && dune build codex.install --display=short
-
-./_build/default/utils/diff_tool::
-	cd ../utils/diff_tool && dune build
+.PHONY: codex
 
 ##########################################################################
 # Tests
 
 #include ${FRAMAC_SHARE}/Makefile.testing
 
-test.opt: build
-	dune exec frama-c -- -machdep x86_32  -codex-debug 2 -kernel-debug 2 $(msg-keys) -codex -codex-print  -codex-no-print-value ../test.c -ulevel -1 -codex-exp-dump test.dump -no-allow-duplication -codex-html-dump output.html -codex-type-file test.types -codex-use-type-domain && cat test.dump #  -absolute-valid-range 0x1-0x7FF
+FRAMA_C=frama-c
+#FRAMA_C=frama_c_codex
+TEST_FLAGS = -codex -machdep x86_32 -codex-debug 2 -kernel-debug 2 $(msg-keys) \
+	-codex-print -codex-no-print-value -ulevel -1 \
+	../test.c \
+	-codex-exp-dump test.dump \
+	-codex-html-dump output.html \
+	-codex-type-file test.types
+# -no-allow-duplication -codex-use-type-domain
 
-tests.opt: build ./_build/default/utils/diff_tool
-	- cd tests && byte="" dune exec make -- -B -k -j8  clean all ; cd .. && dune exec diff_tool tests > results-junit.xml #; make update
+test.opt: build  ## Build and run codex on root/test.c
+	dune exec $(FRAMA_C) -- $(TEST_FLAGS) && cat test.dump
+.PHONY: test.opt
 
+test.diff: build  ## Same as test.opt, but shows a diff with installed version of codex
+	$(FRAMA_C) $(TEST_FLAGS) > works.dump && cat test.dump >> works.dump #  -absolute-valid-range 0x1-0x7FF
+	dune exec $(FRAMA_C) -- $(TEST_FLAGS) > cur.dump && cat test.dump >> cur.dump #  -absolute-valid-range 0x1-0x7FF
+	diff --color=always --tabsize 2 -u ./works.dump ./cur.dump
+.PHONY: test.diff
 
-purge-tests: 
+tests.opt: build  ## Run all tests
+	- cd tests && byte="" dune exec make -- -B -k -j8  clean all ; cd .. && diff2junit tests > results-junit.xml #; make update
+.PHONY: tests.opt
+
+purge-tests:
 
 ##########################################################################
 # Install
@@ -85,5 +115,12 @@ include ${FRAMAC_SHARE}/Makefile.installation
 include ${FRAMAC_SHARE}/Makefile.linting
 
 ##########################################################################
-creduce:
-	dune exec creduce -- ./reduce.sh reduce.c
+
+creduce: ## Run creduce using frama-c/reduce.sh script on frama-c/reduce.c
+	creduce ./reduce.sh reduce.c
+.PHONY: creduce
+
+.PHONY: help
+help:: ## Show this help
+	@echo "$(color_yellow)make codex/frama-c:$(color_reset) list of useful targets :"
+	@egrep -h '\s##\s' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(color_blue)%-$(HELP_PADDING)s$(color_reset) %s\n", $$1, $$2}'

@@ -1,0 +1,32 @@
+One of the target is the tools used for compiling, typing, interpreting or analyzing ASTs, an application domain where OCaml is known to shine! But it is really useful for any recursive or decomposable algorithm.
+
+
+
+* Buttons
+
+We currently define three kinds of button:
+
+- pos :: position in a file. E.g. <pos:../file.c:3> opens file.c at line 3, while  <pos:a.c:3:4> open `a.c' at line 3 and column 4.
+- url ::  Url: Examples: <url:www.gnu.org>, <url:https://www.gnu.org/software/emacs>, etc.
+- define :: Allows to define new buttons by curryfication. E.g. <define:c:pos:a.c> allows <c:4> to be equivalent to <pos:a.c:3> and <c:4:8> to be equivalent to <pos:a.c:4:8>.
+
+
+* Examples
+
+- Simple evaluation of arithmetic expressions
+- Symbolic execution or its generalization, SSA translation. This time, you do not want to dump the whole symbolic expression (it would require a log quadratic in the size of the program).
+  - Instead: incrementally dump the symbolic expressions in a file (with some mode) and point to it (file-name:position of the point).
+    - For symbolic execution: quite simple as this can directly be the formula fed to the SMT solver.
+  - In the future: specialized modes for btree, etc. (Basically: dump the commands, and reconstruct the state in emacs)
+  - Actually, it can be a tracelog- function symbol that is executed (with defaults one, such as open at some point)
+- Similar: an algorithm that works on trees (e.g. binary heaps)
+    
+* Caveat
+
+- Works for relatively large logs, but huge ones will kill performance
+  - However, you can copy and paste to select the part you need.
+
+* Tracelog format
+
+- The .el file only understands the unicode format.
+- The source of truth is tracelog-mode.el

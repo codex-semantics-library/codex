@@ -45,6 +45,7 @@ val mapi : (int -> 'a -> 'b) -> 'a t -> 'b t
 val fold_left : ('a -> 'b -> 'a) -> 'a -> 'b t -> 'a
 
 val fold_left2 : ('a -> 'b -> 'c -> 'a) -> 'a -> 'b t -> 'c t -> 'a
+val fold_left3 : ('a -> 'b -> 'c -> 'd -> 'a) -> 'a -> 'b t -> 'c t -> 'd t -> 'a  
 val map : ('a -> 'b) -> 'a t -> 'b t
 val to_list: 'a t -> 'a list
 

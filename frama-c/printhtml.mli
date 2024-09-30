@@ -19,11 +19,12 @@
 (*                                                                        *)
 (**************************************************************************)
 
-
+open Frama_c_kernel
 (* Given a function that pretty-print informations about expressions
    and lvalues; dumps an HTML in [string] to view these results.  *)
 val print:
   string ->
   (out_channel -> (Cil_types.kinstr * Cil_types.exp) -> unit) ->
   (out_channel -> (Cil_types.kinstr * Cil_types.lval) -> unit) -> 
-  (out_channel -> string -> unit) -> unit
+  (out_channel -> string -> unit) ->
+  (out_channel -> unit) -> unit

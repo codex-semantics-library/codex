@@ -19,6 +19,11 @@
 (*                                                                        *)
 (**************************************************************************)
 
+module Interpreted_automata = Frama_c_kernel.Interpreted_automata
+module Cil_types = Frama_c_kernel.Cil_types
+module Cil_datatype = Frama_c_kernel.Cil_datatype
+module Kernel_function = Frama_c_kernel.Kernel_function
+
 module Letter = struct
   include Codex.Utils.Datatype_sig.Prod3(Interpreted_automata.Vertex)(Interpreted_automata.Edge)(Interpreted_automata.Vertex)
   open Interpreted_automata

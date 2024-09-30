@@ -69,4 +69,17 @@ let fold_left2 f init a1 a2 =
   in loop 0 init
 ;;
 
+let fold_left3 f init a1 a2 a3 =
+  let l1 = Array.length a1
+  and l2 = Array.length a2
+  and l3 = Array.length a3 in
+  assert (l1 == l2); assert(l1 == l3);
+  let rec loop i acc =
+    if i == l1 then acc
+    else let acc = f acc (unsafe_get a1 i) (unsafe_get a2 i) (unsafe_get a3 i)
+         in loop (i+1) acc
+  in loop 0 init
+;;
+
+
 let _cast_from_array x = x

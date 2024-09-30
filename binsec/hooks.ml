@@ -19,14 +19,26 @@
 (*                                                                        *)
 (**************************************************************************)
 
-open Analysis_settings
+module Log = Tracelog.Make(struct let category = "Hooks" end)
+module Addr_tbl : Hashtbl.S with type key = Virtual_address.t = Hashtbl.Make(struct
+  type t = Virtual_address.t
+  let equal x y = Virtual_address.compare x y = 0
+  let hash = Virtual_address.to_int
+end)
+
 
 module Make(State:Dba2Codex.StateS)(Record_cfg:Record_cfg.S) = struct
   module State = State
   module Record_cfg = Record_cfg
   module Ctypes = Types.Ctypes;;
   module Domain= State.Domain
-  type skip =
+
+  type skip_type = NotWhenInterpreting | Always
+
+  (** Hooks can decide to eventually not hook by throwing this exception.   *)
+  (* exception No_hook *)
+  
+  type hook =
     | SkipTo of skip_type * Virtual_address.t (** skip to address *)
     | Hook of (Record_cfg.t -> State.t ->
                Record_cfg.t * (Virtual_address.t * State.t) list)
@@ -38,6 +50,10 @@ module Make(State:Dba2Codex.StateS)(Record_cfg:Record_cfg.S) = struct
         of iterations. *)
     | EndPath
     (** End this trace *)
+    | Return of Types.Ctypes.typ option
+    (** End this trace and check the return type if given *)
+    | EntryCall of string * Types.Ctypes.typ
+    (** Used during interprocedural analysis to enter the entry function, but should be replaced the first time it is encountered *)
 
   let unoption msg = function
     | Some x -> x
@@ -49,18 +65,25 @@ module Make(State:Dba2Codex.StateS)(Record_cfg:Record_cfg.S) = struct
     |> Virtual_address.create
 
 
-  let skip_table = Addr_tbl.create 1;;
+  let hook_table = Addr_tbl.create 1;;
+  let find_hook addr = Addr_tbl.find hook_table addr
 
   let stop addr ~msg =
-    Addr_tbl.add skip_table addr (EndPath, msg);;
+    Addr_tbl.add hook_table addr (EndPath, msg);;
+
+  let entrycall addr ftyp ~name ~msg =
+    Addr_tbl.add hook_table addr (EntryCall (name,ftyp), msg);;
+
+  let return addr rtyp ~msg =
+    Addr_tbl.add hook_table addr (Return rtyp, msg);;
 
   let hook addr ~msg f =
-    Addr_tbl.add skip_table addr (Hook f, msg);;
+    Addr_tbl.add hook_table addr (Hook f, msg);;
 
   let skip_always addr ~dest ~msg =
-    Addr_tbl.add skip_table addr (SkipTo (Always, dest), msg);;
+    Addr_tbl.add hook_table addr (SkipTo (Always, dest), msg);;
   let _unroll i max_iter ~msg =
-    Addr_tbl.add skip_table (Virtual_address.create i) (Unroll max_iter, msg);;
+    Addr_tbl.add hook_table (Virtual_address.create i) (Unroll max_iter, msg);;
   let lift_int_sym f sym = f (get_sym sym);;
   let stop_at = lift_int_sym stop;;
   let hook_at = lift_int_sym hook;;
@@ -113,8 +136,7 @@ module Make(State:Dba2Codex.StateS)(Record_cfg:Record_cfg.S) = struct
     let malloc_size = Ctypes.sizeof typ in
     let ptyp = Ctypes.({descr = Ptr{pointed=typ;index=Zero}; pred=not_null}) in
     let ptr = Domain.binary_unknown_typed ~size:32 ctx ptyp in
-    (*let ptr = EvalPred.use_invariant ~size:32 ctx not_null ptr in*)
-    Codex_log.debug ~level:3 "Filling malloc'ed region with unknown value of size %d bytes" malloc_size;
+    Log.debug (fun p -> p "Filling malloc'ed region with unknown value of size %d bytes" malloc_size);
 
     (* let init_val = Domain.binary_unknown_typed ~size:(malloc_size*8) ~level:(Domain.Context.level ctx) ctx typ in *)
     let init_val = Domain.Binary_Forward.buninit ~size:(malloc_size*8) ctx in
@@ -161,6 +183,69 @@ module Make(State:Dba2Codex.StateS)(Record_cfg:Record_cfg.S) = struct
   hook_malloc ~sym:"malloc_node" "node";;
   *)
 
+  let get_arguments_from_stack (state : State.t) typs =
+    let ctx = state.ctx in
+    let esp = State.get ~size:32 state "esp" in
+    
+    let folder (lst,mem,offset) typ =
+      let size = 8 * Ctypes.sizeof typ in 
+      let arg, mem =
+        Domain.(Memory_Forward.load ~size ctx mem
+          Binary_Forward.(biadd ~size:32 ~nsw:false ~nuw:false ~nusw:false ctx esp 
+            (biconst ~size:32 (Z.of_int offset) ctx))
+        )
+      in (lst @ [(size,arg)], mem, offset + 4)
+    in
+
+    let args, mem, _ = List.fold_left folder ([], state.memory, 4) typs in
+    args, {state with memory = mem}
+
+
+  let rec analyze_summary funtyp (state : State.t) =
+    if state.is_bottom then ret state
+    else begin
+      match funtyp.Ctypes.descr with
+      | Function {ret = rtyp; args = typs} ->
+        let args, state = get_arguments_from_stack state typs in
+        let res, ret_val, mem = Domain.analyze_summary state.ctx funtyp args state.memory in
+        let state = {state with memory = mem} in
+        begin
+          match ret_val with
+          | None -> ret state
+          | Some (sz, value) ->
+            let state = State.set state "eax" value in
+            ret state
+        end
+
+      | Existential (typ,_,_) -> analyze_summary typ state
+        
+      | _ -> assert false
+    end
+
+  let hook_interprocedural_analysis ~name funtyp =
+    match Loader_utils.address_of_symbol_by_name ~name (Kernel_functions.get_img ()) with
+    | None -> ()
+    | Some address ->
+      hook (Virtual_address.create address) ~msg:name (fun trace state ->
+        Log.debug (fun p -> p "Analyzing function summary for %s" name);
+        trace, analyze_summary funtyp state
+      )
+  ;;
+
+  let init_functions_hooks = 
+    fun () ->
+      let entry_name = (Kernel_options.Entry_point.get ()) in
+      let mapper name = (name, Ctypes.function_definition_of_name name) in
+
+      let funlist = List.map mapper @@ Ctypes.get_function_names () in
+      List.iter (fun (name, Ctypes.{funtyp;inline}) ->
+        if entry_name <> name &&
+          not inline then hook_interprocedural_analysis ~name funtyp
+      ) funlist
+    ;;
+
+  init_functions_hooks () ;; 
+
   (match Loader_utils.address_of_symbol_by_name
            ~name:"__VERIFIER_nondet_int" (Kernel_functions.get_img ()) with
   | None -> ()
@@ -179,7 +264,7 @@ module Make(State:Dba2Codex.StateS)(Record_cfg:Record_cfg.S) = struct
   | None -> ()
   | Some address ->
     hook (Virtual_address.create address) ~msg:"__VERIFIER_flush_cache stub" (fun trace state ->
-        Codex_log.debug ~level:0 "flushing cache" ;
+        Log.debug (fun p -> p "flushing cache");
           let state = {state with memory = Domain.flush_cache state.ctx state.memory} in
         trace, ret state (* [(Virtual_address.create (sym_VERIFIER_flush_cache), state)] *)
       ))  
@@ -264,6 +349,13 @@ module Make(State:Dba2Codex.StateS)(Record_cfg:Record_cfg.S) = struct
     | Some address ->
     hook (Virtual_address.create address) ~msg:"diffu stub" (fun trace state -> trace, ret state));;
 
+  (* Fresh symbolic symbols from existential functions *)
+  let fresh_int =
+    let fresh_counter = ref (0 : int) in
+    fun () -> incr fresh_counter ; !fresh_counter
+
+  let fresh_symbol () = Format.sprintf "&%d" (fresh_int ()) ;;
+
   (match Loader_utils.address_of_symbol_by_name
         ~name:"malloc" (Kernel_functions.get_img ()) with
     | None -> ()
@@ -277,20 +369,28 @@ module Make(State:Dba2Codex.StateS)(Record_cfg:Record_cfg.S) = struct
       let sz_b, mem = Domain.(Memory_Forward.load ~size:32 ctx state.memory
         Binary_Forward.(biadd ~size:32 ~nsw:false ~nuw:false ~nusw:false ctx esp (biconst ~size:32 (Z.of_int 4) ctx))) in
 
-      let sz = Domain.Query.binary_is_singleton ~size @@ Domain.Query.binary ~size state.ctx sz_b in
-      begin match sz with
-      | None -> raise (Failure "Unsupported malloc of non constant size")
+      begin match Domain.Query.(binary_is_singleton ~size @@ binary ~size state.ctx sz_b) with
       | Some byte_size ->
         let malloc_size = Z.to_int byte_size in
-        let ptr_size = Codex_config.ptr_size () in
         let weak_typ = Ctypes.{descr = Weak (Ctypes.word ~byte_size:malloc_size); pred = Pred.True} in
         let ptr_typ = Ctypes.{descr = Ptr {pointed = weak_typ; index = Zero}; pred = Pred.neq (Const Z.zero)} in
-        (* TODO : see if this works, otherwise initialize everything without going through "binary_unknown_typed" *)
-        let ptr = Domain.binary_unknown_typed ~size:ptr_size ctx ptr_typ in
-        (*
-        let size = malloc_size in
-        let mem = Domain.Memory_Forward.store ~size state.ctx mem ptr @@ Domain.Binary_Forward.buninit ~size state.ctx in *)
+        let ptr = Domain.binary_unknown_typed ~size ctx ptr_typ in
+        Log.debug (fun p -> p "Allocating type %a of size %d with malloc" Ctypes.pp ptr_typ malloc_size);
+        let init_val = Domain.Binary_Forward.buninit  ~size:malloc_size ctx in
+        let mem = Domain.Memory_Forward.store ~size state.ctx mem ptr init_val in
         let state = {state with memory = mem} in
+        let state = State.set state "eax" ptr in
+        trace, ret state
+
+      | None -> 
+        let sz_symb = fresh_symbol () in
+        Domain.add_global_symbol ~size ctx sz_symb sz_b ;
+        let array_type = Ctypes.{descr = Array (word ~byte_size:1, Some (Sym sz_symb)) ; pred = Pred.True} in
+        let weak_typ = Ctypes.{descr = Weak array_type; pred = Pred.True} in
+        let ptr_typ = Ctypes.{descr = Ptr {pointed = weak_typ; index=Zero}; pred = Ctypes.Pred.(neq (Const Z.zero))} in
+        Log.debug (fun p -> p "Allocating array type %a of size %a with malloc" Ctypes.pp ptr_typ (Domain.binary_pretty ~size ctx) sz_b);
+        let ptr_size = Codex_config.ptr_size () in
+        let ptr = Domain.binary_unknown_typed ~size:ptr_size ctx ptr_typ in
         let state = State.set state "eax" ptr in
         trace, ret state
       end
@@ -324,6 +424,22 @@ module Make(State:Dba2Codex.StateS)(Record_cfg:Record_cfg.S) = struct
   let add_stop addr =
     stop addr ~msg:"Stop hook";;
 
-  let add_skip addr ~dest = skip_always addr ~dest ~msg:"Skip hook"
+  let add_skip addr ~dest = skip_always addr ~dest ~msg:"Skip hook";;
+
+  let add_entrycall ~name addr ftyp =
+    Log.debug (fun p -> p"Adding entry call hook");
+    entrycall ~msg:"Entry call hook" ~name addr ftyp;;
+
+
+  let add_function_hook ~name addr ftyp =
+    Log.debug (fun p -> p "Adding new function hook for %s" name);
+    hook addr ~msg:name (fun trace state ->
+      Log.debug (fun p -> p "Analyzing function summary for %s" name);
+      trace, analyze_summary ftyp state
+    )
+      
+
+  let add_return addr rtyp =
+    return addr rtyp ~msg:"Return hook";;
 
 end

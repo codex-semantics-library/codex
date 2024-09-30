@@ -433,7 +433,7 @@ module Binary_Backward = struct
   let bconcat ~size1:_ ~size2:_ _ _ _ = (None,None)
   let bextract ~size:_ ~index:_ ~oldsize:_ _ _ = (None)
   let valid ~size:_ _ _ _ = (None)
-  let valid_ptr_arith ~size:_ _ _ _ = (None,None)
+  let valid_ptr_arith ~size:_ _ _ _ _ = (None,None)
 
   let bshift ~size:_ ~offset:_ ~max:_ _ = assert false
   let bindex ~size:_ _ = assert false    

@@ -22,8 +22,7 @@
 (* Simple product of domains. *)
 module Make
     (Constraints:Constraints.Constraints_sig.Constraints)
-    (A:Constraint_domains_sig.Domain_S with module Constraints = Constraints)
-    (B:Constraint_domains_sig.Domain_S with module Constraints = Constraints):
+    (_:Constraint_domains_sig.Domain_S with module Constraints = Constraints)
+    (_:Constraint_domains_sig.Domain_S with module Constraints = Constraints):
   Constraint_domains_sig.Domain_S
    with module Constraints = Constraints
-;;

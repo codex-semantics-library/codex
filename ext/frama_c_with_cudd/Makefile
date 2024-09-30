@@ -21,7 +21,7 @@
 
 # Those versions are known to work.
 # FRAMA_C_VERSION = frama-c-27.1-Cobalt
-FRAMA_C_VERSION = frama-c-28.0-Nickel
+FRAMA_C_VERSION = frama-c-28.1-Nickel
 
 all: opam-install-frama-c-with-cudd
 

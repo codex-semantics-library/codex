@@ -23,42 +23,42 @@
 (** {2 Nodes without values (simple nodes)} *)
 
 module MakeSimpleNode
-    (Term : Parameters.SIMPLE_GENERIC_TERM)
-    (Relation : Parameters.SIMPLE_GENERIC_GROUP) =
+    (Elt : Parameters.SIMPLE_GENERIC_ELT)
+    (Relation : Parameters.GENERIC_GROUP) =
 struct
-  type 'a node = { mutable parent : 'a parent; payload : 'a Term.t }
-  and 'a parent = Node : 'b node * ('a, 'b) Relation.t -> 'a parent | Root of root
-  and root = { mutable size : int }
+  type 'a t = { mutable parent : 'a parent; payload : 'a Elt.t }
+  and 'a parent =
+    | Node : 'b t * ('a, 'b) Relation.t -> 'a parent
+    | Root
 
-  module Node = struct
-    type 'a t = 'a node
-    let polyeq a b = Term.polyeq a.payload b.payload
-  end
+  let polyeq a b = Elt.polyeq a.payload b.payload
+
   module Relation = Relation
 
   let get_parent x = x.parent
   let set_parent x v = x.parent <- v
 
   let payload x = x.payload
-  let make_node payload = { payload; parent = Root { size = 1 } }
+  let make_node payload = { payload; parent = Root }
 end
 
 module MakeSimpleNumberedNode
-    (Term : PatriciaTree.HeterogeneousKey)
-    (Relation : Parameters.SIMPLE_GENERIC_GROUP) =
+    (Elt : PatriciaTree.HETEROGENEOUS_KEY)
+    (Relation : Parameters.GENERIC_GROUP) =
 struct
-  include MakeSimpleNode(Term)(Relation)
+  include MakeSimpleNode(Elt)(Relation)
 
   (** We could also use a [Hashmap] here (although it would require existential types) *)
-  module BuiltTerms = PatriciaTree.MakeHeterogeneousMap(Term)(struct type ('a, _) t = 'a node end)
+  module BuiltNodes = PatriciaTree.MakeHeterogeneousMap
+    (Elt)(struct type nonrec ('a, _) t = 'a t end)
 
-  let terms : unit BuiltTerms.t ref = ref BuiltTerms.empty
+  let nodes : unit BuiltNodes.t ref = ref BuiltNodes.empty
   let make_node payload =
     let nd = make_node payload in
-    terms := BuiltTerms.add !terms payload nd;
+    nodes := BuiltNodes.add payload nd !nodes;
     nd
 
-  let get_node payload = BuiltTerms.find_opt !terms payload
+  let get_node payload = BuiltNodes.find_opt payload !nodes
 
   let get_or_make_node payload = match get_node payload with
   | Some t -> t
@@ -68,18 +68,18 @@ end
 (** {2 Nodes with values} *)
 
 module MakeNode
-    (Term : Parameters.SIMPLE_GENERIC_TERM)
-    (Relation : Parameters.SIMPLE_GENERIC_GROUP)
+    (Elt : Parameters.SIMPLE_GENERIC_ELT)
+    (Relation : Parameters.GENERIC_GROUP)
     (Value : Parameters.SIMPLE_GENERIC_VALUE with type ('a,'b) relation = ('a,'b) Relation.t) =
 struct
-  type 'a node = { mutable parent : 'a parent; payload : 'a Term.t }
-  and 'a parent = Node : 'b node * ('a, 'b) Relation.t -> 'a parent | Root of 'a root
+  type 'a t = { mutable parent : 'a parent; payload : 'a Elt.t }
+  and 'a parent =
+    | Node : 'b t * ('a, 'b) Relation.t -> 'a parent
+    | Root of 'a root
   and 'a root = { mutable value : 'a Value.t; mutable size : int }
 
-  module Node = struct
-    type 'a t = 'a node
-    let polyeq a b = Term.polyeq a.payload b.payload
-  end
+  let polyeq a b = Elt.polyeq a.payload b.payload
+
   module Relation = Relation
   module Value = Value
 
@@ -91,22 +91,23 @@ struct
 end
 
 module MakeNumberedNode
-    (Term : PatriciaTree.HeterogeneousKey)
-    (Relation : Parameters.SIMPLE_GENERIC_GROUP)
+    (Elt : PatriciaTree.HETEROGENEOUS_KEY)
+    (Relation : Parameters.GENERIC_GROUP)
     (Value : Parameters.SIMPLE_GENERIC_VALUE with type ('a,'b) relation = ('a,'b) Relation.t) =
 struct
-  include MakeNode(Term)(Relation)(Value)
+  include MakeNode(Elt)(Relation)(Value)
 
   (** We could also use a [Hashmap] here (although it would require existential types) *)
-  module BuiltTerms = PatriciaTree.MakeHeterogeneousMap(Term)(struct type ('a, _) t = 'a node end)
+  module BuiltNodes = PatriciaTree.MakeHeterogeneousMap
+      (Elt)(struct type nonrec ('a, _) t = 'a t end)
 
-  let terms : unit BuiltTerms.t ref = ref BuiltTerms.empty
+  let nodes : unit BuiltNodes.t ref = ref BuiltNodes.empty
   let make_node payload value =
     let nd = make_node payload value in
-    terms := BuiltTerms.add !terms payload nd;
+    nodes := BuiltNodes.add payload nd !nodes;
     nd
 
-  let get_node payload = BuiltTerms.find_opt !terms payload
+  let get_node payload = BuiltNodes.find_opt payload !nodes
 
   let get_or_make_node payload value = match get_node payload with
     | Some t -> t
@@ -118,13 +119,16 @@ end
 module GenericRelationalValued(Node: Parameters.UF_NODE) =
 struct
   open Node
+  type 'a t = 'a Node.t
+  type ('a, 'b) relation = ('a, 'b) Relation.t
+  type 'a value = 'a Value.t
 
-  type 'a ret = Exists_b : 'b Node.t * 'b root * ('a, 'b) Relation.t -> 'a ret
+  type 'a ret = Exists_b : 'b t * 'b root * ('a, 'b) Relation.t -> 'a ret
 
   let ( ** ) = Relation.compose
   let ( ~~ ) = Relation.inverse
 
-  let rec find_repr : type a. a Node.t -> a ret =
+  let rec find_repr : type a. a t -> a ret =
    fun n ->
     match get_parent n with
     | Root r -> Exists_b (n, r, Relation.identity)
@@ -135,11 +139,11 @@ struct
         Exists_b (repr, root, rel)
 
   type 'a node_through_relation =
-    NodeThoughRelation : 'b Node.t * ('a, 'b) Relation.t -> 'a node_through_relation
+    NodeThoughRelation : 'b t * ('a, 'b) Relation.t -> 'a node_through_relation
   type 'a value_through_relation =
     ValueThroughRelation : 'b Value.t * ('a, 'b) Relation.t -> 'a value_through_relation
   type 'a node_and_value_through_relation =
-    NodeValueThroughRelation : 'b Node.t * 'b Value.t * ('a, 'b) Relation.t
+    NodeValueThroughRelation : 'b t * 'b Value.t * ('a, 'b) Relation.t
         -> 'a node_and_value_through_relation
 
   let find_representative n =
@@ -157,7 +161,7 @@ struct
   let check_related a b =
       let Exists_b(ra, _, rel_a) = find_repr a in
       let Exists_b(rb, _, rel_b) = find_repr b in
-      match Node.polyeq ra rb with
+      match polyeq ra rb with
       | Eq -> Some(~~rel_b ** rel_a)
       | Diff -> None
 
@@ -183,10 +187,14 @@ struct
   let union a b rel =
     let (Exists_b (repr_a, root_a, rel_a)) = find_repr a in
     let (Exists_b (repr_b, root_b, rel_b)) = find_repr b in
-    match Node.polyeq repr_a repr_b with
-    | Eq -> failwith "Union in the same class"
+    match polyeq repr_a repr_b with
+    | Eq ->
+      let old_rel = ~~rel_b ** rel_a in
+      if Relation.equal rel old_rel then Ok () else Error old_rel
     | Diff ->
-        if root_b.size > root_a.size then (
+        (* Favor making [a] a child of [b] over the reverse, as this avoids a
+           relation flip. *)
+        begin if root_b.size >= root_a.size then (
           let rel = rel_b ** rel ** ~~rel_a in
           root_b.size <- root_b.size + root_a.size;
           root_b.value <- Value.meet root_b.value (Value.apply root_a.value rel);
@@ -196,38 +204,36 @@ struct
           root_a.size <- root_b.size + root_a.size;
           root_a.value <- Value.meet root_a.value (Value.apply root_b.value rel);
           set_parent repr_b (Node (repr_a, rel))
+        end;
+        Ok ()
 end
 
 module GenericRelational (Node : Parameters.SIMPLE_UF_NODE) =
 struct
   open Node
+  type 'a t = 'a Node.t
+  type ('a, 'b) relation = ('a, 'b) Relation.t
 
   let ( ** ) = Relation.compose
   let ( ~~ ) = Relation.inverse
 
-  type 'a ret = Exists_b : 'b Node.t * root * ('a, 'b) Relation.t -> 'a ret
+  type 'a node_through_relation =
+  | NodeThoughRelation : 'b t * ('a, 'b) Relation.t -> 'a node_through_relation
 
-  let rec find_repr : type a. a Node.t -> a ret =
+  let rec find_representative : type a. a t -> a node_through_relation =
    fun n ->
     match get_parent n with
-    | Root r -> Exists_b (n, r, Relation.identity)
+    | Root -> NodeThoughRelation (n, Relation.identity)
     | Node (parent, rel_parent) ->
-        let (Exists_b (repr, root, rel_repr)) = find_repr parent in
+        let (NodeThoughRelation (repr, rel_repr)) = find_representative parent in
         let rel = rel_repr ** rel_parent in
         let () = set_parent n (Node (repr, rel)) in
-        Exists_b (repr, root, rel)
-
-  type 'a node_through_relation =
-    | NodeThoughRelation : 'b Node.t * ('a, 'b) Relation.t -> 'a node_through_relation
-
-  let find_representative n =
-    let (Exists_b (repr, _, rel)) = find_repr n in
-    NodeThoughRelation (repr, rel)
+        NodeThoughRelation (repr, rel)
 
   let check_related a b =
-    let Exists_b(ra, _, rel_a) = find_repr a in
-    let Exists_b(rb, _, rel_b) = find_repr b in
-    match Node.polyeq ra rb with
+    let NodeThoughRelation(ra, rel_a) = find_representative a in
+    let NodeThoughRelation(rb, rel_b) = find_representative b in
+    match polyeq ra rb with
     | Eq -> Some(~~rel_b ** rel_a)
     | Diff -> None
 
@@ -246,17 +252,23 @@ struct
   A good thing about generic types is that the typechecker ensure we generate a valid
   relation here. *)
   let union a b rel =
-    let (Exists_b (repr_a, root_a, rel_a)) = find_repr a in
-    let (Exists_b (repr_b, root_b, rel_b)) = find_repr b in
-    match Node.polyeq repr_a repr_b with
-       | Eq -> failwith "Union in the same class"
+    let NodeThoughRelation(repr_a, rel_a) = find_representative a in
+    let NodeThoughRelation(repr_b, rel_b) = find_representative b in
+    match polyeq repr_a repr_b with
+       | Eq ->
+          let old_rel = ~~rel_b ** rel_a in
+          if Relation.equal rel old_rel then Ok () else Error old_rel
        | Diff ->
-          if root_b.size > root_a.size then (
+          (* Favor making [a] a child of [b] over the reverse, as this avoids a
+             relation flip. *)
+          (* begin *)
             let rel = rel_b ** rel ** ~~rel_a in
-            root_b.size <- root_b.size + root_a.size;
-            set_parent repr_a (Node (repr_b, rel)))
-          else
+            (* root_b.size <- root_b.size + root_a.size; *)
+            set_parent repr_a (Node (repr_b, rel));
+          (* else
             let rel = rel_a ** ~~rel ** ~~rel_b in
             root_a.size <- root_b.size + root_a.size;
             set_parent repr_b (Node (repr_a, rel))
+          end; *)
+          Ok ()
 end

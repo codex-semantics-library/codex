@@ -68,26 +68,47 @@ module type With_Bitvector_Forward = sig
 end
 
 
+module type With_Block_Forward = sig
+  type boolean = Quadrivalent.t
+  type binary
+  type block
+  module Block_Forward:Transfer_functions.Block_Forward
+    with module Arity := Transfer_functions.Forward_Arity
+    and type boolean := boolean
+    and type value := binary
+    and type block := block
+    and type offset := binary
+end
+
 module type With_Memory_Forward = sig
   type boolean = Quadrivalent.t
   type binary
   type memory
+  type block
   module Memory_Forward:Transfer_functions.Memory_Forward
     with module Arity := Transfer_functions.Forward_Arity
     and type boolean := boolean
-    and type binary := binary
+    and type address := binary
     and type memory := memory
+    and type block := block
+    and type value := binary
 end
 
 module type With_Memory_Binary_Boolean_Forward = sig
   include With_Memory_Forward;;
-  include With_Binary_Forward with type boolean := boolean
+  include With_Block_Forward with type boolean := boolean
                               and type binary := binary
+                              and type block := block    
+  include With_Binary_Forward with type boolean := boolean
+                              and type binary := binary                        
   include With_Boolean_Forward with type boolean := boolean
 end
 
 module type With_Memory_Binary_Integer_Boolean_Forward = sig
   include With_Memory_Forward;;
+  include With_Block_Forward with type boolean := boolean
+                              and type binary := binary
+                              and type block := block 
   include With_Binary_Forward with type boolean := boolean
                                and type binary := binary
   include With_Integer_Forward with type boolean := boolean
@@ -139,19 +160,37 @@ module type With_Binary_Backward = sig
     and type binary := binary
 end
 
+module type With_Block_Backward = sig
+  type boolean = Quadrivalent.t
+  type binary
+  type block
+  module Block_Backward:Transfer_functions.Block_Backward
+    with module Arity := Transfer_functions.Backward_Arity
+    and type boolean := boolean
+    and type value := binary
+    and type block := block
+    and type offset := binary
+end
+
 module type With_Memory_Backward = sig
   type boolean = Quadrivalent.t
   type binary
   type memory
+  type block
   module Memory_Backward:Transfer_functions.Memory_Backward
     with module Arity := Transfer_functions.Backward_Arity
     and type boolean := boolean
-    and type binary := binary
+    and type address := binary
     and type memory := memory
+    and type block := block
+    and type value := binary
 end
 
 module type With_Memory_Binary_Boolean_Backward = sig
   include With_Memory_Backward;;
+  include With_Block_Backward with type boolean := boolean
+                              and type binary := binary
+                              and type block := block
   include With_Binary_Backward with type boolean := boolean
                               and type binary := binary
   include With_Boolean_Backward with type boolean := boolean
@@ -201,19 +240,35 @@ module type With_Binary_Forward_Backward = sig
 end
 
 
+module type With_Block_Forward_Backward = sig
+  type boolean = Quadrivalent.t
+  type binary
+  type block
+  include With_Block_Forward
+    with type boolean := boolean
+    and type binary := binary
+    and type block := block
+  include With_Block_Backward
+    with type boolean := boolean
+    and type binary := binary
+    and type block := block
+end
 
 module type With_Memory_Forward_Backward = sig
   type boolean = Quadrivalent.t
   type binary
   type memory
+  type block
   include With_Memory_Forward
     with type boolean := boolean
     and type binary := binary
     and type memory := memory
+    and type block := block
   include With_Memory_Backward
     with type boolean := boolean
     and type binary := binary
     and type memory := memory
+    and type block := block
 end
 
 module type With_Binary_Boolean_Forward_Backward = sig
@@ -224,6 +279,9 @@ end
 
 module type With_Memory_Binary_Boolean_Forward_Backward = sig
   include With_Memory_Forward_Backward;;
+  include With_Block_Forward_Backward with type boolean := boolean
+                                               and type binary := binary
+                                               and type block := block
   include With_Binary_Boolean_Forward_Backward with type boolean := boolean
                                                and type binary := binary
 end
@@ -300,6 +358,10 @@ module type Memory_Lattice = sig
   include Lattices.Sig.Join_Semi_Lattice_With_Bottom
 end
 
+module type Block_Lattice = sig
+  include Lattices.Sig.Join_Semi_Lattice_With_Bottom
+end
+
 module type Boolean_Basis = sig
   val name: string
   include With_Boolean_Forward_Backward
@@ -343,7 +405,7 @@ end
 
 
 
-module type Binary_Integer_Basis = sig
+module type Numeric_Basis = sig
   include Binary_Basis
   include Integer_Basis with type boolean := boolean
                          and module Boolean_Lattice := Boolean_Lattice
@@ -360,12 +422,16 @@ module type All_Basis = sig
   include With_Boolean_Forward_Backward 
   include With_Integer_Forward_Backward with type boolean := boolean
   include With_Binary_Forward_Backward with type boolean := boolean
+  include With_Block_Forward_Backward with type boolean := boolean
+                                      and type binary := binary
   include With_Memory_Forward_Backward with type binary := binary
                                         and type boolean := boolean
+                                        and type block := block
   module Boolean_Lattice:Boolean_Lattice with type t = boolean
   module Integer_Lattice:Integer_Lattice with type t = integer
   module Binary_Lattice:Binary_Lattice with type t = binary
   module Memory_Lattice:Memory_Lattice with type t = memory
+  module Block_Lattice:Block_Lattice with type t = block
   include Boolean_Conversions with type boolean := boolean
   include Binary_Conversions with type binary := binary
   include Integer_Conversions with type integer := integer

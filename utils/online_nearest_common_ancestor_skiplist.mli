@@ -29,7 +29,7 @@ module Make(Elt : sig
     val parents : t -> t parents
   end):
 sig
-  val nil : int * 'a array
+  val nil : int * 'a array      (* XXX: Why nil here? *)
   val cons : Elt.t -> int * Elt.t parents
   val nth : Elt.t -> int -> Elt.t
   val nearest_common_ancestor_same_depth : Elt.t -> Elt.t -> Elt.t

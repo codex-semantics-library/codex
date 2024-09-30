@@ -25,3 +25,4 @@ module Constraints = Constraints_constraints
 module Smt = Constraints_smt
 module Constraints_sig = Constraints_constraints_sig
 module Const_eval = Constraints_const_eval
+module Relations = Relations

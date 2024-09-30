@@ -85,7 +85,16 @@ end
 
 module Binary_Forward = Binary_Backward
 
-module Memory_Forward = struct
+module Block_Forward = struct
+  let sizeof _ = assert false
+  let concat ~size1 ~size2 _ = assert false
+  let load ~size _ = assert false
+  let store ~size _ = assert false
+  let binary_to_block ~size _ = assert false
+end
+module Block_Backward = Block_Forward;;
+
+module Memory_Backward = struct
   let var _ = assert false
   let nondet _ = assert false
   let assume _ = assert false
@@ -96,4 +105,4 @@ module Memory_Forward = struct
   let free _ = assert false
   let unknown _ = assert false
 end
-module Memory_Backward = Memory_Forward;;
+module Memory_Forward = Memory_Backward;;

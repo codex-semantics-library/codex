@@ -19,6 +19,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
+module Log = Tracelog.Make(struct let category = "Single_value_abstraction.Ival_basis" end);;
 module Ival = Framac_ival.Ival
 module Abstract_interp = Framac_ival.Abstract_interp
 open Ival
@@ -350,23 +351,23 @@ module Integer_Backward = struct
       let (newi1,newi2) = iadd i1 i2 res in
       let affnewi1 = match newi1 with None -> i1 | Some v -> v in
       let affnewi2 = match newi2 with None -> i2 | Some v -> v in    
-      Codex_log.debug "iadd: i1 %a i2 %a res %a newi1 %a newi2 %a"
-        Ival.pretty i1 Ival.pretty i2 Ival.pretty res Ival.pretty affnewi1 Ival.pretty affnewi2;
+      Log.debug (fun p -> p "iadd: i1 %a i2 %a res %a newi1 %a newi2 %a"
+        Ival.pretty i1 Ival.pretty i2 Ival.pretty res Ival.pretty affnewi1 Ival.pretty affnewi2);
       (newi1,newi2)
     ;;
         
     let itimes k a res =
       let (newa) = itimes k a res in
       let affnewa = match newa with None -> a | Some v -> v in
-      Codex_log.debug "itimes: k %s a  %a res %a newa %a"
-        (Z.to_string k) Ival.pretty a Ival.pretty res Ival.pretty affnewa;
+      Log.debug (fun p -> p "itimes: k %s a  %a res %a newa %a"
+        (Z.to_string k) Ival.pretty a Ival.pretty res Ival.pretty affnewa);
       newa
     ;;
 
     let imod a div res =
-      Codex_log.debug "imod start";
+      Log.debug (fun p -> p "imod start");
       let res = imod a div res in
-      Codex_log.debug "imod end";
+      Log.debug (fun p -> p "imod end");
       res
     ;;
 
@@ -461,14 +462,14 @@ let wrapu ~size value =
   try
     if wrapped_u ~size value then value
     else Ival.cast_int_to_int ~size:(Z.of_int size) ~signed:false value
-  with Z.Overflow -> Codex_log.warning "Overflow wrapu: TODO"; top
+  with Z.Overflow -> Log.warning (fun p -> p "Overflow wrapu: TODO"); top
 
 let wraps ~size value =
   try
     (* Codex_log.feedback "wraps %a" pretty value; *)
     if wrapped_s ~size value then value
     else Ival.cast_int_to_int ~size:(Z.of_int size) ~signed:true value
-  with Z.Overflow -> Codex_log.warning "Overflow wraps: TODO"; top
+  with Z.Overflow -> Log.warning (fun p -> p "Overflow wraps: TODO"); top
 
 (* Wrapper around wrapu to increase sharing of "top" *)
 let wrapu =
@@ -630,7 +631,7 @@ module Unsigned = struct
 
   let _bconcat_ ~size1 ~size2 v1 v2 =
     let res = bconcat ~size1 ~size2 v1 v2 in
-    Codex_log.feedback "bconcat %d %d %a %a res %a" size1 size2 Ival.pretty v1 Ival.pretty v2 Ival.pretty res;
+    Log.debug (fun p -> p "bconcat %d %d %a %a res %a" size1 size2 Ival.pretty v1 Ival.pretty v2 Ival.pretty res);
     res
     
   let bitimes ~size k x  = wrapu ~size @@ Ival.scale k x
@@ -675,7 +676,6 @@ module Unsigned = struct
         | None -> Format.fprintf fmt " none"
         | Some b -> Format.fprintf fmt " %a" Ival.pretty b)
       in
-      Codex_log.feedback "%t" f;
       resa,resb
     ;;
       
@@ -692,13 +692,13 @@ module NoWrap = struct
 
     let _wraps ~size value =
       let res = wraps ~size value in
-      Codex_log.feedback "wraps %d: %a -> %a" size Ival.pretty value Ival.pretty res;
+      Log.debug (fun p -> p "wraps %d: %a -> %a" size Ival.pretty value Ival.pretty res);
       res
     ;;
 
     let _wrapu ~size value =
       let res = wrapu ~size value in
-      Codex_log.feedback "wrapu %d: %a -> %a" size Ival.pretty value Ival.pretty res;
+      Log.debug (fun p -> p "wrapu %d: %a -> %a" size Ival.pretty value Ival.pretty res);
       res
     ;;
 
@@ -735,42 +735,42 @@ module NoWrap = struct
 
       let _bisdiv ~size a b =
         let res = bisdiv ~size a b in
-        Codex_log.feedback "bisdiv %d: %a %a %a" size Ival.pretty a Ival.pretty b Ival.pretty res;
+        Log.debug (fun p -> p "bisdiv %d: %a %a %a" size Ival.pretty a Ival.pretty b Ival.pretty res);
         res
 
 
       let _biudiv ~size a b =
         let res = biudiv ~size a b in
-        Codex_log.feedback "biudiv %d: %a %a %a" size Ival.pretty a Ival.pretty b Ival.pretty res;
+        Log.debug (fun p -> p "biudiv %d: %a %a %a" size Ival.pretty a Ival.pretty b Ival.pretty res);
         res
 
       let _bismod ~size a b =
         let res = bismod ~size a b in
-        Codex_log.feedback "bismod %d: %a %a %a" size Ival.pretty a Ival.pretty b Ival.pretty res;
+        Log.debug (fun p -> p "bismod %d: %a %a %a" size Ival.pretty a Ival.pretty b Ival.pretty res);
         res
 
 
       let _biumod ~size a b =
         let res = biumod ~size a b in
-        Codex_log.feedback "biumod %d: %a %a %a" size Ival.pretty a Ival.pretty b Ival.pretty res;
+        Log.debug (fun p -> p "biumod %d: %a %a %a" size Ival.pretty a Ival.pretty b Ival.pretty res);
         res
 
 
       let _bisle ~size a b =
         let res = bisle ~size a b in
-        Codex_log.feedback "bisle %d: %a %a %a" size Ival.pretty a Ival.pretty b Quadrivalent_basis.Boolean_Lattice.pretty res;
+        Log.debug (fun p -> p "bisle %d: %a %a %a" size Ival.pretty a Ival.pretty b Quadrivalent_basis.Boolean_Lattice.pretty res);
         res
 
 
       let _biule ~size a b =
         let res = biule ~size a b in
-        Codex_log.feedback "biule %d: %a %a %a" size Ival.pretty a Ival.pretty b Quadrivalent_basis.Boolean_Lattice.pretty res;
+        Log.debug (fun p -> p "biule %d: %a %a %a" size Ival.pretty a Ival.pretty b Quadrivalent_basis.Boolean_Lattice.pretty res);
         res
       ;;
 
       let _beq ~size a b =
         let res = beq ~size a b in
-        Codex_log.feedback "beq %d: %a %a %a" size Ival.pretty a Ival.pretty b Quadrivalent_basis.Boolean_Lattice.pretty res;
+        Log.debug (fun p -> p "beq %d: %a %a %a" size Ival.pretty a Ival.pretty b Quadrivalent_basis.Boolean_Lattice.pretty res);
         res
       ;;
 
@@ -783,13 +783,13 @@ module NoWrap = struct
     let buninit ~size = Ival.bottom
     let bunknown ~size = Ival.top
     let bextract ~size ~index ~oldsize x =
-      (* Codex_log.feedback "bextracat %d %d %d %a" size index oldsize Ival.pretty x; *)
+      (* Log.debug (fun p -> p "bextracat %d %d %d %a" size index oldsize Ival.pretty x; *)
       Ival.extract_bits ~size:(Z.of_int oldsize) ~start:(Z.of_int index)
         ~stop:(Z.of_int @@ index + size - 1) x
 
     let bextract ~size ~index ~oldsize x =
       let res = bextract ~size ~index ~oldsize x in
-      Codex_log.feedback "Ival_basis.bextract %d %d %d %a %a" size index oldsize Ival.pretty x Ival.pretty res;
+      Log.debug (fun p -> p "Ival_basis.bextract %d %d %d %a %a" size index oldsize Ival.pretty x Ival.pretty res);
       res
 
     let bconcat ~size1 ~size2 v1 v2 = Ival.add_int (Ival.scale (Z.shift_left Z.one size2) v1) v2
@@ -798,7 +798,7 @@ module NoWrap = struct
      *   wrapu ~size:(size1 + size2) @@ Ival.add_int (Ival.scale (Z.shift_left Z.one size2) v1) v2
      * let bconcat_ ~size1 ~size2 v1 v2 =
      *   let res = bconcat ~size1 ~size2 v1 v2 in
-     *   Codex_log.feedback "bconcat %d %d %a %a res %a" size1 size2 Ival.pretty v1 Ival.pretty v2 Ival.pretty res;
+     *   Log.debug (fun p -> p "bconcat %d %d %a %a res %a" size1 size2 Ival.pretty v1 Ival.pretty v2 Ival.pretty res;
      *   res *)
 
     
@@ -845,7 +845,7 @@ module NoWrap = struct
       let res1 = Ival.widen (Z.of_int size,widen_hints) previous next in
       (* Note: with this wrapu, we sometimes enter an infinite loop. *)
       (* let res2 = wrapu ~size @@ res1 in *)
-      (* Codex_log.feedback "size %d prev %a next %a res1 %a res2 %a" size Ival.pretty previous Ival.pretty next Ival.pretty res1 Ival.pretty res2; *)
+      (* Log.debug (fun p -> p "size %d prev %a next %a res1 %a res2 %a" size Ival.pretty previous Ival.pretty next Ival.pretty res1 Ival.pretty res2; *)
       res1
     let includes_or_widen ~size ~previous next =
       if is_included next previous then (true,next)
@@ -931,9 +931,12 @@ module BothWrap = struct
       else reduce ~size {signed ; unsigned = Ival.widen (size_,widen_hints)  a.unsigned b.unsigned }
 
     (* As we have an intersection semantics for signed and unsigned,
-       we can usr || on the inclusion tests. *)
+       we can usr || on the inclusion tests.
+       
+       EDIT: no we cannot, as the inclusion test is comparing the
+       abstract values, not the concrete ones.     *)
     let includes a b =
-      Integer_Lattice.includes a.signed b.signed || Integer_Lattice.includes a.unsigned b.unsigned
+      Integer_Lattice.includes a.signed b.signed && Integer_Lattice.includes a.unsigned b.unsigned
     
     let includes_or_widen ~size ~previous next =
       if includes previous next then (true,next)
@@ -954,7 +957,8 @@ module BothWrap = struct
 
     let _join ~size a b =
       let res = join ~size a b in
-      if not @@ Ival.is_bottom a.signed then Codex_log.feedback "join %a %a res %a" (pretty ~size)a  (pretty ~size) b (pretty ~size) res;
+      if not @@ Ival.is_bottom a.signed
+      then Log.debug (fun p -> p "join %a %a res %a" (pretty ~size)a  (pretty ~size) b (pretty ~size) res);
       res
     ;;
     
@@ -966,7 +970,7 @@ module BothWrap = struct
         reduce ~size {signed;unsigned = Integer_Lattice.inter a.unsigned b.unsigned }
     ;;
 
-    let includes ~size a b = Integer_Lattice.includes a.signed b.signed || Integer_Lattice.includes a.unsigned b.unsigned
+    let includes ~size a b = Integer_Lattice.includes a.signed b.signed && Integer_Lattice.includes a.unsigned b.unsigned
     let hash _ = assert false
     let compare a b =
       let x = compare a.signed b.signed in
@@ -1073,17 +1077,18 @@ module BothWrap = struct
     let bitimes ~size _ _ = assert false
 
     let biadd ~size ~nsw ~nuw ~nusw a b =
-      Codex_log.debug "Ival_basis.biadd ~nsw:%b ~nuw:%b ~nusw:%b %a %a" nsw nuw nusw (Binary_Lattice.pretty ~size) a (Binary_Lattice.pretty ~size) b ;
+      Log.debug (fun p -> p "Ival_basis.biadd ~nsw:%b ~nuw:%b ~nusw:%b %a %a" nsw nuw nusw (Binary_Lattice.pretty ~size) a (Binary_Lattice.pretty ~size) b);
       let signed = Integer_Forward.iadd a.signed b.signed in
       if a.signed == a.unsigned && b.signed == b.unsigned
       then reduce ~size { signed = wraps_or_narrow ~nsw ~size signed;
                           unsigned = wrapu_or_narrow ~nuw ~size signed }
 
-      else if nusw then
+      else if nusw then (
+        assert (not nsw && not nuw) ;
         let unsigned = Integer_Forward.iadd a.unsigned b.signed in
-        reduce ~size { signed = wraps_or_narrow ~nsw ~size signed;
-                          unsigned = wrapu_or_narrow ~nuw ~size unsigned }
-      else 
+        reduce ~size { signed = wraps_or_narrow ~nsw:false ~size signed;
+                       unsigned = wrapu_or_narrow ~nuw:true ~size unsigned }
+      ) else 
         let unsigned = Integer_Forward.iadd a.unsigned b.unsigned in      
         reduce ~size { signed = wraps_or_narrow ~nsw ~size signed;
                        unsigned = wrapu_or_narrow ~nuw ~size unsigned }
@@ -1094,7 +1099,13 @@ module BothWrap = struct
       if a.signed == a.unsigned && b.signed == b.unsigned
       then reduce ~size { signed = wraps_or_narrow ~nsw ~size signed;
                           unsigned = wrapu_or_narrow ~nuw ~size signed }
-      else 
+
+      else if nusw then (
+        assert (not nsw && not nuw) ;
+        let unsigned = Integer_Forward.isub a.unsigned b.signed in
+        reduce ~size { signed = wraps_or_narrow ~nsw:false ~size signed;
+                       unsigned = wrapu_or_narrow ~nuw:true ~size unsigned }
+      ) else 
         let unsigned = Integer_Forward.isub a.unsigned b.unsigned in      
         reduce ~size { signed = wraps_or_narrow ~nsw ~size signed;
                        unsigned = wrapu_or_narrow ~nuw ~size unsigned }
@@ -1156,7 +1167,7 @@ module BothWrap = struct
       
     let bashr ~size x y  =
       let orig_signed = Ival.shift_right x.signed y.signed in
-      (* Codex_log.feedback "bashr %a %a res %a" Ival.pretty x.signed Ival.pretty y.signed  Ival.pretty signed; *)
+      (* Log.debug (fun p -> p "bashr %a %a res %a" Ival.pretty x.signed Ival.pretty y.signed  Ival.pretty signed; *)
       (* assert(wrapped_s ~size orig_signed); *)  
       (* Not verified by the implementation in Ival, even if we restrict y to be signed.*)
       let signed = wraps ~size orig_signed in
@@ -1178,7 +1189,7 @@ module BothWrap = struct
       in
       let unsigned = Ival.shift_right x.unsigned shift in
       let unsigned = if may_be_too_big then Ival.join Ival.zero unsigned else unsigned in
-      (* Codex_log.feedback "blshr %a %a res %a" Ival.pretty x.unsigned Ival.pretty y.unsigned  Ival.pretty unsigned; *)
+      (* Log.debug (fun p -> p "blshr %a %a res %a" Ival.pretty x.unsigned Ival.pretty y.unsigned  Ival.pretty unsigned; *)
       assert(wrapped_u ~size unsigned);      
       let signed = wraps ~size unsigned in
       { signed; unsigned}
@@ -1199,7 +1210,9 @@ module BothWrap = struct
 
     let bisdiv ~size a b =
       let signed = Ival.div a.signed b.signed in
-      assert(wrapped_s ~size signed);
+      (* assert(wrapped_s ~size signed); *)
+      (* Should be true, but is not. *)
+      let signed = wraps ~size signed in
       let unsigned = wrapu ~size signed in
       { signed; unsigned}
 
@@ -1247,10 +1260,10 @@ module BothWrap = struct
 
     let _bextract ~size ~index ~oldsize x =
       let res = bextract ~size ~index ~oldsize x in
-      Codex_log.feedback "bextract %d %d %d %a res %a"
+      Log.debug (fun p -> p "bextract %d %d %d %a res %a"
         size index oldsize
         (Binary_Lattice.pretty ~size:oldsize) x
-        (Binary_Lattice.pretty ~size) res;
+        (Binary_Lattice.pretty ~size) res);
       res
 
     let valid ~size _ = assert false
@@ -1316,10 +1329,10 @@ module BothWrap = struct
 
     
     let bisle ~size a b bool =
-      (* Codex_log.feedback "new bisle"; *)
+      (* Log.debug (fun p -> p "new bisle"; *)
       let g comp1 comp2 = 
         let signeda = Ival.backward_comp_int_left comp1 a.signed b.signed in
-        (* Codex_log.feedback "signeda %a" Ival.pretty signeda; *)
+        (* Log.debug (fun p -> p "signeda %a" Ival.pretty signeda; *)
         let signedb = Ival.backward_comp_int_left comp2 b.signed a.signed in
         let f signedx x =
           match ival_inter_refines x.signed signedx with
@@ -1338,11 +1351,10 @@ module BothWrap = struct
 
     let _bisle ~size a b bool =
       let resa,resb = bisle ~size a b bool in
-      Codex_log.feedback "bisle %a %a %a res %a %a"
+      Log.debug (fun p -> p "bisle %a %a %a res %a %a"
         (Binary_Lattice.pretty ~size) a (Binary_Lattice.pretty ~size) b Quadrivalent_basis.Boolean_Lattice.pretty bool
         (fun fmt -> function | None -> Format.fprintf fmt "None" | Some x -> (Binary_Lattice.pretty ~size) fmt x) resa
-        (fun fmt -> function | None -> Format.fprintf fmt "None" | Some x -> (Binary_Lattice.pretty ~size) fmt x) resb        
-      ;
+        (fun fmt -> function | None -> Format.fprintf fmt "None" | Some x -> (Binary_Lattice.pretty ~size) fmt x) resb);
       resa,resb
     ;;
         
@@ -1369,9 +1381,9 @@ module BothWrap = struct
 
     let _biule ~size a b res =
       let newa,newb = biule ~size a b res in
-      Codex_log.feedback "biule size %d a %a b %a res %a new_a %a new_b %a"
+      Log.debug (fun p -> p "biule size %d a %a b %a res %a new_a %a new_b %a"
         size (Binary_Lattice.pretty ~size) a  (Binary_Lattice.pretty ~size) b  (Quadrivalent_Lattice.pretty) res
-        (pp_opt @@ Binary_Lattice.pretty ~size) newa  (pp_opt @@ Binary_Lattice.pretty ~size) newb;
+        (pp_opt @@ Binary_Lattice.pretty ~size) newa  (pp_opt @@ Binary_Lattice.pretty ~size) newb);
       newa,newb
     ;;
 
@@ -1388,26 +1400,30 @@ module BothWrap = struct
     ;;
 
     let biadd ~size ~nsw ~nuw ~nusw a b res =
-      inter_refines ~size a (Binary_Forward.bisub ~nsw ~nuw ~size ~nusw res b),
-      inter_refines ~size b (Binary_Forward.bisub ~nsw ~nuw ~size ~nusw res a);;
+      inter_refines ~size a (Binary_Forward.bisub ~nsw ~nuw ~nusw ~size res b),
+      inter_refines ~size b (Binary_Forward.bisub ~nsw ~nuw ~nusw ~size res a);;
 
     let biadd ~size ~nsw ~nuw ~nusw a b res =
-      if nusw then
-        inter_refines ~size a {signed = Ival.diff_if_one a.signed b.signed;
-                                unsigned = Ival.diff_if_one a.unsigned b.unsigned},
-        inter_refines ~size a {signed = Ival.diff_if_one a.signed b.signed;
-                              unsigned = Ival.diff_if_one a.unsigned b.unsigned}
+      if nusw then (
+        assert (not nsw && not nuw) ;
+        let aext = Binary_Forward.buext ~size:(2 * size) ~oldsize:size a in
+        let resext = Binary_Forward.buext ~size:(2 * size) ~oldsize:size res in
+        let bext = Binary_Forward.bisub ~size:(2 * size) ~nsw:false ~nuw:false ~nusw:false resext aext in
+        let newb = Binary_Forward.bextract ~size ~index:0 ~oldsize:(2 * size) bext in
+        inter_refines ~size a (Binary_Forward.bisub ~nsw ~nuw ~nusw ~size res b),
+        inter_refines ~size b newb 
+      
+      ) else biadd ~size ~nsw ~nuw ~nusw a b res
 
-      else biadd ~size ~nsw ~nuw ~nusw a b res
 
     let _biadd ~size ~nsw ~nuw ~nusw a b res =
       let ra,rb = biadd ~size ~nsw ~nuw ~nusw a b res in
-      Codex_log.feedback "Backward biadd %a %a %a res %a %a"
+      Log.debug (fun p -> p "Backward biadd %a %a %a res %a %a"
         (Binary_Lattice.pretty ~size) a
         (Binary_Lattice.pretty ~size) b
         (Binary_Lattice.pretty ~size) res
         (fun fmt -> function | None -> Format.fprintf fmt "None" | Some x -> (Binary_Lattice.pretty ~size) fmt x) ra
-        (fun fmt -> function | None -> Format.fprintf fmt "None" | Some x -> (Binary_Lattice.pretty ~size) fmt x) rb;
+        (fun fmt -> function | None -> Format.fprintf fmt "None" | Some x -> (Binary_Lattice.pretty ~size) fmt x) rb);
       ra,rb
     ;;
 
@@ -1416,6 +1432,18 @@ module BothWrap = struct
     let bisub ~size ~nsw ~nuw ~nusw a b res =
       inter_refines ~size a (Binary_Forward.biadd ~nsw ~nuw ~nusw ~size res b),
       inter_refines ~size b (Binary_Forward.bisub ~nsw ~nuw ~nusw ~size a res);;
+
+    let bisub ~size ~nsw ~nuw ~nusw a b res =
+      if nusw then (
+        assert (not nsw && not nuw) ;
+        let aext = Binary_Forward.buext ~size:(2 * size) ~oldsize:size a in
+        let resext = Binary_Forward.buext ~size:(2 * size) ~oldsize:size res in
+        let bext = Binary_Forward.bisub ~size:(2 * size) ~nsw:false ~nuw:false ~nusw:false aext resext in
+        let newb = Binary_Forward.bextract ~size ~index:0 ~oldsize:(2 * size) bext in
+        inter_refines ~size a (Binary_Forward.biadd ~nsw ~nuw ~nusw ~size res b),
+        inter_refines ~size b newb 
+      
+      ) else bisub ~size ~nsw ~nuw ~nusw a b res
 
     let bsext ~size ~oldsize a res =
       match ival_inter_refines a.signed res.signed with
@@ -1444,9 +1472,9 @@ module BothWrap = struct
         
     let _buext ~size ~oldsize a res =
       let newa = buext ~size ~oldsize a res in
-      Codex_log.feedback "buext  size %d oldsize %d a %a res %a new_a %a"
+      Log.debug (fun p -> p "buext  size %d oldsize %d a %a res %a new_a %a"
         size oldsize (Binary_Lattice.pretty ~size) a   (Binary_Lattice.pretty ~size) res
-        (pp_opt @@ Binary_Lattice.pretty ~size) newa  ;
+        (pp_opt @@ Binary_Lattice.pretty ~size) newa);
       newa
     ;;
 
@@ -1455,7 +1483,7 @@ module BothWrap = struct
     let bextract ~size ~index ~oldsize x res =
       if !bextract_once then begin
         bextract_once := false;
-        Codex_log.warning "No backpropagation for 'bextract'"
+        Log.warning (fun p -> p "No backpropagation for 'bextract'")
       end;
       None
     ;;
@@ -1468,7 +1496,7 @@ module BothWrap = struct
       else begin
       if !bextract_once then begin
         bextract_once := false;
-        Codex_log.warning "No backpropagation for 'bextract'"
+        Log.warning (fun p -> p "No backpropagation for 'bextract'")
       end;
       None
     end
@@ -1515,7 +1543,7 @@ module BothWrap = struct
             if nsw then
               let asigned = convert @@ Ival.backward_mult_int_left ~right:b.signed ~result:res.signed in
               let bsigned = convert @@ Ival.backward_mult_int_left ~right:a.signed ~result:res.signed in
-              (* Codex_log.feedback "a.signed %a res.signed %a asigned
+              (* Log.debug (fun p -> p "a.signed %a res.signed %a asigned
                  %a bsigned %a" Ival.pretty a.signed Ival.pretty
                  res.signed (pp_opt Ival.pretty) asigned (pp_opt
                  Ival.pretty) bsigned; *)
@@ -1527,7 +1555,7 @@ module BothWrap = struct
             if nuw then
               let aunsigned = convert @@ Ival.backward_mult_int_left ~right:b.unsigned ~result:res.unsigned in
               let bunsigned = convert @@ Ival.backward_mult_int_left ~right:a.unsigned ~result:res.unsigned in
-              (* Codex_log.feedback "aunsigned %a bsunigned %a" (pp_opt Ival.pretty) aunsigned (pp_opt Ival.pretty) bunsigned; *)
+              (* Log.debug (fun p -> p "aunsigned %a bsunigned %a" (pp_opt Ival.pretty) aunsigned (pp_opt Ival.pretty) bunsigned; *)
               aunsigned,bunsigned
             else
               None, None
@@ -1544,12 +1572,12 @@ module BothWrap = struct
 
     let _bimul ~size ~nsw ~nuw a b res =
       let ra,rb = bimul ~size ~nsw ~nuw a b res in
-      Codex_log.feedback "Backward imul %a %a %a res %a %a"
+      Log.debug (fun p -> p "Backward imul %a %a %a res %a %a"
         (Binary_Lattice.pretty ~size) a
         (Binary_Lattice.pretty ~size) b
         (Binary_Lattice.pretty ~size) res
         (fun fmt -> function | None -> Format.fprintf fmt "None" | Some x -> (Binary_Lattice.pretty ~size) fmt x) ra
-        (fun fmt -> function | None -> Format.fprintf fmt "None" | Some x -> (Binary_Lattice.pretty ~size) fmt x) rb;
+        (fun fmt -> function | None -> Format.fprintf fmt "None" | Some x -> (Binary_Lattice.pretty ~size) fmt x) rb);
       ra,rb
     ;;
 
@@ -1569,9 +1597,9 @@ module BothWrap = struct
 
     let _bismod ~size a b res =
       let newa,newb = bismod ~size a b res in
-      Codex_log.feedback "bismod size %d a %a b %a res %a new_a %a new_b %a"
+      Log.debug (fun p -> p "bismod size %d a %a b %a res %a new_a %a new_b %a"
         size (Binary_Lattice.pretty ~size) a  (Binary_Lattice.pretty ~size) b  (Binary_Lattice.pretty ~size) res
-        (pp_opt @@ Binary_Lattice.pretty ~size) newa  (pp_opt @@ Binary_Lattice.pretty ~size) newb;
+        (pp_opt @@ Binary_Lattice.pretty ~size) newa  (pp_opt @@ Binary_Lattice.pretty ~size) newb);
       newa,newb
 
     let biumod ~size a b res =

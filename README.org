@@ -34,7 +34,41 @@ The simplest way to try Binsec/Codex and Frama-C/Codex is to download the compil
 
 (note that framac_codex.exe is a stripped version of Frama-C, with no plugins and support for compiler builtins removed)
 
-** From source code
+** Install from source
+
+The easiest way is to use opam ( https://opam.ocaml.org/ ).
+
+Just locally pin the package with:
+
+#+begin_src shell
+$ opam pin . -n
+#+end_src
+
+You can then install the different packages:
+
+#+begin_src shell
+$ opam install codex # For the codex library
+$ opam install binsec_codex # For the binsec_codex executable
+$ opam install frama_c_codex # For the frama_c_codex executable.
+#+end_src
+
+You can also install the Frama-c/Codex plugin if you already have a version of Frama-C installed.
+
+#+begin_src shell
+$ opam install frama_c_codex_plugin
+#+end_src
+
+*** Testing your frama_c_codex installation
+
+You can test that frama_c_codex is working by typing:
+
+#+begin_src shell
+frama_c_codex -no-plugin-autoload -machdep x86_32 -codex test.c -codex-use-type-domain -codex-type-file frama-c/test.types  -codex-html-dump output.html
+#+end_src
+
+This should output an output.html with the results of the analysis, that you can inspect using your browser.
+
+** Working from source code locally
 
 *** Prerequisites
 
@@ -49,21 +83,22 @@ Install opam:
 Install the dependencies:
 
 #+begin_src shell
-opam install frama-c binsec lmdb llvm qcheck-core ppx_inline_test sexplib mlcuddidl bheap
+opam install frama-c binsec lmdb qcheck-core ppx_inline_test sexplib mlcuddidl bheap pacomb
 #+end_src
 
-*** Installing the codex library
+Note: there is a bug in Frama-C >= 28.0 that breaks some of the testsg, so stick to 27.1 if this matters to you (e.g. if you develop new Codex features).
+
+*** Building the codex library
 
 #+begin_src shell
 dune build
 #+end_src
 
-*** Installing Binsec/Codex
+*** Building Binsec/Codex
 
 #+begin_src shell
   opam install binsec
   dune build binsec/binsec_codex.exe
-  dune install binsec/binsec_codex.exe
 #+end_src
 
 *** Installing Frama-C/Codex

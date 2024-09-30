@@ -19,6 +19,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
+module Log = Tracelog.Make(struct let category = "Types.Ctypes" end);;
 module Int_option = Datatype_sig.Option(Datatype_sig.Int)
 module String_option = Datatype_sig.Option(Datatype_sig.String)
 
@@ -44,7 +45,7 @@ module Pred = struct
       Format.fprintf fmt "%a{%d, %d}" pp_expr expr idx (idx+len-1)
 
   type binop =
-    | Add | Sub | Mul | And | Or
+    | Add | Sub | Mul | And | Or | Mod
     | Concat of int * int (** Size 1, size 2. First argument is the most significant *)
 
   let pp_binop fmt op =
@@ -54,6 +55,7 @@ module Pred = struct
     | Mul -> "*"
     | And -> "&"
     | Or -> "|"
+    | Mod -> "%"      
     | Concat (size1, size2) -> Format.sprintf "::<%d,%d>" size1 size2
 
   type expr =
@@ -146,6 +148,7 @@ module Pred = struct
     | Or -> Z.logor
     | Concat (_,size2) -> fun x y ->
       Z.logor (Z.shift_left x size2) y
+    | Mod -> Z.rem
 
   let rec eval_expr ~symbols ~self = function
     | Val (Const c) -> c
@@ -251,7 +254,7 @@ and descr =
   | Enum of enum
   | Array of typ * value option
   (** Element type and number of elements (if statically known). *)
-  | Function of typ * typ list (** Return type and parameter types *)
+  | Function of funtyp (** Return type and parameter types *)
   | Name of string
   | Application of constr * (Pred.expr list)
   | Existential of typ * string * typ
@@ -263,10 +266,14 @@ and constr =
   (** Type and its parameters *)
   | Constructor of typ * (string list)
 
+and funtyp = { ret : typ ; args : typ list ; pure : bool}
+
 and typ =
   { mutable descr : descr;
-    pred : Pred.t;
+    mutable pred : Pred.t;
   }
+
+type fundef = { funtyp : typ; inline : bool }
 
 
 exception Undefined_type of string
@@ -287,7 +294,7 @@ let rec pp_ctype fmt f =
   | Ptr p -> Printf.fprintf fmt "(%a)*" pp_ctype p.pointed
   | Enum e -> Printf.fprintf fmt "Enum"
   | Array (t, vo) -> Printf.fprintf fmt "Array"
-  | Function (r, a) -> Printf.fprintf fmt "Function"
+  | Function {ret; args} -> Printf.fprintf fmt "Function"
   | Name s -> Printf.fprintf fmt "%s" s 
   | Application (c, pl) -> Printf.fprintf fmt "Aplication"
   | Existential (t, string, t2) -> Printf.fprintf fmt "Existential"
@@ -305,7 +312,7 @@ let rec pp_ctype_list fmt l =
 let pp_function_type fmt f =
   try
     match (type_of_name f).descr with
-    | Function (ret, args) -> Printf.fprintf fmt "[%a] -> %a" 
+    | Function {ret; args} -> Printf.fprintf fmt "[%a] -> %a" 
       pp_ctype_list args
       pp_ctype ret
     | _ -> ()
@@ -330,10 +337,22 @@ let expr_to_symbol expr =
   | Val((Sym a) as symb)  -> symb
   | _ -> failwith("Expression is not a simply symbol")
 
-let function_map:(string,typ) Hashtbl.t = Hashtbl.create 17;;
-let add_function_name_definition name typ = Hashtbl.replace function_map name typ;;
+let function_map:(string, fundef) Hashtbl.t = Hashtbl.create 17;;
+let add_function_name_definition name funtyp inline = Hashtbl.replace function_map name {funtyp; inline};;
 let function_of_name name =
+  match Hashtbl.find function_map name with
+  | exception Not_found -> raise (Undefined_type name)
+  | {funtyp} -> funtyp
+
+let function_definition_of_name name =
   try Hashtbl.find function_map name
+  with Not_found -> raise (Undefined_type name)
+
+
+let global_map:(string,typ) Hashtbl.t = Hashtbl.create 17;;
+let add_global_name_definition name typ = Hashtbl.replace global_map name typ;;
+let global_of_name name =
+  try Hashtbl.find global_map name
   with Not_found -> raise (Undefined_type name)
 
 let pp_string fmt s =
@@ -390,13 +409,13 @@ let rec pp_descr_name precedence reuse fmt descr =
        fprintf fmt "@[<hov 2>(%a[])@]"
      else
        fprintf fmt "@[<hov 2>%a[]@]") (pp_type_name 1 true) typ
-  | Function (ret_t, params) ->
+  | Function {ret; args} ->
     (if precedence > 0 then
        fprintf fmt "@[<hov 2>(Function (%a, [%a]))@]"
      else
        fprintf fmt "@[<hov 2>Function (%a, [%a])@]")
-      (pp_type_name 0 reuse) ret_t
-      (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ";@ ") (pp_type_name 0 true)) params
+      (pp_type_name 0 reuse) ret
+      (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ";@ ") (pp_type_name 0 true)) args
   
   | Name n -> fprintf fmt "Name(@[<hov 2>%s@])" n
   | Application (const, args) ->
@@ -466,7 +485,10 @@ let rec subst_type ~in_ptr t env =
       let sz_value = expr_to_symbol (SymbolMap.find s env) in
         {descr = Array (subst_type ~in_ptr t env, Some sz_value); pred}
   | Array (t, sz) -> {descr = Array ((subst_type ~in_ptr t env), sz); pred}
-  | Function (t, param) -> {t with pred = pred}
+  | Function funtyp ->
+      let args = List.map (fun e -> subst_type ~in_ptr e env) funtyp.args in
+      let ret = subst_type ~in_ptr funtyp.ret env in
+      {descr = Function {funtyp with ret; args}; pred = pred}
   | Application (c, args) ->
     let args = List.map (fun e -> Pred.substitutes_expr e env) args in
     if not in_ptr then
@@ -494,7 +516,7 @@ and apply constr args =
     subst_type ~in_ptr:false t (map_bindings params args)
 
 let substitute_symbol typ prev symb =
-  Codex_log.debug "Ctypes.substitute_symbol %s by %s" prev symb ; 
+  Log.debug (fun p -> p "Ctypes.substitute_symbol %s by %s" prev symb); 
   let env = SymbolMap.singleton prev Pred.(Val (Sym symb)) in
   subst_type ~in_ptr:false typ env
 
@@ -568,7 +590,7 @@ and compare_descr ~only_descr x y =
     if c <> 0 then c else compare ~only_descr t t'
   | Array _, _ -> -1
   | _, Array _ -> 1
-  | Function (t,ts), Function (u,us) ->
+  | Function {ret=t; args=ts}, Function {ret=u; args=us} ->
     compare_list (compare ~only_descr) (t :: ts) (u :: us)
 
   | Name n1, Name n2 -> Stdlib.compare n1 n2
@@ -629,8 +651,10 @@ let rec sizeof_descr descr = (* function *)
     | Ptr _ -> 4
     | Array (elem_t, Some (Const sz)) ->
       Z.to_int sz * (sizeof_descr elem_t.descr)
-    | Void | Structure { st_byte_size = None;_ }
-    | Array (_, _) | Function (_, _) ->
+    (* | Void -> 4 *) (* TODO : check if this is valid or if a new type should be used behind pointers *)
+    | Void -> raise (Failure "The generic type \"void\" is currently not supported")
+    | Structure { st_byte_size = None;_ }
+    | Array (_, _) | Function _ ->
       (* Not handled. *)
       raise Unsizeable_type
       (* raise (Invalid_argument "type_size") *)
@@ -679,7 +703,7 @@ let rec equiv ~only_descr x y =
   | Array (t1,l1), Array (t2, l2) ->
     (l1 = l2) && (equiv ~only_descr t1 t2)
 
-  | Function (t, ts), Function (u,us) ->
+  | Function {ret=t; args=ts}, Function {ret=u; args=us} ->
     compare_list (fun x y -> if equiv ~only_descr x y then 0 else 1) (t :: ts) (u :: us) = 0
 
   | Application (ConstrName n1, args1), 
@@ -693,7 +717,7 @@ let rec equiv ~only_descr x y =
     let t = apply c args in
       equiv ~only_descr x {descr = t.descr; pred = Pred.conjunction t.pred y.pred}
 
-  (* | _ when sizeof x = sizeof y -> check_pred x.pred y.pred *)
+  | Weak t1, Weak t2 -> equiv ~only_descr t1 t2
 
   | _ -> false
 
@@ -708,11 +732,30 @@ let equal ~only_descr t u =
   equal_descr ~only_descr t.descr u.descr
   && ((=) : Pred.t -> Pred.t -> bool) t.pred u.pred
 
+let equal_constr ~only_descr t u =
+  compare_constr ~only_descr t u = 0
+
+
 let rec is_pointer_type t =
   match t.descr with
   | Ptr _ -> true
   | Structure {st_members=[_,_,typ]} -> is_pointer_type typ
   | Name str -> is_pointer_type (type_of_name str)
+  | _ -> false
+
+let rec is_flexible_array t =
+  let t = inlined t in
+  match t.descr with
+  | Structure {st_byte_size = None} -> true
+  | Existential (t,_,_) -> is_flexible_array t
+  | Weak {descr = Array (_, Some (Sym _))} -> true
+  | Weak _ -> false
+  | _ -> false
+
+let rec is_function_pure ft =
+  match ft.descr with
+  | Existential (t,_,_) -> is_function_pure t
+  | Function {pure} -> pure
   | _ -> false
 
 let rec contains_descr t u =
@@ -749,9 +792,21 @@ let print_constr_map () =
 ;;
 
 let print_function_map () =
-  Hashtbl.iter (fun name funct ->
-    Format.printf "Result: %s -> %a@." name pp funct
+  Hashtbl.iter (fun name {funtyp;inline} ->
+    Format.printf "Result: %s -> %s %a"
+      name
+      (if inline then "inline " else "")
+      pp funtyp
   ) function_map
+;;
+
+let get_function_names () =
+  List.of_seq @@ Hashtbl.to_seq_keys function_map
+
+let print_global_map () =
+  Hashtbl.iter (fun name global ->
+    Format.printf "Result: %s -> %a@." name pp global
+  ) global_map
 ;;
 
 
@@ -816,7 +871,7 @@ let tuple types =
 (** Additionnal functions used for type domains *)
 
 let concat ~size1 t ~size2 u =
-  Codex_log.debug "Ctypes.concat ~size1:%d ~size2:%d of %a and %a" size1 size2 pp t pp u ;
+  Log.debug (fun p -> p "Ctypes.concat ~size1:%d ~size2:%d of %a and %a" size1 size2 pp t pp u);
   let pair ~size1 t ~size2 u =
     {descr = Structure {st_byte_size = Some (size1 + size2); st_members = [(0, "anon", t);(size1, "anon", u)]}; pred = Pred.True}
   in
@@ -833,36 +888,6 @@ let concat ~size1 t ~size2 u =
           {descr = Structure {st_byte_size = Some (size1 + size2); st_members = ts}; pred = Pred.True}
     | _ -> pair ~size1 t ~size2 u
 
-(* let rec extract_from_record ~size ~index ~oldsize {st_byte_size; st_members} =
-
-  let rec filter_end lst = match lst with 
-    | [] -> []
-    | (i,_,_)::tl when index + size = i -> []
-    | (i,n,t)::(j,_,_)::tl when index + size < j ->
-      let typ = Option.get @@ extract ~oldsize:(j-i) ~size:(j - index - size) ~index:0 t in
-      [(i, n, typ)]
-    | x :: tl -> x :: (filter_end tl) in
-
-  let rec filter_start lst = match lst with
-    | [] -> []
-    | [x] -> lst
-    | (i,_,_)::tl when index = i -> filter_end lst
-    | (i,n,t)::((j,_,_)::tl as l) when index < j ->
-        let typ = Option.get @@ extract ~oldsize:(j-i) ~size:(j-index) ~index:(index-i) t in
-        filter_end ((j - index, n, typ)::l)
-    | x::tl -> filter_start tl in
-
-    try
-      begin
-        match filter_start st_members with
-        | [] -> None
-        | [(ofs,_,typ)]-> Some typ
-        | (ofs,name,typ)::tl ->
-            let l = List.map (fun (i,f,t) -> (i - ofs, f, t)) tl in 
-            Some {descr = Structure {st_byte_size = Some size ; st_members = (0,name,typ)::l}; pred = Pred.True}
-      end
-
-    with Invalid_argument _ -> None *)
 
 let rec extract_from_record ~size ~index ~oldsize {st_byte_size; st_members} =
 
@@ -880,7 +905,7 @@ let rec extract_from_record ~size ~index ~oldsize {st_byte_size; st_members} =
   
         
 and extract  ~size ~index ~oldsize t = 
-  Codex_log.debug "Ctypes.extract ~size:%d ~index:%d ~oldsize:%d %a" size index oldsize pp t ;
+  Log.debug (fun p -> p "Ctypes.extract ~size:%d ~index:%d ~oldsize:%d %a" size index oldsize pp t);
   let t = inlined t in
   match t.descr with
   | _ when size = 0 -> None

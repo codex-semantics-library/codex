@@ -1,0 +1,15 @@
+chandra_point.c:32.15-18: `(PS *)cps' -> ([1..0xFFFFFFFF] : ({self : Name(struct CPS)[{0}].(0)* | (self != 0)}))
+chandra_point.c:32.15-18: `cps' -> ([1..0xFFFFFFFF] : ({self : Name(struct CPS)[{0}].(0)* | (self != 0)}))
+chandra_point.c:33.9-12: `cps' -> ([1..0xFFFFFFFF] : ({self : Name(struct CPS)[{0}].(0)* | (self != 0)}))
+chandra_point.c:34.6-8: `pt' -> ([1..0xFFFFFFFF] : ({self : Name(struct Point)[{0}].(0)* | (self != 0)}))
+chandra_point.c:35.2-5: `psp' -> ([1..0xFFFFFFFF] : ({self : Name(struct CPS)[{0}].(0)* | (self != 0)}))
+chandra_point.c:35.11-12: `q' -> ([1..0xFFFFFFFF] : ({self : Name(struct Point)[{0}].(0)* | (self != 0)}))
+chandra_point.c:36.7-14: `cpsp->p' -> ([1..0xFFFFFFFF] : ({self : Name(struct Point)[{0}].(0)* | (self != 0)}))
+chandra_point.c:36.7-11: `cpsp' -> ([1..0xFFFFFFFB] : ({self : Name(struct CPS)[{0}].(0)* | (self != 0)}))
+chandra_point.c:37.2-4: `cp' -> ([1..0xFFFFFFFF] : ({self : Name(struct Point)[{0}].(0)* | (self != 0)}))
+Unproved regular alarms:
+Unproved additional alarms:
++ chandra_point.c:37 : { cp->color = RED; } -> array_offset_access ;
+Proved 3/3 regular alarms
+Unproved 0 regular alarms and 1 additional alarms.
+Solved 0/0 user assertions, proved 0

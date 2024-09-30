@@ -26,22 +26,22 @@ module type Reduce = sig
 end
 
 module type Reduced_prod_functor = functor
-  (B1 : Basis_sig.Binary_Integer_Basis)
-  (B2 : Basis_sig.Binary_Integer_Basis)
+  (B1 : Basis_sig.Numeric_Basis)
+  (B2 : Basis_sig.Numeric_Basis)
   (R : Reduce with
     type t1 = B1.binary
     and type t2 = B2.binary)
-  -> Basis_sig.Binary_Integer_Basis
+  -> Basis_sig.Numeric_Basis
 
 (** A domain that abstracts a bitvector, trying to track whether it is equal to
    zero or not. *)
 module Make
-    (B1 : Basis_sig.Binary_Integer_Basis)
-    (B2 : Basis_sig.Binary_Integer_Basis)
+    (B1 : Basis_sig.Numeric_Basis)
+    (B2 : Basis_sig.Numeric_Basis)
     (R : Reduce with
       type t1 = B1.binary
       and type t2 = B2.binary)
-    : Basis_sig.Binary_Integer_Basis = struct
+    : Basis_sig.Numeric_Basis = struct
   let name = Printf.sprintf "Reduced_prod(%s)(%s)" B1.name B2.name
 
   include Quadrivalent_basis
@@ -277,7 +277,7 @@ module Make
     let bconcat ~size1:_ ~size2:_ _ _ _ = (None,None)
     let bextract ~size:_ ~index:_ ~oldsize:_ _ _ = (None)
     let valid ~size:_ _ _ _ = (None)
-    let valid_ptr_arith ~size:_ _ _ _ = (None,None)
+    let valid_ptr_arith ~size:_ _ _ _ _ = (None,None)
 
     let bshift ~size:_ ~offset:_ ~max:_ _ = assert false
     let bindex ~size:_ _ = assert false

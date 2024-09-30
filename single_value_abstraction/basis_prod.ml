@@ -91,8 +91,8 @@ struct
       Quadrivalent_basis.Boolean_Lattice.inter (ABF.valid ~size acc_type a) (BBF.valid ~size acc_type b)
     ;;
 
-    let valid_ptr_arith ~size =
-      bpred (ABF.valid_ptr_arith ~size) (BBF.valid_ptr_arith ~size)
+    let valid_ptr_arith ~size arith_typ =
+      bpred (ABF.valid_ptr_arith ~size arith_typ) (BBF.valid_ptr_arith ~size arith_typ)
 
     let bshift ~size ~offset ~max _ = assert false
     let bindex ~size _ = assert false

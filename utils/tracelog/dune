@@ -23,4 +23,10 @@
  (public_name "codex.tracelog")
  (name tracelog)
  (modules Common Terminal Tracelog)
+ (libraries unix)
 )
+
+(install
+ (package codex)
+ (section share_root)
+ (files (tracelog-mode.el as emacs/site-lisp/tracelog-mode.el)))

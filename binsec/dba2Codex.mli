@@ -60,8 +60,6 @@ module type StateS = sig
   module Domain : Codex.With_focusing.S_with_types
   (*  with module Context = Weak_shape_domain.BR.Scalar.Context
     and module Type = Weak_shape_domain.Type *)
-  module EvalPred : Codex.Type_domain.EvalPred.Sig
-    with module Domain := Domain
 
   type t = {
     ctx: Domain.Context.t;
@@ -104,9 +102,6 @@ module Create():sig
   module Numeric : Codex.Domain_sig.Base
   module Domain : Codex.With_focusing.S_with_types
   module Region : RegionS with module Virtual_address := Virtual_address
-
-  module EvalPred : Codex.Type_domain.EvalPred.Sig
-    with module Domain := Domain
 
   module Make (Reg : Arch_settings.Registers with module Domain = Domain) : sig
 

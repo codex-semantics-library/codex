@@ -22,7 +22,7 @@
 (library
  (public_name codex.single_value_abstraction)
  (name Single_value_abstraction)
- (libraries zarith codex.codex_log codex.transfer_functions codex.lattices
+ (libraries zarith tracelog codex.transfer_functions codex.lattices
 	    codex.datatype_sig
 	    codex.framac_ival)
 ; (modules :standard \ bitwise_basis binary_test)

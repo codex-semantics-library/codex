@@ -1,0 +1,29 @@
+ex1.c:13.29-39: `box->first' -> {0} or ([1..0xFFFFFFFF] : (Name(struct message))[{0}].0*)
+ex1.c:13.29-32: `box' -> {0} or ([1..0xFFFFFFFF] : (Name(struct message_box))[{0}].0*)
+ex1.c:14.31-36: `first' -> {0} or ([1..0xFFFFFFFF] : (Name(struct message))[{0}].0*)
+ex1.c:16.17-28: `box->length' -> [0..0x7FFFFFFF]
+ex1.c:16.17-20: `box' -> ([1..0xFFFFFFFF] : (Name(struct message_box))[{0}].0*)
+ex1.c:19.24-32: `i < length' -> {0; 1}
+ex1.c:19.24-25: `i' -> [0..0x7FFFFFFF]
+ex1.c:19.26-32: `length' -> [0..0x7FFFFFFF]
+ex1.c:20.12-27: `current->buffer + i' -> [0..0x7FFFFFFE] or ([1..0xFFFFFFFF] : (char(1))[{0}].0* + [0..0x7FFFFFFE])
+ex1.c:20.12-27: `current->buffer' -> {0} or ([1..0xFFFFFFFF] : (char(1))[{0}].0*)
+ex1.c:20.12-19: `current' -> {0} or ([1..0xFFFFFFFF] : (Name(struct message))[{0}].0*)
+ex1.c:20.28-29: `i' -> [0..0x7FFFFFFE]
+ex1.c:19.34-37: `i + 1' -> [1..0x7FFFFFFF]
+ex1.c:19.34-35: `i' -> [0..0x7FFFFFFE]
+ex1.c:22.18-31: `current->next' -> {0} or ([1..0xFFFFFFFF] : (Name(struct message))[{0}].0*)
+ex1.c:22.18-25: `current' -> {0} or ([1..0xFFFFFFFF] : (Name(struct message))[{0}].0*)
+ex1.c:23.12-28: `current != first' -> {0; 1}
+ex1.c:23.12-19: `current' -> {0} or ([1..0xFFFFFFFF] : (Name(struct message))[{0}].0*)
+ex1.c:23.23-28: `first' -> {0} or ([1..0xFFFFFFFF] : (Name(struct message))[{0}].0*)
+Unproved alarms:
+ex1.c:13: Memory_access(box->first, read) {true;false}
+ex1.c:20: Memory_access(current->buffer, read) {true;false}
+ex1.c:20: Memory_access(*(current->buffer + i), write) {true;false}
+ex1.c:22: Memory_access(current->next, read) {true;false}
+Additional alarms:
++ ex1.c:20 : { *(current->buffer + i) = (char)0; } -> store_param_nonptr ;
+Proved 1/5 alarms
+Unproved 4 regular alarms and 1 additional alarms.
+Solved 0/0 user assertions, proved 0

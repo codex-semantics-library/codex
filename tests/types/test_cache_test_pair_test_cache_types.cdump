@@ -1,0 +1,12 @@
+test_cache.c:37.6-29: `tmp' -> [--..--]
+test_cache.c:38.4-5: `p' -> ([1..0xFFFFFFFF] : ({self : Name(struct pair)[{0}].(0)* | (self != 0)}))
+test_cache.c:40.1-2: `p' -> ([1..0xFFFFFFFF] : ({self : Name(struct pair)[{0}].(0)* | (self != 0)}))
+test_cache.c:42.9-13: `p->a' -> [--..--]
+test_cache.c:42.9-10: `p' -> ([1..0xFFFFFFFF] : ({self : Name(struct pair)[{0}].(0)* | (self != 0)}))
+test_cache.c:42.2-15: `__retres' -> [--..--]
+Unproved regular alarms:
+Unproved additional alarms:
++ Return -> typing_store ;
+Proved 3/3 regular alarms
+Unproved 0 regular alarms and 1 additional alarms.
+Solved 0/0 user assertions, proved 0

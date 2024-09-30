@@ -26,6 +26,7 @@
 
  *)
 
+module Log = Tracelog.Make(struct let category = "Domains.Region_suffix_tree" end);;
 open Memory_sig;;
 
 module Ival = Framac_ival.Ival
@@ -40,7 +41,7 @@ module IntMap = struct
     let old = match find key map with
       | exception Not_found -> None
       | v -> Some v
-    in 
+    in
     add key (f old) map
 end
 
@@ -48,12 +49,12 @@ end
 module MakePrev(Scalar:Domain_sig.Base) = struct
 
   let ptrsize = Codex_config.ptr_size();;
-  
+
   (* The abstract domain can be seen as follow.  Offsets in a region
      are given using paths of successive .field or [expr] suffixes
      Because of join, we may group several paths together using a tree
      (actually, a trie). For instance, .f.a[3].b[4] and .f.a[8].g is
-     joined as .f.a[nondet(3,8)].{.g,.b[4]}. The tree allows to identify 
+     joined as .f.a[nondet(3,8)].{.g,.b[4]}. The tree allows to identify
      the paths that have the same prefix.
 
      Because C allows casts, the offsets and the indices are stored
@@ -71,7 +72,6 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
     module Scalar = Scalar
     include Scalar
     module Context = Scalar.Context
-    open Context
     let boolean2scalar_bool _ctx x = x
     let scalar_bool2boolean _ctx x = x
     module Binary_Forward = struct
@@ -91,7 +91,7 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
         | UBound, UBound -> true
         | CBound a, CBound b -> a == b
         | UBound, CBound _ | CBound _, UBound -> false
-      
+
       (* Manipulate bound using the notion of over-approximation of
          intersection and union of bound intervals. *)
       let inter (mina,maxa) (minb,maxb) =
@@ -100,7 +100,7 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
           | UBound, x | x, UBound -> x
         and max = match maxa,maxb with
           | CBound a, CBound b -> CBound (min a b)
-          | UBound, x | x, UBound -> x          
+          | UBound, x | x, UBound -> x
         in (min,max)
       ;;
 
@@ -110,7 +110,7 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
           | UBound, x | x, UBound -> UBound
         and max = match maxa,maxb with
           | CBound a, CBound b -> CBound (max a b)
-          | UBound, x | x, UBound -> UBound   
+          | UBound, x | x, UBound -> UBound
         in (min,max)
       ;;
 
@@ -118,7 +118,7 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
         | UBound -> Format.fprintf fmt "UBound"
         | CBound a -> Format.fprintf fmt "CBound(%d)" a
       ;;
-      
+
 
       let bchoose _choice x = x
 
@@ -137,7 +137,7 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
       (* Mapping from k -> suffixes when some field k is taken. *)
       offsets: t IntMap.t;
       (* Mapping k -> expression * suffixes, when index e is taken
-         (for arrays with elements of size k).  
+         (for arrays with elements of size k).
          MAYBE: use integer intead of binary for indices. *)
       indices: (Scalar.binary * t) IntMap.t;
 
@@ -147,7 +147,7 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
 
          For computing pointers, the offsets corresponding to min and
          max are both included.  For access, only min is included, max
-         is excluded. *)      
+         is excluded. *)
       min:Bound.t; max:Bound.t;
     }
     ;;
@@ -158,7 +158,7 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
         indices = IntMap.empty;
         min = CBound 0; max = CBound (-13);
       };;
-    
+
     let offset_empty = fun ~size ctx -> empty_suffix
     ;;
 
@@ -170,10 +170,7 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
     let binary2scalar_binary ~size _ctx value = assert false
     let assume_type ~size _ctx value typ = assert false
 
-    let global_symbol ctx symb = assert false
-    let add_global_symbol ~size ctx name binary = assert false
-    let add_global_scalar_symbol ~size ctx name binary = assert false
-    
+
     (* Maybe we should use hashconsing. *)
     (* let rec equal a b =
      *   a == b ||
@@ -196,7 +193,7 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
         if IntMap.is_empty offsets && IntMap.is_empty indices then
           if leaf then ()
           else Format.fprintf fmt "+ <bottom>"
-        else if leaf then Format.fprintf fmt " + 0@," 
+        else if leaf then Format.fprintf fmt " + 0@,"
                                          (* Only display + 0 when in an interior node. *)
         else ();
         offsets |> IntMap.iter (fun i x ->
@@ -209,8 +206,8 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
         Format.fprintf fmt "@]";
       in pp fmt x
     ;;
-          
-    
+
+
     (* Note: if line wrapping occurs, the value can be misread. *)
     let offset_pretty ~size ctx fmt x = pp (Scalar.binary_pretty ~size ctx) fmt x
 
@@ -225,7 +222,7 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
     end
     module Offset = Binary
 
-    
+
     module Query = struct
       include Scalar.Query
 
@@ -254,7 +251,7 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
       ;;
 
       let binary_to_known_bits ~size x = assert false
-      
+
       let binary_fold_crop ~size bin ~inf ~sup acc f =
         ZSet.fold (fun x acc ->
             if Z.leq inf x && Z.leq x sup then f x acc else acc
@@ -281,7 +278,7 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
               ZSet.union acc @@ ZSet.map (Z.add (Z.of_int i)) (loop x)
             ) offsets acc in
           let acc = IntMap.fold (fun k (i,t) acc ->
-              let ival = assert false in                        
+              let ival = assert false in
               (* let ival = Scalar.Query.binary ~size ctx i |> Scalar.Query.binary_to_ival ~size in *)
               let lt = loop t in
               let res = Ival.fold_int (fun i acc ->
@@ -371,19 +368,19 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
     (* Used in some transfer functions. *)
     let nondet_binary ~size ctx v1 v2 =
       let Context.Result(_,tup,deserialize) =
-        Scalar.serialize_binary ~size ctx v1 ctx v2 (true,Context.empty_tuple)
+        Scalar.serialize_binary ~size ctx v1 ctx v2 (true,Context.empty_tuple ())
       in
       let res_tup = Scalar.nondet_same_context ctx tup in
       let res,(_: Context.empty_tuple Context.out_tuple) = deserialize ctx res_tup in
       res
     ;;
-    
+
     (**************** Transfer functions. ****************)
 
     (* Note: In GCC, the max object size is PTRDIFF_MAX, which is
        INT_MAX. This limits the length of arrays to
        PTRDIFF_MAX/sizeof(element). *)
-    
+
     (* Translate a suffix tree into linear expressions +
        nondet. This is an extension of the translation of a suffix
        path into a linear expression. *)
@@ -392,12 +389,12 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
         let acc = if leaf then [Scalar.Binary_Forward.biconst ~size Z.zero ctx] else [] in
         let acc = IntMap.fold (fun k (e,x) acc ->
             let k = Scalar.Binary_Forward.biconst ~size (Z.of_int k) ctx in
-            let ke = Scalar.Binary_Forward.bimul ~size ~nsw:false ~nuw:true ctx k e in
-            (Scalar.Binary_Forward.biadd ~size ~nsw:false ~nuw:true ~nusw:false ctx ke @@ loop x)::acc
+            let ke = Scalar.Binary_Forward.bimul ~size ~nsw:true ~nuw:false ctx k e in
+            (Scalar.Binary_Forward.biadd ~size ~nsw:false ~nuw:false ~nusw:true ctx ke @@ loop x)::acc
           ) indices acc in
         let acc = IntMap.fold (fun k x acc ->
             let k = Scalar.Binary_Forward.biconst ~size (Z.of_int k) ctx in
-            (Scalar.Binary_Forward.biadd ~size ~nsw:false ~nuw:true ~nusw:false ctx k @@ loop x)::acc
+            (Scalar.Binary_Forward.biadd ~size ~nsw:false ~nuw:false ~nusw:true ctx k @@ loop x)::acc
           ) offsets acc in
         match acc with
         | [a] -> a
@@ -417,12 +414,12 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
       (* Codex_log.feedback "la %a lb %a res %a" (Scalar.binary_pretty ~size ctx) la
          (Scalar.binary_pretty ~size ctx) lb (Scalar.boolean_pretty ctx) res; *)
       res
-    ;;        
+    ;;
 
     let beq ~size ctx a b =
       let la = to_linear_exp ~size ctx a and lb = to_linear_exp ~size ctx b in
       let res = Scalar.Binary_Forward.beq ~size ctx la lb in
-      (* Codex_log.feedback "la %a lb %a res %a" (Scalar.binary_pretty ~size ctx) la 
+      (* Codex_log.feedback "la %a lb %a res %a" (Scalar.binary_pretty ~size ctx) la
          (Scalar.binary_pretty ~size ctx) lb (Scalar.boolean_pretty ctx) res; *)
       res
     ;;
@@ -442,11 +439,11 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
       max=Bound.bchoose choice x.max
     }
     ;;
-    
+
     (* No other offset than leaf. *)
     let only_leaf ~max =
       {leaf = true; offsets = IntMap.empty; indices = IntMap.empty; max; min = CBound 0};;
-    
+
     let only_leaf_no_bound =
       {leaf = true; offsets = IntMap.empty; indices = IntMap.empty; max = UBound; min = UBound};;
 
@@ -473,7 +470,7 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
      *     {leaf=false;offsets;indices;min;max}
      * ;; *)
 
-    
+
     (* This version does "offset compression": successive offsets are
        added together. This reduces space usage. But as "+ 6 + 2" and
        "+ 8" are no longer separate, in some (rare) cases (join with
@@ -488,8 +485,8 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
       (* if offset = 0 then { x with min=newmin; max=newmax }
        * else *)
         let indices = indices |> IntMap.mapi (fun k (e1,s1) ->
-          (* When "entering" array elements, we cannot go beyond their size. 
-             Actually sometimes we can; e.g. * (struct toto * ) &char_buffer[i]; 
+          (* When "entering" array elements, we cannot go beyond their size.
+             Actually sometimes we can; e.g. * (struct toto * ) &char_buffer[i];
              So we remove this limitation. *)
           (* let (_,max) = Bound.inter (UBound,CBound k) (UBound,newmax) in *)
             let max = newmax in
@@ -497,7 +494,7 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
         let offsets =
           let acc = if leaf then IntMap.singleton offset (only_leaf ~max:newmax) else IntMap.empty in
           IntMap.fold (fun key s acc ->
-              
+
             (* If the offset point to a leaf: perform offset compression. *)
             let acc =
               if s.leaf then
@@ -514,7 +511,7 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
                   ) acc
               else acc
             in
-            
+
             (* If the offset contains other things: shift them too, keep the old offset. *)
             let acc =
               if IntMap.is_empty s.offsets && IntMap.is_empty s.indices
@@ -537,8 +534,8 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
       res
     ;;
 
-    
-    
+
+
     (* Go to the end of every path, and append an index. *)
     let rec bindex ~size k ctx {leaf;offsets;indices;min=oldmin;max=oldmax} e =
       assert(k != 0);
@@ -561,7 +558,7 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
               (Scalar.Binary_Forward.biconst ~size (Z.of_int (x/k)) ctx)
               e
         in
-        let acc = match max with
+        let _acc = match max with
           | UBound -> acc
           | CBound x ->
             Scalar.Boolean_Forward.(&&) ctx acc @@
@@ -574,10 +571,10 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
       in
 
       let assume_bound min max k e = e in
-      
-      
+
+
       (* Codex_log.feedback "Bindex %a %a" (binary_pretty ~size ctx) x
-         (Scalar.binary_pretty ~size ctx) e; *)      
+         (Scalar.binary_pretty ~size ctx) e; *)
       let new_offsets = offsets |> IntMap.map (fun x -> bindex ~size k ctx x e) in
       let new_indices:(Scalar.binary * t) IntMap.t =
         (IntMap.remove k indices) |> IntMap.mapi (fun k1 (e1,s) ->
@@ -588,15 +585,15 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
                We do not want that q is such that &x[0] <= q < &x[1].  *)
             (* MAYBE: if size is different from 1 (i.e. is not a char) we can. *)
             (* let min = Bound.max (CBound 0) r.min in
-             * let max = Bound.min (CBound k1) r.max in *)            
+             * let max = Bound.min (CBound k1) r.max in *)
             (* (e1,{r with min; max})) in *)
-            (e1,r)) in            
+            (e1,r)) in
         let new_indices =
           match IntMap.find k indices with
-          | exception Not_found -> 
+          | exception Not_found ->
             if leaf
             then begin
-              (* The index goes at most at the end of the array. *)              
+              (* The index goes at most at the end of the array. *)
               let e = assume_bound oldmin oldmax k e in
               IntMap.add k (e,only_leaf_no_bound) new_indices
             end
@@ -614,12 +611,12 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
                 (* The only non-corner case. The use of this fast path
                    has a small incidence (a few percents) on the
                    benchmarks. *)
-                (* Offset compression: + k * x + k * y -> k * (x + y)  *)                
-                let add = Scalar.Binary_Forward.biadd ~size ~nsw:true ~nuw:false ~nusw:false ctx e1 e in                
+                (* Offset compression: + k * x + k * y -> k * (x + y)  *)
+                let add = Scalar.Binary_Forward.biadd ~size ~nsw:true ~nuw:false ~nusw:false ctx e1 e in
                 IntMap.add k (add,only_leaf_no_bound) new_indices
               else if s1.leaf = true then begin
                 if ( IntMap.is_empty s1.offsets && IntMap.is_empty s1.indices) then begin
-                  let add = Scalar.Binary_Forward.biadd ~size ~nsw:true ~nuw:false ~nusw:false ctx e1 e in                
+                  let add = Scalar.Binary_Forward.biadd ~size ~nsw:true ~nuw:false ~nusw:false ctx e1 e in
                   IntMap.add k (add,only_leaf_no_bound) new_indices
                 end
                 else begin
@@ -647,16 +644,16 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
 
     (* Folding, taking care of not enumerating indefinitevely. For
        this reason, we build an offset "to_add" that we use to crop
-       the folding on possible array indices. 
-       
+       the folding on possible array indices.
+
        We maintain inf and sup as bounds that cannot be traversed. *)
     let fold_crop ~size ctx x ~inf ~sup f acc =
       (* Codex_log.feedback "fold_crop inf %s sup %s" (Z.to_string inf) (Z.to_string sup); *)
       (* in C, it is allowed to go beyond the max value by one, but
-         one cannot use this value for access.  *)      
+         one cannot use this value for access.  *)
       let for_access = true in
       let module ZSet = Query.ZSet in
-      
+
       (* We build this temporary set to make sure that each indice
          appears only once. Generally the memory domain should work
          even if indices apperead twice, which is generally rare. But
@@ -680,12 +677,12 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
             let bin = Scalar.Query.binary ~size ctx i in
             let ival_min = Z.div (Z.sub inf to_add) (Z.of_int k) in
             let ival_max = Z.div (Z.sub sup to_add) (Z.of_int k) in
-            let res = Scalar.Query.binary_fold_crop ~size bin ~inf:ival_min ~sup:ival_max acc (fun i acc ->            
+            let res = Scalar.Query.binary_fold_crop ~size bin ~inf:ival_min ~sup:ival_max acc (fun i acc ->
                 loop ~inf ~sup (Z.add to_add (Z.mul (Z.of_int k) i)) t acc
               ) in
             res)
             indices acc in
-        if leaf && Z.leq inf to_add && Z.leq to_add sup 
+        if leaf && Z.leq inf to_add && Z.leq to_add sup
         then ZSet.add to_add acc
         else acc
       in
@@ -754,13 +751,13 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
 
         let nondet2_bool v1 v2 =
           let Context.Result(_,tup,deserialize) =
-            Scalar.serialize_boolean ctx v1 ctx v2 (true,Context.empty_tuple)
+            Scalar.serialize_boolean ctx v1 ctx v2 (true,Context.empty_tuple ())
           in
           let res_tup = Scalar.nondet_same_context ctx tup in
           let res,_ = deserialize ctx res_tup in
           res
         ;;
-        
+
         let nondet a b = {
           true_= a.true_ || b.true_;
           value= match a.value,b.value with
@@ -777,7 +774,7 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
           | Some y -> Format.fprintf fmt "{true=%b;value=Some(%a)}"
                         x.true_ (Scalar.boolean_pretty ctx) y
         ;;
-        
+
         let (&&) x y = match x.true_, x.value with
           | true, Some x ->
             (* Flatten before doing the conjunction. *)
@@ -789,14 +786,14 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
           | false, Some x -> {true_ = false;
                               value = Some (Scalar.Boolean_Forward.(&&) ctx x y)}
         ;;
-    
+
         let flatten x = match x.true_, x.value with
           | true, None -> Scalar.Boolean_Forward.true_ ctx
           | false, Some x -> x
           | true, Some x -> nondet2_bool (Scalar.Boolean_Forward.true_ ctx) x
           | false, None -> assert false  (* TODO: empty boolean.  *)
 
-        
+
       end in
 
       let rec loop ~inf ~sup {leaf;offsets;indices;min;max}  =
@@ -853,14 +850,14 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
       let offset_choose = bchoose
     end
     include Offset_transfer_functions
-    
+
     let query_boolean = Scalar.query_boolean
   end
   module Address = Operable_Value
 
 
   (* TODO: This should be placed in another module. *)
-  
+
   (* The argument for an array should be a cell, but let's name it like this for now. *)
   module type Array_Arg = sig
 
@@ -869,7 +866,7 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
     module Value:Value
       (* (\* An initial memory region, that contains the empty value. *\)
        * val initial: memsize:int -> Scalar.Context.t -> t
-       * 
+       *
        * (\* Reading and writing values out of a cell. *\)
        * val load: memsize:int -> offset:int -> size:int -> Scalar.Context.t -> t -> Value.binary
        * (\* val store: memsize:int -> offset:int -> size:int -> Scalar.Context.t -> t -> Value.binary -> t *\)
@@ -878,18 +875,20 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
 
     (* Reading and writing values out of a cell. Probably temporary, i.e. can be replaced by extract? *)
     val load: memsize:int -> offset:int -> size:int -> Value.Context.t -> t -> Value.binary (* Value.binary *)
-    
+
     (* Copying part of a cell. *)
     val extract: memsize:int -> offset:int -> size:int -> Value.Context.t -> t -> t
 
     val serialize:memsize:int -> Value.Context.t -> t -> Value.Context.t ->  t -> 'a Value.Context.in_acc -> (t,'a) Value.Context.result
-        
+
     val pretty:memsize:int -> Value.Context.t -> Format.formatter -> t -> unit
 
     val union: memsize:int -> Value.Context.t -> t -> t -> t
 
     val nconcat: Value.Context.t -> (int * t) list -> t
-    
+
+    val shared_addresses: memsize:int -> Value.Context.t -> t -> Value.Context.t -> t -> (Value.binary * Value.binary) list
+
   end
 
   module type Array_result = sig
@@ -907,7 +906,7 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
     (* Two functions are provided, for strong and weak update. We
        could do with only the strong one, but it is too
        inefficient. *)
-    (* TODO: provide weak with the condition in which the value is written, 
+    (* TODO: provide weak with the condition in which the value is written,
        so that it can "assume" on it. *)
     val subst: memsize:int -> Scalar.Context.t -> Scalar.binary -> int -> t ->
       strong:(memsize:int -> offset:int ->
@@ -925,13 +924,15 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
     (* Extract a cell from an array. *)
     val extract: memsize:int -> offset:int -> size:int -> Value.Context.t -> t -> cell
 
-    val serialize:memsize:int -> 
+    val serialize:memsize:int ->
       Value.Context.t -> t -> Value.Context.t -> t ->
       'a Value.Context.in_acc ->
       (t,'a) Value.Context.result
 
+    val shared_addresses: memsize:int -> Value.Context.t -> t -> Value.Context.t -> t -> (Value.binary * Value.binary) list
+
     end
-  
+
 
   (* In this implementation, the array is just a single cell. *)
   module Make_Array1(Cell:Array_Arg):Array_result
@@ -941,20 +942,26 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
 
     module Value = Cell.Value
     type cell = Cell.t
-    
+
       (* A simple implementation where Arrays are complete cells. *)
       type t = Cell.t
 
       let pretty = Cell.pretty;;
 
       let extract = Cell.extract;;
-      
+
       let load = Cell.load;;
-      
+
       let singleton ~memsize ctx cell = cell;;
 
-      let serialize = Cell.serialize;;      
-      
+      let serialize = Cell.serialize;;
+
+      let shared_addresses = Cell.shared_addresses
+
+      let sizeof _ = assert false
+      let concat ~size1:_ ~size2:_ _ = assert false
+      let binary_to_block ~size:_ _ = assert false
+
       module Bound = Operable_Value.Bound
       (* Different when we will do array squashing. *)
       let subst ~memsize ctx e k (* ~min ~max *) cell ~strong ~weak =
@@ -1004,7 +1011,7 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
   = struct
 
     module Context = Scalar.Context
-    
+
     (* An array with an unknown (non-null) number of cells with a fixed size. *)
     type t = {
       cell_size: int;
@@ -1013,7 +1020,7 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
 
     module Value = Value
     type cell = Cell.t
-      
+
 
     let pretty ~memsize ctx fmt cell = Cell.pretty ~memsize ctx fmt cell.cell_contents
     let singleton ~memsize ctx cell = {cell_size=memsize;cell_contents=cell};;
@@ -1030,7 +1037,7 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
     (* Shrink the array n times; the original size must be a multiple of n. *)
     let shrink ctx array n =
       let oldsize = array.cell_size in
-      let mem = array.cell_contents in      
+      let mem = array.cell_contents in
       assert (oldsize mod n == 0);
       let size = oldsize / n in
       let rec loop i acc =
@@ -1058,7 +1065,7 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
       assert(n > 0);
       (m * n) / (gcd m n)
     ;;
-    
+
     (* Resize the array so that it has size k. *)
     let resize ctx array k =
       let oldsize = array.cell_size in
@@ -1066,7 +1073,7 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
       let big = grow ctx array @@ big_size / oldsize in
       shrink ctx big @@ big_size / k
     ;;
-    
+
     (* Resize the array to k. *)
     (* let resize ctx array k =  *)
 
@@ -1098,7 +1105,7 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
         else assert false       (* TODO *)
       end
     ;;
-    
+
     let subst ~memsize ctx e k array ~strong ~weak =
       let resized = resize ctx array k in
       (* Completely ignore e *)
@@ -1119,10 +1126,10 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
         (* Grow the cell to the smallest multiple needed so that the
            load can succeed. *)
         else grow ctx array ((offset + size + (k - 1))/k)
-      in      
+      in
       let v = Cell.load ~memsize:array.cell_size ~offset ~size ctx array.cell_contents in
       let level = Cell.Value.Context.level ctx in
-      Value.Binary_Forward.bchoose ~size:(8 * size) (Transfer_functions.Choice.fresh ~level) ctx v      
+      Value.Binary_Forward.bchoose ~size:(8 * size) (Transfer_functions.Choice.fresh ~level) ctx v
     ;;
 
     let extract ~memsize ~offset ~size ctx array =
@@ -1133,7 +1140,7 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
         if offset + size <= k then array
         else grow ctx array ((offset + size + (k - 1))/k)
       (* Should this call Cell.choose? *)
-      in Cell.extract ~memsize:array.cell_size ~offset ~size ctx array.cell_contents        
+      in Cell.extract ~memsize:array.cell_size ~offset ~size ctx array.cell_contents
     ;;
 
     (* If size is not equal, take the gcm. *)
@@ -1143,28 +1150,41 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
       let a = grow ctxa a (newsize / a.cell_size) in
       let b = grow ctxb b (newsize / b.cell_size) in
       assert(a.cell_size == newsize);
-      assert(b.cell_size == newsize); 
+      assert(b.cell_size == newsize);
       (* ICI: les tests plantent a cause de ca. Il faut resizer en plus grand *)
       (* assert(a.cell_size == b.cell_size); *)
       let Context.Result(inc,acc,d) = Cell.serialize ~memsize:newsize ctxa a.cell_contents ctxb b.cell_contents acc
-      in Context.Result(inc, acc, (fun ctx tup -> let x,tup = d ctx tup in {cell_size=newsize;cell_contents=x},tup))      
+      in Context.Result(inc, acc, (fun ctx tup -> let x,tup = d ctx tup in {cell_size=newsize;cell_contents=x},tup))
     ;;
 
+    let shared_addresses ~memsize ctxa a ctxb b =
+      let newsize = lcm a.cell_size b.cell_size in
+      let a = grow ctxa a (newsize / a.cell_size) in
+      let b = grow ctxb b (newsize / b.cell_size) in
+      assert(a.cell_size == newsize);
+      assert(b.cell_size == newsize);
+      Cell.shared_addresses ~memsize:newsize ctxa a.cell_contents ctxb b.cell_contents
+    ;;
 
-    
+    let sizeof _ = assert false
+    let concat ~size1:_ ~size2:_ _ = assert false
+    let binary_to_block ~size:_ _ = assert false
+
+
+
     (* subst Operation: based on the written size and original size, we may
        have to resize or shrink the array by using extract,concat, and
        "merges/folds". *)
 
       (* Ici. Deplacer le merge sur les cells dans cell, rajouter un concat sur les cells,
        * et c'est parti!
-       * 
+       *
        * NB: Les cells ont une taille fixe, mais les arrays ne sont pas (toujours) des cells  *)
   end
 
 
 
-  
+
   module Memory
       (Value:Value)
       (Lift:sig val ctx: Value.Context.t -> Address.Context.t * (Address.Context.t -> Value.Context.t) end)
@@ -1174,10 +1194,10 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
       with module Context = Value.Context
        and type boolean = Value.boolean
       = Value
-    include Domain      
+    include Domain
 
     let to_sub x = fst @@ Lift.ctx x
-    
+
     module Value = Value
     module Offset = Operable_Value
     type offset = Operable_Value.binary
@@ -1185,7 +1205,7 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
     (* Join values with nondet. Works only when the array is fully-expanded.  *)
     let join_values_nondet ~size ctx v1 v2 =
       let Context.Result(_,tup,deserialize) =
-        Value.serialize ~size ctx v1 ctx v2 (true, Context.empty_tuple)
+        Value.serialize ~size ctx v1 ctx v2 (true, Context.empty_tuple ())
       in
       let res_tup = Value.nondet_same_context ctx tup in
       let res,_ = deserialize ctx res_tup in
@@ -1196,7 +1216,7 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
     (* Join values with union. *)
     let join_values_union ~size ctx v1 v2 =
       let Context.Result(_,tup,deserialize) =
-        Value.serialize ~size ctx v1 ctx v2 (true, Context.empty_tuple)
+        Value.serialize ~size ctx v1 ctx v2 (true, Context.empty_tuple ())
       in
       let level = Value.Context.level ctx in
       let condition = Transfer_functions.Condition.fresh ~level in
@@ -1222,9 +1242,9 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
       include M1
 
     end
-    
-    
-    
+
+
+
     (* First part: the memory structures. Sizes are all in bytes. *)
     (* MAYBE: store the size inside the objects, as is already the
        case when using interval maps. *)
@@ -1233,16 +1253,16 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
       (* A cell is a contiguous memory region. *)
       type t = Array of Array.t | Value of Value.binary | Struct of Struct.t
       (* | Concat of a,b, for flexible array members? *)
-        
+
 
       (* An initial memory region, that contains the empty value. *)
       (* MAYBE: pass it the initial (char) value for the region. *)
       val initial: memsize:int -> Value.Context.t -> t
-      
+
       (* Reading and writing values out of a cell. *)
       val load: memsize:int -> offset:int -> size:int -> Value.Context.t -> t -> Value.binary
       (* val store: memsize:int -> offset:int -> size:int -> Value.Context.t -> t -> Value.binary -> t *)
-      val store_cell: memsize:int -> offset:int -> size:int -> Value.Context.t -> t -> Cell.t -> t        
+      val store_cell: memsize:int -> offset:int -> size:int -> Value.Context.t -> t -> Cell.t -> t
 
       (* Copying part of a cell. *)
       val extract: memsize:int -> offset:int -> size:int -> Value.Context.t -> t -> t
@@ -1250,7 +1270,7 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
       (* Maybe: Concat: easy with structs, just put 2 cells one after the other.
          Useful for array manipulation.  *)
 
-      val serialize:memsize:int -> Value.Context.t -> t -> Value.Context.t -> t -> 
+      val serialize:memsize:int -> Value.Context.t -> t -> Value.Context.t -> t ->
         'a Value.Context.in_acc -> (t,'a) Value.Context.result
 
       val pretty:memsize:int -> Value.Context.t -> Format.formatter -> t -> unit
@@ -1267,18 +1287,20 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
       (* Concatenantes n cells in a larger cell. List elements are (size,cell); the head of the list
          represents the low addresses. *)
       val nconcat: Value.Context.t -> (int * t) list -> t
-      
+
+      val shared_addresses: memsize:int -> Value.Context.t -> t -> Value.Context.t -> t -> (Value.binary * Value.binary) list
+
     end = struct
 
       (* We choose to have Value < Array < Struct. In part because it
          is easy to convert a Value to a singleton array, and to
          convert any array to a struct. This means that joining a
          Value and a Array yields an Array, for intance. *)
-      (* XXX: On doit pouvoir avoir une structure plus simple, ou les struct contiennent 
+      (* XXX: On doit pouvoir avoir une structure plus simple, ou les struct contiennent
          soit des valeurs soit des tableaux, et les tableaux contiennent
          toujours des structures. Ca demande seulement une structure intermediaire (d'un seul element)
-         quand on a des tableaux de tableaux. 
-         
+         quand on a des tableaux de tableaux.
+
          => Migrer vers ce modele petit a petit?. *)
       type t =
         | Array of Array.t
@@ -1329,7 +1351,7 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
           Context.Result(inc, acc, (fun ctx tup -> let res,tup = d ctx tup in Struct res,tup))
         ;;
 
-      
+
       let store_cell  ~memsize ~offset ~size ctx memory cell =
         (* Codex_log.feedback "store_here offset %d memsize %d size %d" offset memsize size; *)
         match memory with
@@ -1349,13 +1371,13 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
         res
       ;;
 
-      
+
       let _store  ~memsize ~offset ~size ctx memory value =
         store_cell ~memsize ~offset ~size ctx memory @@ Value value
       ;;
 
 
-      
+
 
       let load ~memsize ~offset ~size ctx memory =
         match memory with
@@ -1397,14 +1419,14 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
       (* MAYBE: drop this memsize argument. But we could have to store
          the size with Value, which could be costly.*)
       let union ~memsize ctx m1 m2 =
-        let Context.Result(_,tup,deserialize2) = serialize ~memsize ctx m1 ctx m2 (true, Context.empty_tuple) in
+        let Context.Result(_,tup,deserialize2) = serialize ~memsize ctx m1 ctx m2 (true, Context.empty_tuple ()) in
         let level = Value.Context.level ctx in
         let res_tup = Value.union (Transfer_functions.Condition.fresh ~level) ctx tup in
         let res,_ = deserialize2 ctx res_tup in res
       ;;
 
       (* XXX: blit is just extract + store_cell. Implement this and use it.  *)
-      let blit ~memsize ctx from_mem from_offset to_mem to_offset len = 
+      let blit ~memsize ctx from_mem from_offset to_mem to_offset len =
       (* ArrayLabels.blit *)
       (* let concat  *)
         assert false
@@ -1427,7 +1449,43 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
         Struct res
       ;;
 
-      
+      let rec combine_sorted_list ls1 ls2 =
+        match ls1,ls2 with
+        | [], _ | _, [] -> []
+        | (i1,v1) :: tl1, (i2, v2) :: tl2 ->
+          if i1 = i2 then (v1,v2) :: combine_sorted_list tl1 tl2
+          else if i1 < i2 then combine_sorted_list tl1 ls2
+          else combine_sorted_list ls1 tl2
+
+      let shared_addresses ~memsize ctxa a ctxb b =
+        Log.debug (fun p -> p "Region_suffix_tree.Cell.shared_addresses ~memsize:%d" memsize);
+        match a,b with
+        | Value a, Value b ->
+          let lsa = Value.contained_addresses ~size:(8 * memsize) ctxa a in
+          let lsb = Value.contained_addresses ~size:(8 * memsize) ctxb b in
+          combine_sorted_list lsa lsb
+
+        | Struct a, Struct b ->
+          Struct.shared_addresses ~memsize ctxa a ctxb b
+        | Array a, Array b ->
+          Array.shared_addresses ~memsize ctxa a ctxb b
+        (* Decay into an array. *)
+        | Value a, Array b ->
+          Array.shared_addresses ~memsize ctxa (Array.singleton ~memsize ctxa @@ Value a) ctxb b
+        | Array a, Value b ->
+          Array.shared_addresses ~memsize ctxa a ctxb (Array.singleton ~memsize ctxb @@ Value b)
+        (* Decay into a struct. *)
+        | (Value _ | Array _) as a, Struct b ->
+          Struct.shared_addresses ~memsize ctxa (Struct.singleton ~memsize a) ctxb b
+        | Struct a, ((Value _ | Array _) as b) ->
+          Struct.shared_addresses ~memsize ctxa a ctxb (Struct.singleton ~memsize b)
+        ;;
+
+      let sizeof _ = assert false
+      let concat ~size1:_ ~size2:_ _ = assert false
+      let binary_to_block ~size:_ _ = assert false
+
+
       (* TODO: concat, or blit. This consists in creating a new
          structure, and writing the two parts in it. Maybe blit would
          generalize both extract and concat. *)
@@ -1448,9 +1506,11 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
 
       val serialize:memsize:int -> Value.Context.t -> t -> Value.Context.t -> t ->
         'a Value.Context.in_acc -> (t,'a) Value.Context.result
-      
+
+      val shared_addresses:memsize:int -> Value.Context.t -> t -> Value.Context.t -> t -> (Value.binary * Value.binary) list
+
     end = struct
-      
+
       module IntervalMap = Interval_map.With_Extract(Cell)
       type t = IntervalMap.t
       let singleton ~memsize c = IntervalMap.create ~size:memsize c
@@ -1469,7 +1529,7 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
           (v,idx,size,oldsize)
           (* Do not perform evaluations with pretty. *)
           (* Cell.extract ~memsize:oldsize ~offset:idx ~size ctx v *)
-        in        
+        in
         IntervalMap.iter_between ~size:memsize 0 map ~extract:(extract ctx) (fun ~size offset v ->
             Format.fprintf fmt " (%d-%d)" offset (offset+size-1);
             let (v,idx,size,oldsize) = v in
@@ -1479,7 +1539,7 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
           )
       ;;
 
-      
+
 
       let load ~memsize ~offset ~size (ctx:Value.Context.t) memory =
         let extract ctx v ~idx ~size ~oldsize =
@@ -1493,7 +1553,7 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
         (* Codex_log.feedback "load: memsize %d region_size %d" memsize region_size; *)
         assert(memsize == region_size);
         (* Codex_log.feedback "loading offset %d size %d region_size %d %a"
-           key size region_size (pretty ctx) {map}; *)                
+           key size region_size (pretty ctx) {map}; *)
         assert(key + size <= region_size);
         (* Codex_log.feedback "load idx %d size %d" key size; *)
         let l = IntervalMap.fold_between ~size key map []
@@ -1533,7 +1593,7 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
         let region_size = IntervalMap.get_size memory in
         assert(memsize == region_size);
         (* Codex_log.feedback "loading offset %d size %d region_size %d %a"
-           key size region_size (pretty ctx) {map}; *)                
+           key size region_size (pretty ctx) {map}; *)
         assert(key + size <= region_size);
         (* Kernel.feedback "load idx %d size %d" key size; *)
         let l = IntervalMap.fold_between ~size key map []
@@ -1555,7 +1615,7 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
           in
           assert(offset == 0);
           let acc:t = acc in
-          (* Fixes the "Double vision" problem of the recursive modules. *)          
+          (* Fixes the "Double vision" problem of the recursive modules. *)
           let acc:Struct.t = Obj.magic acc in
           Cell.Struct(acc)
       ;;
@@ -1578,7 +1638,7 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
       end = struct
         type t = Cell.t
         let extract = Cell.extract
-        let serialize = Cell.serialize                           
+        let serialize = Cell.serialize
       end
 
       let mk_extract ctx =
@@ -1591,7 +1651,7 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
         (* Note that we may end up serializing equal cells with
            different representation (i.e. they are not ==), but we will
            realize that when serializing sub-cells (and eventually, values). *)
-        IntervalMap.fold_on_diff a b (Context.Result(inc, acc,fun _ctx tup -> a,tup)) 
+        IntervalMap.fold_on_diff a b (Context.Result(inc, acc,fun _ctx tup -> a,tup))
           ~extracta:(mk_extract ctxa) ~extractb:(mk_extract ctxb)
           (fun ~size offset a b (Context.Result(inc,acc,d_map)) ->
              let Context.Result(inc,acc,d_cell) = ExtractedCell.serialize ~memsize:size
@@ -1604,8 +1664,12 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
 
       ;;
 
-      
-      
+      let shared_addresses ~memsize ctxa a ctxb b = [] (* TODO : improve this *)
+
+      let sizeof _ = assert false
+      let concat ~size1:_ ~size2:_ _ = assert false
+      let binary_to_block ~size:_ _ = assert false
+
     end
 
 
@@ -1621,13 +1685,13 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
       (* Make_Array1(struct include Cell type value = Value.binary end) *)
       (* Make_Array2(Value)(struct include Cell type value = Value.binary end) *)
 
-      
-    
+
+
 
     (* Note: if we used sets of cells (or arrays of cells) here, we
        would require operations so that loading from a set of cells
        returns a set of values. *)
-    type memory =
+    type block =
       {size:int;
        contents:Cell.t }
 
@@ -1639,18 +1703,27 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
 
     let may_alias ~ptr_size:_ _ = assert false
     let should_focus ~size:_ _ = assert false
-    let memory_empty _ = assert false
+    let block_empty _ = assert false
     let free _ = assert false
     let malloc ~id:_ ~malloc_size:_ _ = assert false
     let unknown ~level:_ ctx = assert false;;
 
-    
+
     let serialize ctxa a ctxb b acc =
       assert(a.size == b.size);
       let Context.Result(inc,acc,deserialize) =
         Cell.serialize ~memsize:a.size ctxa a.contents ctxb b.contents acc
       in Context.Result(inc, acc, (fun ctx tup -> let contents,tup = deserialize ctx tup in
                               {size=a.size;contents},tup))
+
+
+    let shared_addresses ctxa a ctxb b =
+      assert (a.size == b.size);
+      Cell.shared_addresses ~memsize:a.size ctxa a.contents ctxb b.contents
+
+    let sizeof _ = assert false
+    let concat ~size1:_ ~size2:_ _ = assert false
+    let binary_to_block ~size:_ _ = assert false
 
     (**************** Using the pointers to access the memory. ****************)
 
@@ -1681,13 +1754,13 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
       val load: min:Bound.t -> max:Bound.t ->
         memsize:int -> offset:int -> size:int -> Value.Context.t ->
         Scalar.binary -> int -> offset -> Cell.t -> Value.binary
-      
+
       val store: min:Bound.t -> max:Bound.t ->
         memsize:int -> offset:int -> size:int -> Value.Context.t ->
         Scalar.binary -> int -> offset -> Cell.t -> Value.binary -> Cell.t
     end
-    
-    
+
+
     module MakePtrInteraction(Indices:Indices):PtrInteraction = struct
 
 
@@ -1743,7 +1816,7 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
           (* Optimization: When the bound is impossible, no need to fold in the rest of the tree. *)
           match min,max with
           | Bound.CBound min, Bound.CBound max when min + size > max -> acc
-          | _ -> 
+          | _ ->
             let open Bound in
             let acc =
               if suffix.leaf &&
@@ -1784,7 +1857,7 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
                       (Indices.store ~min ~max ~memsize ~offset ~size ctx esub ksub suffixsub memory value)::acc
                     with Memory_Empty -> acc
                   end
-                | true -> 
+                | true ->
                 try
                   (Indices.store ~min ~max ~memsize ~offset ~size ctx e k suffix memory value)::acc
                 with Memory_Empty -> acc
@@ -1841,7 +1914,7 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
 
 
       (* MAYBE: when double indexing: I should merge the indices together. *)
-      
+
       let load ~min ~max ~memsize ~offset ~size (ctx:Value.Context.t) e k suffix mem =
         (* Codex_log.feedback "Indices.load offset %d suffix %a min %a max %a" offset
            (Operable_Value.binary_pretty ~size:32 ctx) suffix Bound.pretty min Bound.pretty max; *)
@@ -1922,9 +1995,9 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
     module MakeIndicesSeparateEnumeration(PtrInteraction:PtrInteraction):Indices = struct
 
       module Y = MakeIndicesInPlaceEnumeration(PtrInteraction)
-      
+
       (* Check that the indices in suffix fit within 0..k *)
-      
+
       (* Note that in some cases, it will not fit. For instance, if
          you access a struct value in a buffer at an unknown
          position. *)
@@ -1983,7 +2056,7 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
            possible. The array module can itself choose to split cells
            into partitions. *)
         (* XXX: Je pense qu'il suffit de changer ici pour avoir du dynamic squashing;
-           i.e. on cree un array dont la taille correspond aux indices dans e. 
+           i.e. on cree un array dont la taille correspond aux indices dans e.
         *)
         let inf,sup = match min,max with
           | Bound.CBound min, Bound.CBound max -> offset+min,offset+max
@@ -2028,7 +2101,7 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
 
       (* This will enumerate, but it will still be correct. *)
       let load ~min ~max ~memsize ~offset ~size ctx e k suffix mem =
-        (* assert(fits_within ctx suffix 0 k); *)  
+        (* assert(fits_within ctx suffix 0 k); *)
         Y.load ~min ~max ~memsize ~offset ~size ctx e k suffix mem
       ;;
       let store ~min ~max ~memsize ~offset ~size (ctx:Value.Context.t) e k suffix mem value =
@@ -2039,14 +2112,14 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
         else
           (Codex_log.warning "Storing outside 0..k";
            Y.store ~min ~max ~memsize ~offset ~size ctx e k suffix mem value)
-      ;;      
+      ;;
 
-      
+
     end
-    
+
     module rec PtrInteraction:PtrInteraction = MakePtrInteraction(Indices)
     and Indices:Indices = MakeIndicesSeparateEnumeration(PtrInteraction)
-    (* and Indices:Indices = MakeIndicesInPlaceEnumeration(PtrInteraction) *)        
+    (* and Indices:Indices = MakeIndicesInPlaceEnumeration(PtrInteraction) *)
 
     let store ~size ctx {size=memsize;contents} offset value =
       let contents =
@@ -2061,9 +2134,9 @@ module MakePrev(Scalar:Domain_sig.Base) = struct
       let res = store ~size ctx {size=memsize;contents} offset value in
       (* Codex_log.feedback "main.store @\nold:%a@\nnew:%a@\nvalue:%a" (Cell.pretty ~memsize ctx) contents (Cell.pretty ~memsize ctx) res.contents (Value.binary_pretty ~size ctx) value; *)
       res
-    
-    
-    
+
+
+
     let load ~size ctx {size=memsize;contents} offset =
       PtrInteraction.load
         ~min:(Bound.CBound 0)
@@ -2110,7 +2183,7 @@ end
    - Struct
    - Array
 
-   Interagit plustot sur le code, tandis que les 
+   Interagit plustot sur le code, tandis que les
 
    PtrInteraction et Indices
 
@@ -2169,22 +2242,22 @@ end
 
 
    - To implement:
-      - Having sets of binary will be boring, especially i would have to change every Operable_Value 
+      - Having sets of binary will be boring, especially i would have to change every Operable_Value
         to include set operations?
 
       - I could just add "union" and "choose" operations for binary and reuse the standard binary
-      - Although, binary would no longer be just a binary, but a function from a set of boolean variables        to binary. binary would be a special case when the set is empty. 
+      - Although, binary would no longer be just a binary, but a function from a set of boolean variables        to binary. binary would be a special case when the set is empty.
         But I don't want operations such as "1+if(b1) A else B", because we don't know what choose
         could mean then. I can check that, but as a "singleton" and a binary would be the same,
         I cannot check that choose is always applied on a set. Thus, it would be quite OK.
 
       - Par contre, la traduction vers SMT sera peut-etre pas si facile?
         AU besoin, je peux rajouter un flag
-        "singleton", qui dit si on est un singleton ou non. Mais je peux aussi calculer ca 
+        "singleton", qui dit si on est un singleton ou non. Mais je peux aussi calculer ca
         pendant la conversion vers le SMT.
 
 
-   - In different mu iterations, we may make different choices. Thus, the choice_id depends 
+   - In different mu iterations, we may make different choices. Thus, the choice_id depends
      on the mu level (it it equivalent to a call to unknown())
 
  *)

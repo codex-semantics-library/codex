@@ -1,0 +1,23 @@
+nested_loop.c:5.9-11: `*a' -> [--..--]
+nested_loop.c:5.10-11: `a' -> {0} or ([1..0xFFFFFFFF] : (int(4))[{0}].0*)
+nested_loop.c:6.15-18: `i < n' -> {0; 1}
+nested_loop.c:6.15-16: `i' -> [0..0x7FFFFFFF]
+nested_loop.c:6.17-18: `n' -> [--..--]
+nested_loop.c:7.16-19: `j < n' -> {0; 1}
+nested_loop.c:7.16-17: `j' -> [0..0x7FFFFFFF]
+nested_loop.c:7.18-19: `n' -> [1..0x7FFFFFFF]
+nested_loop.c:7.21-24: `j + 1' -> [1..0x7FFFFFFF]
+nested_loop.c:7.21-22: `j' -> [0..0x7FFFFFFE]
+nested_loop.c:6.20-23: `i + 1' -> [1..0x7FFFFFFF]
+nested_loop.c:6.20-21: `i' -> [0..0x7FFFFFFE]
+nested_loop.c:11.15-18: `i_0 < n' -> {0; 1}
+nested_loop.c:11.15-16: `i_0' -> [0..0x7FFFFFFF]
+nested_loop.c:11.17-18: `n' -> [--..--]
+nested_loop.c:11.20-23: `i_0 + 1' -> [1..0x7FFFFFFF]
+nested_loop.c:11.20-21: `i_0' -> [0..0x7FFFFFFE]
+Unproved regular alarms:
+nested_loop.c:5: Memory_access(*a, read) {true;false}
+Unproved additional alarms:
+Proved 0/1 regular alarms
+Unproved 1 regular alarms and 0 additional alarms.
+Solved 0/0 user assertions, proved 0

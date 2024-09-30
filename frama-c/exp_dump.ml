@@ -19,6 +19,13 @@
 (*                                                                        *)
 (**************************************************************************)
 
+module Cil_types = Frama_c_kernel.Cil_types
+module Filepath = Frama_c_kernel.Filepath
+module Visitor = Frama_c_kernel.Visitor
+module Printer = Frama_c_kernel.Printer
+module Cil = Frama_c_kernel.Cil
+module Ast = Frama_c_kernel.Ast
+
 let exp_dump ~should_print pp_exp_value outc =
   let module Local = struct
 

@@ -1,0 +1,13 @@
+pair.c:12.9-13: `a->x' -> [--..--]
+pair.c:12.9-10: `a' -> ([1..0xFFFFFFFF] : ({self : Name(pair_eq)[{0}].(0)* | (self != 0)}))
+pair.c:13.9-13: `a->y' -> [--..--]
+pair.c:13.9-10: `a' -> ([1..0xFFFFFFFF] : ({self : Name(pair_eq)[{0}].(0)* | (self != 0)}))
+pair.c:14.19-25: `c == d' -> {0x1}
+pair.c:14.19-20: `c' -> [--..--]
+pair.c:14.24-25: `d' -> [--..--]
+Unproved regular alarms:
+Unproved additional alarms:
+Proved 2/2 regular alarms
+Unproved 0 regular alarms and 0 additional alarms.
+pair.c:14: assertion is TRUE (valid) (proved with abstract interpretation)
+Solved 1/1 user assertions, proved 1

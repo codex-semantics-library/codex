@@ -19,6 +19,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
+open Frama_c_kernel
+
 (* An initial syntactic pass on the code; notably to know which
    globals are necessary (remove obviously dead code and data). *)
 module Make(Main:sig val main: Kernel_function.t end):sig

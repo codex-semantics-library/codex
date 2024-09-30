@@ -55,7 +55,11 @@ struct
   let read_sat() =
     (* P.print "\n"; *)
     (* P.flush(); *)
-    let input = input_line P.inc in
+    let input =
+      match input_line P.inc with
+      | exception End_of_file -> Codex_log.fatal "Could not read the solver answer. Is z3 installed?"
+      | input -> input
+    in
     match input with
     | "sat" -> Sat
     | "unsat" -> Unsat

@@ -1,0 +1,16 @@
+comparison.c:4.9-11: `*a' -> [--..--]
+comparison.c:4.10-11: `a' -> ([1..0xFFFFFFFF] : ({self : int(4)[{0}].(0)* | (self != 0)}))
+comparison.c:5.9-11: `*b' -> [--..--]
+comparison.c:5.10-11: `b' -> ([1..0xFFFFFFFF] : ({self : int(4)[{0}].(0)* | (self != 0)}))
+comparison.c:6.5-11: `i >= j' -> {0; 1}
+comparison.c:6.5-6: `i' -> [--..--]
+comparison.c:6.10-11: `j' -> [--..--]
+comparison.c:7.22-28: `i >= j' -> {0x1}
+comparison.c:7.22-23: `i' -> [--..--]
+comparison.c:7.27-28: `j' -> [--..--]
+Unproved regular alarms:
+Unproved additional alarms:
+Proved 2/2 regular alarms
+Unproved 0 regular alarms and 0 additional alarms.
+comparison.c:7: assertion is TRUE (valid) (proved with abstract interpretation)
+Solved 1/1 user assertions, proved 1

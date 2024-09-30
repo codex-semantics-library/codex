@@ -1,0 +1,19 @@
+pair.c:34.1-2: `a' -> ([1..0xFFFFFFFF] : ({self : Name(pair_eq)[{0}].(0)* | (self != 0)}))
+pair.c:35.1-2: `a' -> ([1..0xFFFFFFFF] : ({self : Name(pair_eq)[{0}].(0)* | (self != 0)}))
+pair.c:36.1-2: `a' -> ([1..0xFFFFFFFB] : ({self : Name(pair_eq)[{0}].(0)* | (self != 0)}))
+pair.c:36.8-12: `b->x' -> [--..--]
+pair.c:36.8-9: `b' -> ([1..0xFFFFFFFF] : ({self : Name(pair_eq)[{0}].(0)* | (self != 0)}))
+pair.c:37.9-13: `a->x' -> [--..--]
+pair.c:37.9-10: `a' -> ([1..0xFFFFFFFB] : ({self : Name(pair_eq)[{0}].(0)* | (self != 0)}))
+pair.c:38.9-13: `a->y' -> [--..--]
+pair.c:38.9-10: `a' -> ([1..0xFFFFFFFB] : ({self : Name(pair_eq)[{0}].(0)* | (self != 0)}))
+pair.c:39.19-25: `c == d' -> {0; 1}
+pair.c:39.19-20: `c' -> [--..--]
+pair.c:39.24-25: `d' -> [--..--]
+Unproved regular alarms:
+Unproved additional alarms:
++ pair.c:36 : { a->x = b->x; } -> typing_store ;
+Proved 6/6 regular alarms
+Unproved 0 regular alarms and 1 additional alarms.
+pair.c:39: assertion is FALSE (counter-example exists) (proved with smt solving)
+Solved 1/1 user assertions, proved 0

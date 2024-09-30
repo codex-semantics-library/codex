@@ -19,10 +19,10 @@
 (*                                                                        *)
 (**************************************************************************)
 
-open UnionFind
+open Union_Find
 
 let%test_module "TestUnionFind" = (module struct
-  module Term (*: Parameters.GENERIC_TERM*) = struct
+  module Elt = struct
     type _ t = IntTerm : int -> int t [@@unboxed]
 
     let to_int (type a) (IntTerm n : a t) = n
@@ -130,9 +130,9 @@ let%test_module "TestUnionFind" = (module struct
     let top = Interval (None, None)
   end
 
-  module ImpNode = Imperative.MakeNode(Term)(Relation)(Value)
+  module ImpNode = Imperative.MakeNode(Elt)(Relation)(Value)
   module Imp = Imperative.GenericRelationalValued(ImpNode)
-  module Fun = Functional.GenericRelationalValued(Term)(Relation)(Value)
+  module Fun = Functional.GenericRelationalValued(Elt)(Relation)(Value)
 
   let relation_of_int = function
     | 0 -> Relation.Equal
@@ -169,13 +169,14 @@ let%test_module "TestUnionFind" = (module struct
       | [] -> uf
       | (i, rel, _) :: q ->
           let rel = match rel with None -> Relation.Equal | Some x -> relation_of_int x in
-          let uf = Fun.union uf hd (IntTerm i) rel in
-          create_class hd uf q
+          match Fun.union uf hd (IntTerm i) rel with
+          | Ok uf -> create_class hd uf q
+          | Error _rel -> failwith "Duplicate union"
     in
     List.fold_left (fun uf classe -> match classe with
       | [] -> uf
       | (i, im, iM)::q ->
-          let hd = Term.IntTerm i in
+          let hd = Elt.IntTerm i in
           let uf = Fun.add_value uf hd (Value.interval (to_z im) (to_z iM)) in
           create_class hd uf q
 
@@ -188,13 +189,14 @@ let%test_module "TestUnionFind" = (module struct
     | (i, rel, _) :: q ->
         let rel = match rel with None -> Relation.Equal | Some x -> relation_of_int x in
         let node = ImpNode.make_node (IntTerm i) Value.top in
-        let () = Imp.union hd node rel in
-        node :: create_class hd q
+        match Imp.union hd node rel with
+        | Ok () -> node :: create_class hd q
+        | Error _rel -> failwith "Duplicate union"
     in
     List.map (function
       | [] -> []
       | (i, im, iM)::q ->
-          let hd = Term.IntTerm i in
+          let hd = Elt.IntTerm i in
           let hd = ImpNode.make_node hd (Value.interval (to_z im) (to_z iM)) in
           hd::(create_class hd q)
     ) gen
@@ -203,22 +205,20 @@ let%test_module "TestUnionFind" = (module struct
 
   (** Checks functional and imperative models agree *)
   let check_models_agree fun_model imp_model =
-    let check_class hd = function
-    | [] -> true
-    | t :: q ->
+    let check_class hd t =
         let imp_rel = Option.get (Imp.check_related t hd) in
         let fun_rel = Option.get (Fun.check_related fun_model (payload t) (payload hd)) in
         if Relation.equal imp_rel fun_rel then true
         else (
           QCheck2.Test.fail_reportf
             "Different relations between %a and %a :\n %a (imperative) and %a (functional)@."
-            Term.pretty (payload t) Term.pretty (payload hd)
+            Elt.pretty (payload t) Elt.pretty (payload hd)
             Relation.pretty imp_rel Relation.pretty fun_rel
         )
     in
     List.for_all (function
       | [] -> true
-      | hd::rest -> check_class hd rest)
+      | hd::rest -> List.for_all (check_class hd) rest)
     imp_model
 
   let check_invariants fun_model =
@@ -241,9 +241,12 @@ let%test_module "TestUnionFind" = (module struct
         let elt_a = list_snd cls_a in
         let elt_b = list_snd cls_b in
         let relation = relation_of_int i in
-        let fun_model = Fun.union fun_model (payload elt_a) (payload elt_b) relation in
-        let () = Imp.union elt_a elt_b relation in
-        make_unions fun_model ((cls_a @ cls_b) :: classes) is
+        match Fun.union fun_model (payload elt_a) (payload elt_b) relation with
+        | Error _ -> failwith "Non-disjoint union"
+        | Ok fun_model ->
+        match Imp.union elt_a elt_b relation with
+        | Ok () -> make_unions fun_model ((cls_a @ cls_b) :: classes) is
+        | Error _ -> failwith "Non-disjoint union, but only in imperative"
 
   let test_agree = QCheck.Test.make ~count:1000 ~name:"Functional and Imperative Build" gen_partition
     (fun part -> check_models_agree

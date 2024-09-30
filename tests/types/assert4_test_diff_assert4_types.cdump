@@ -1,0 +1,13 @@
+assert4.c:9.9-11: `*a' -> {1}
+assert4.c:9.10-11: `a' -> ([1..0xFFFFFFFF] : ({self : Name(int1)[{0}].(0)* | (self != 0)}))
+assert4.c:10.9-11: `*b' -> {3}
+assert4.c:10.10-11: `b' -> ([1..0xFFFFFFFF] : ({self : Name(int3)[{0}].(0)* | (self != 0)}))
+assert4.c:11.19-25: `c != d' -> {0x1}
+assert4.c:11.19-20: `c' -> {1}
+assert4.c:11.24-25: `d' -> {3}
+Unproved regular alarms:
+Unproved additional alarms:
+Proved 2/2 regular alarms
+Unproved 0 regular alarms and 0 additional alarms.
+assert4.c:11: assertion is TRUE (valid) (proved with abstract interpretation)
+Solved 1/1 user assertions, proved 1

@@ -66,7 +66,7 @@ struct
     let buninit ~size = IL.bottom
     let biconst ~size i = IF.iconst i
     let valid ~size _ _ = Quadrivalent_basis.Top
-    let valid_ptr_arith ~size _ _ = Quadrivalent_basis.Top
+    let valid_ptr_arith ~size _ _ _ = Quadrivalent_basis.Top
     let blshr ~size = IF.ishr
     let bashr ~size = IF.ishr
     let bshl ~size ~nsw ~nuw = IF.ishl

@@ -23,51 +23,50 @@ include Constraints_constraints_sig;;
 
 module TC = Transfer_functions.Term;;
 
-module type Parents = sig
-  type 'a parents
+module type Superterms = sig
+  type 'a superterms
   module Make(Param:sig
       type elt
-      val get_parents: elt -> elt parents
-      val set_parents: elt -> elt parents -> unit
+      val get_superterms: elt -> elt superterms
+      val set_superterms: elt -> elt superterms -> unit
     end):sig
-    (* An empty set of parents. *)
-    val create: unit -> Param.elt parents
 
-    (* Add one parent to one child. *)
-    val add_one_parent: child:Param.elt -> parent:Param.elt -> unit
+    (** An empty set of superterms. *)
+    val create: unit -> Param.elt superterms
 
-    (* Iterate on all parents of a child. *)
-    val iter_on_parents: child:Param.elt -> (Param.elt -> unit) -> unit
+    (** Add one parent to one child. *)
+    val add_one_superterm: subterm:Param.elt -> superterm:Param.elt -> unit
+
+    (** Iterate on all superterms of a child. *)
+    val iter_on_superterms: Param.elt -> (Param.elt -> unit) -> unit
   end
 end
 
 
-module ParentsWeakArray:Parents = struct
+module Superterms_WeakArray : Superterms = struct
 
-  (* WeakSet takes too much memory, we use weak array instead. *)
-  type 'a parents = 'a Weak.t
+  (** WeakSet takes too much memory, we use weak array instead. *)
+  type 'a superterms = 'a Weak.t
 
-
-  module Make(P:sig
+  module Make(P : sig
       type elt
-      val get_parents: elt -> elt parents
-      val set_parents: elt -> elt parents -> unit
-    end) = struct
+      val get_superterms: elt -> elt superterms
+      val set_superterms: elt -> elt superterms -> unit
+  end) = struct
 
     (* We assume that most constraints will have at least one parent.  *)
     let create() = Weak.create 1;;
 
-
     (* Linear search *)
-    let add_one_parent ~child ~parent =
-      try 
-        let parents = P.get_parents child in
+    let add_one_superterm ~subterm ~superterm =
+      try
+        let parents = P.get_superterms subterm in
         let length = Weak.length parents in
         assert (length > 0);
         for i = 0 to length - 1 do
-          if not (Weak.check parents i) 
+          if not (Weak.check parents i)
           then begin
-            Weak.set parents i (Some parent);
+            Weak.set parents i (Some superterm);
             raise Exit
           end
         done;
@@ -80,78 +79,86 @@ module ParentsWeakArray:Parents = struct
           (Codex_log.performance_warning
              "Complexity warning: a constrain has more than %d parents" length;
            (* raise Exit *)
-           (* Kernel.warning "child %a parent %a" *)
-           (*  length Pretty.Pretty.pretty child Pretty.Pretty.pretty parent *)
+           (* Kernel.warning "subterm %a superterm %a" *)
+           (*  length Pretty.Pretty.pretty subterm Pretty.Pretty.pretty superterm *)
           );
 
         let newparents = Weak.create (2 * length) in
         Weak.blit parents 0 newparents 0 length;
-        P.set_parents  child newparents;
-        Weak.set newparents length (Some parent)
+        P.set_superterms  subterm newparents;
+        Weak.set newparents length (Some superterm)
       with Exit -> ()
-    ;;
 
-    let iter_on_parents ~child f =
-      let parents = P.get_parents child in
+    let iter_on_superterms subterm f =
+      let parents = P.get_superterms subterm in
       for i = 0 to (Weak.length parents) - 1 do
         match Weak.get parents i with
         | None -> ()
         | Some x -> f @@ x
       done
-    ;;
-
   end
 
-    (* MAYBE: also add the index of the last parent added, and start
+    (* MAYBE: also add the index of the last superterm added, and start
        from here. This should allow amortized O(1) insertion if we
        explore from the start when the array is full, and O(1) if
        we do not try to reuse de-allocated array cells.
-       
+
        We could also have a bitmap with the free elements in an int,
        and find the correct one with find_first_set. The bitmap would
-       be updated on iter_on_parents. More complex, and probably not
+       be updated on iter_on_superterms. More complex, and probably not
        as useful.
 
        To have small bitmaps unboxed and large boxed, we could just
        use Zarith; there are popcount and trailing_zeros functions.
 
-       For now, just warn when we have a large number of parents,
+       For now, just warn when we have a large number of superterms,
        which is the main problem anyway. The goal is to have a low
        memory consumption, so an extra index is useless. *)
-  
 end
 
-module ParentsUnit:Parents = struct
-
-  (* WeakSet takes too much memory, we use weak array instead. *)
-  type 'a parents = unit
-
+(** Does not store superterms *)
+module Superterms_Unit : Superterms = struct
+  type 'a superterms = unit
 
   module Make(P:sig
       type elt
-      val get_parents: elt -> elt parents
-      val set_parents: elt -> elt parents -> unit
+      val get_superterms: elt -> elt superterms
+      val set_superterms: elt -> elt superterms -> unit
     end) = struct
 
-    let create() = ()
-    let add_one_parent ~child ~parent = ()
-    let iter_on_parents ~child f = ()
+    let create () = ()
+    let add_one_superterm ~subterm ~superterm = ()
+    let iter_on_superterms _ _ = ()
   end
 end
 
-let _parent_maker:(module Parents) =
+let superterm_maker : (module Superterms) =
   if Codex_config.constraints_register_parents()
-  then (module ParentsWeakArray)
-  else (module ParentsUnit);;
-module ParentMaker = (val _parent_maker);;
+  then (module Superterms_WeakArray)
+  else (module Superterms_Unit)
 
-module MakeConstraints(Condition:Condition_map.Condition)() = struct
+module SupertermMaker = (val superterm_maker)
+
+module MakeConstraints
+    (Condition : Condition_map.Condition)
+    (Relation : Union_Find.Parameters.GENERIC_GROUP)() =
+struct
   type boolean = TC.boolean
   type integer = TC.integer
   type binary = TC.binary
 
+  module Log = Tracelog.Make(struct let category = "Constraints.Build" end);;
+
+  (* Install the buttons to be understood by tracelog. *)
+  Log.info (fun p -> p "Defines clickable buttons for Emacs tracelog-mode: %s%s%s"
+                     "<(define:B:search-before:let B%1 =)>"
+                     "<(define:i:search-before:let i%1 =)>"
+                     "<(define:b:search-before:let b%1 =)>");;
+
   module Condition = Condition
-  
+
+  module Relation = Relation
+
   type ('arg,'res) term = ('arg,'res) TC.term
 
   module Id:sig
@@ -175,44 +182,74 @@ module MakeConstraints(Condition:Condition_map.Condition)() = struct
 
   end
 
-    type level = int;;
+  type widening_id = int
+  type level = int
 
+  module T = struct
       (* MAYBE: Completely replace booleans by bdds. Alternatively: hide
          the presence of bdd, we only manipulate boolean constraints. *)
     type 'res complete_term =
-    | Tuple_get: int * tuple_ -> 'res complete_term
-    | Empty: 'res complete_term
-    | Unknown: level -> 'res complete_term
-    | Mu_formal:{ level:level; actual: ('res t * TC.boolean t) } -> 'res complete_term 
-    | T0: { tag: (TC.ar0,'res) term } -> 'res complete_term
-    | T1: { tag: ('a TC.ar1,'res) term; a: 'a t; level:level} -> 'res complete_term
-    | T2: { tag: (('a,'b) TC.ar2,'res) term; a: 'a t; b:'b t; level:level } -> 'res complete_term
+      | Tuple_get: int * tuple_ -> 'res complete_term
+      | Empty: 'res complete_term
+      | Unknown: level -> 'res complete_term
+      | Mu_formal:{ level:level; actual: ('res t * TC.boolean t) } -> 'res complete_term
+      (* Note: maybe the level is a less fragile way to give name to inductive variables
+        (where desambiguation can be done by the scope). For now we store both. *)
 
-  and 'res t =
-    | Bool: { mutable parents: parents; id: boolean Id.t; term: boolean complete_term; bdd:Condition.t} -> boolean t
-    | Integer: { mutable parents: parents; id: integer Id.t; term: integer complete_term; } -> integer t
-    | Binary: { mutable parents: parents; id: binary Id.t; term: binary complete_term; size: int} -> binary t
+      (* Note: we have to choose between getting rid of the tuples and
+        having [Inductive_var] here, or keeping them and having
+        [Inductive_vars] in tuple_. *)
+      | Inductive_var: {widening_id:widening_id; level:level; mutable definition: 'res t} -> 'res complete_term
+      | T0: { tag: (TC.ar0,'res) term } -> 'res complete_term
+      | T1: { tag: ('a TC.ar1,'res) term; a: 'a t; level:level} -> 'res complete_term
+      | T2: { tag: (('a,'b) TC.ar2,'res) term; a: 'a t; b:'b t; level:level } -> 'res complete_term
 
-(* TODO: Cannot be unboxed (yet) because of the #!@# float array
-   hack...?  Actually , it seems more to be a bug in OCaml: the value
-   is never a float. Note: seems to be fixed in 4.11 *)
-  and any = Any: 'res t -> any [@@boxed ]
+    and 'a t =
+      | Bool: {
+          mutable superterms: superterms;
+          id: boolean Id.t;
+          mutable parent: boolean parent;
+          term: boolean complete_term;
+          bdd:Condition.t
+        } -> boolean t
+      | Integer: {
+          mutable superterms: superterms;
+          id: integer Id.t;
+          mutable parent: integer parent;
+          term: integer complete_term;
+        } -> integer t
+      | Binary: {
+          mutable superterms: superterms;
+          id: binary Id.t;
+          mutable parent: binary parent;
+          term: binary complete_term;
+          size: int
+        } -> binary t
 
-(* Note: Cannot use any (because the boxing clashes with using Weak),
-   and we need to make the type disappear: so we use Obj.t instead. *)
-  and parents = Obj.t ParentMaker.parents
+      and 'a parent =
+        | Node : 'b t * ('a, 'b) Relation.t -> 'a parent
+        | Root
 
-  (* The tuple that we manipulate *)
-  and tuple = any Immutable_array.t
+    and any = Any: 'res t -> any [@@unboxed]
 
-  (* The real tuple. *)
-  and tuple_ =
-    | Nondet of {id: tuple Id.t; level: level;
-                 a:tuple; conda_bool: boolean t;
-                 b:tuple; condb_bool: boolean t}    
-    | Mu of { id: tuple Id.t; level:level; init:tuple;var:tuple;body:tuple;body_cond:boolean t}
+    (** Note: Cannot use any (because the boxing clashes with using Weak),
+        and we need to make the type disappear: so we use Obj.t instead. *)
+    and superterms = Obj.t SupertermMaker.superterms
 
-   type 'a constraints = 'a t
+    (** The tuple that we manipulate *)
+    and tuple = any Immutable_array.t
+
+    (** The real tuple. *)
+    and tuple_ =
+      | Nondet of {id: tuple Id.t; level: level;
+                  a:tuple; conda_bool: boolean t;
+                  b:tuple; condb_bool: boolean t}
+      | Mu of { id: tuple Id.t; level:level; init:tuple;var:tuple;body:tuple;body_cond:boolean t}
+      (* Maybe: add a condition for the path predicate. *)
+      | Inductive_vars of { id: tuple Id.t; widening_id:widening_id; level:int; mutable def:tuple }
+  end
+  include T
+  type 'a constraints = 'a t
 
   let get_id: type a. a t -> a Id.t = function
     | Bool {id} -> id
@@ -229,42 +266,21 @@ module MakeConstraints(Condition:Condition_map.Condition)() = struct
     | Integer {id=Id.Id id} -> id
     | Binary {id=Id.Id id} -> id
 
+  let polyeq (type a) (type b) (x: a t) (y: b t) : (a,b) PatriciaTree.cmp =
+    match x, y with
+    | Bool {id=Id.Id il; _}, Bool {id=Id.Id ir; _} ->
+        if il == ir then Eq else Diff
+    | Integer {id=Id.Id il; _}, Integer {id=Id.Id ir; _} ->
+        if il == ir then Eq else Diff
+    | Binary {id=Id.Id il; _}, Binary {id=Id.Id ir; _} ->
+        if il == ir then Eq else Diff
+    | _ -> Diff
+
   let compare: type a b. a t -> b t -> int = fun a b ->
-    Stdlib.compare (get_id_int a) (get_id_int b)
+    Int.compare (get_id_int a) (get_id_int b)
 
   let equal: type a b. a t -> b t -> bool = fun a b ->
     (get_id_int a) == (get_id_int b)
-
- (* Relies on the fact that for all variants, the position is the same in memory. *)
-  module Unsafe = struct
-
-    let get_id: type a. a t -> a Id.t = fun x ->
-      let x:TC.boolean t = (Obj.magic x) in
-      match x with
-      | Bool {id} -> (Obj.magic id)
-    ;;
-
-    let get_term: type a. a t -> a complete_term = fun x ->
-      let x:TC.boolean t = (Obj.magic x) in
-      match x with
-      | Bool {term} -> (Obj.magic term)
-    ;;
-
-    let get_id_int: type a. a t -> int = fun x ->
-      let x:TC.boolean t = (Obj.magic x) in
-      match x with
-      | Bool {id=Id.Id id} -> id
-    ;;
-    
-    let compare: type a b. a t -> b t -> int = fun a b ->
-      Stdlib.compare (get_id_int a) (get_id_int b)
-
-    let equal: type a b. a t -> b t -> bool = fun a b ->
-      (Obj.magic a) == (Obj.magic b)
-  end
-
-  include Unsafe
-
 
   let hash x = get_id_int x;;
 
@@ -273,10 +289,12 @@ module MakeConstraints(Condition:Condition_map.Condition)() = struct
 
   let level_term: type a. a complete_term -> level = function
     | Tuple_get(_,Nondet{level}) -> level
-    | Tuple_get(_,Mu{level}) -> level      
+    | Tuple_get(_,Inductive_vars{level}) -> level
+    | Tuple_get(_,Mu{level}) -> level
     | Empty -> -1
     | Unknown level -> level
     | Mu_formal {level} -> level
+    | Inductive_var {level} -> level
     | T0 _ -> -1
     | T1 {level} -> level
     | T2 {level} -> level
@@ -285,7 +303,7 @@ module MakeConstraints(Condition:Condition_map.Condition)() = struct
   let level x = level_term @@ get_term x;;
 
   let size_of: binary t -> int = function Binary{size} -> size
-  
+
 
   module Any = struct
 
@@ -298,7 +316,7 @@ module MakeConstraints(Condition:Condition_map.Condition)() = struct
 
     let get_id_int (Any a) = get_id_int a;;
 
-    let compare a b = Stdlib.compare (get_id_int a) (get_id_int b)
+    let compare a b = Int.compare (get_id_int a) (get_id_int b)
   end
 
   module Tuple = struct
@@ -306,14 +324,16 @@ module MakeConstraints(Condition:Condition_map.Condition)() = struct
     let equal a b = match (a,b) with
       | Mu{id=Id.Id(id1)}, Mu{id=Id.Id(id2)} -> id1 == id2
       | Nondet{id=Id.Id(id1)}, Nondet{id=Id.Id(id2)} -> id1 == id2
+      | Inductive_vars{id=Id.Id(id1)}, Inductive_vars{id=Id.Id(id2)} -> id1 == id2
       | _ -> false
     let hash = function
       | Mu{id=Id.Id(id)} -> id
       | Nondet{id=Id.Id(id)} -> id
-  
-    let compare a b = Stdlib.compare (hash a) (hash b)
+      | Inductive_vars{id=Id.Id(id)} -> id
+
+    let compare a b = Int.compare (hash a) (hash b)
   end
-  
+
   module Pretty = struct
     type 'a pack =
       | Unit: TC.ar0 pack
@@ -322,7 +342,7 @@ module MakeConstraints(Condition:Condition_map.Condition)() = struct
 
     module rec PrettyArg:TC.Pretty_Arg
       with type 'a pack = 'a pack
-       and type 'a t = 'a t 
+       and type 'a t = 'a t
     = struct
       type nonrec 'a t = 'a t
       type nonrec 'a pack = 'a pack
@@ -337,39 +357,17 @@ module MakeConstraints(Condition:Condition_map.Condition)() = struct
     = TC.Pretty(PrettyArg)
     and Pretty:sig
       val pretty: Format.formatter -> 'a t -> unit
-      val pretty_deps: Format.formatter -> 'a t -> unit
-      val pretty_tuple_deps: Format.formatter -> tuple -> unit
-      val pretty_tuple: Format.formatter -> tuple -> unit
+      val pretty_definition: Format.formatter -> 'a t -> unit
+      (* val pretty_tuple_deps: Format.formatter -> tuple -> unit *)
+      val pretty_any: Format.formatter -> any -> unit
     end
     = struct
 
-      (* If we don't use prefer_predictability_over_performance, then 
-         already printed definitions may come again in the logs. *)
-      module AnyEphe =
-        (val if Codex_config.hash_cons_constraints_with_weak_table()
-          then (module Ephemeron.K1.Make(Any):Hashtbl.S with type key = Any.t)
-          else (module Hashtbl.Make(Any):Hashtbl.S with type key = Any.t))
-      ;;
-
-      module TupleEphe =
-        (val if Codex_config.hash_cons_constraints_with_weak_table()
-          then (module Ephemeron.K1.Make(Tuple):Hashtbl.S with type key = Tuple.t)
-          else (module Hashtbl.Make(Tuple):Hashtbl.S with type key = Tuple.t))
-      ;;
-
-      (* Ensures that definitions are printed only once. *)
-      let printed = AnyEphe.create 17;;
-      let printed_tuple = TupleEphe.create 17;;
-
       let rec pretty_definition: type a. Format.formatter -> a t -> unit = fun fmt cons ->
-        if not @@ AnyEphe.mem printed (Any cons)
-        then begin
-          AnyEphe.replace printed (Any cons) ();
-          match cons with
-          | Bool{id=Id.Id id;term} -> pretty_definition_complete_term "b" id fmt term;
-          | Integer{id=Id.Id id;term} -> pretty_definition_complete_term "i" id fmt term;
-          | Binary{id=Id.Id id;term} -> pretty_definition_complete_term "B" id fmt term;
-        end
+        match cons with
+        | Bool{id=Id.Id id;term} -> pretty_definition_complete_term "b" id fmt term;
+        | Integer{id=Id.Id id;term} -> pretty_definition_complete_term "i" id fmt term;
+        | Binary{id=Id.Id id;term} -> pretty_definition_complete_term "B" id fmt term;
 
       and pretty_definition_complete_term:
         type a. string -> int -> Format.formatter -> a complete_term -> unit =
@@ -378,54 +376,46 @@ module MakeConstraints(Condition:Condition_map.Condition)() = struct
       let print_def tag x =
         Format.fprintf fmt "let %s%d = " str id;
         PrettyApply.pretty_destruct fmt tag x;
-        Format.fprintf fmt "@\n"
       in match cons with
-        | T0{tag=(TC.Biconst _)} -> ()
+        | T0{tag=(TC.Biconst _) as tag} -> Format.fprintf fmt "("; print_def tag Unit; Format.fprintf fmt ")"
         | T0{tag} -> print_def tag Unit
-        | T1{tag;a} -> pretty_definition fmt a; print_def tag (Single a)
-        | T2{tag;a;b} -> pretty_definition fmt a; pretty_definition fmt b; print_def tag (Pair(a,b))
+        | T1{tag;a} -> print_def tag (Single a)
+        | T2{tag;a;b} -> print_def tag (Pair(a,b))
         | Tuple_get(i,tup) ->
-          pretty_definition_tuple fmt tup;
-
           Format.fprintf fmt "let %s%d = tuple_get(%d,%a)@\n" str id i pretty_tuple tup
         | Empty -> Format.fprintf fmt "let %s%d = empty@\n" str id
         | Unknown _level -> Format.fprintf fmt "let %s%d = unknown(%d)@\n" str id _level
         | Mu_formal {level} -> Format.fprintf fmt "let %s%d = var(%d)@\n" str id level
-
+        | Inductive_var {widening_id} -> Format.fprintf fmt "let %s%d = ivar(%d)@\n" str id widening_id
       and pretty: type a. Format.formatter -> a t -> unit = fun fmt cons ->
-        (* assert (AnyWeak.mem printed (Any cons)); *)
-        pretty_definition fmt cons;
         match cons with
-        | Bool{id=Id.Id id;term} -> Format.fprintf fmt "b%d" id
-        | Integer{id=Id.Id id;term} -> Format.fprintf fmt "i%d" id
+        | Bool{id=Id.Id id;term;parent} -> Format.fprintf fmt "<(b:%d%a)>" id pretty_parent parent
+        | Integer{id=Id.Id id;term;parent} -> Format.fprintf fmt "<(i:%d%a)>" id pretty_parent parent
         | Binary{term=T0{tag=(TC.Biconst(size,k)) as tag}} -> PrettyApply.pretty_destruct fmt tag Unit
-        | Binary{id=Id.Id id;term} -> Format.fprintf fmt "B%d" id
-
+        | Binary{id=Id.Id id;term;parent} -> Format.fprintf fmt "<(B:%d%a)>" id pretty_parent parent
+      and pretty_parent: type a. Format.formatter -> a parent -> unit = fun fmt parent ->
+        match parent with
+        | Root _ -> ()
+        | Node _ -> Format.fprintf fmt ":node"
       and pretty_tuple fmt tup =
-        pretty_definition_tuple fmt tup;
         match tup with
         | Nondet({id=Id.Id id}) -> Format.fprintf fmt "T%d" id
-        | Mu {id=Id.Id id} -> Format.fprintf fmt "T%d" id                          
+        | Inductive_vars({id=Id.Id id}) -> Format.fprintf fmt "T%d" id
+        | Mu {id=Id.Id id} -> Format.fprintf fmt "T%d" id
 
+
+      (* We don't use it anymore, we print the phi pairs instead, which is more legible. *)
       and pretty_definition_tuple fmt tup =
-        if not @@ TupleEphe.mem printed_tuple tup
-        then begin
-          TupleEphe.replace printed_tuple tup ();
           match tup with
           | Nondet({id=Id.Id id;a;b;conda_bool;condb_bool}) ->
-            pretty_definition_tuple_ fmt a; 
-            pretty_definition_tuple_ fmt b;
-            pretty_definition fmt conda_bool;
-            pretty_definition fmt condb_bool;            
             Format.fprintf fmt "let T%d = nondet(@[<hv> assume(@[<hv>%a@],@[<hv> %a@]),@ assume(@[<hv>%a@],@[<hv> %a@])@])@\n" id pretty conda_bool pretty_tuple_ a pretty condb_bool pretty_tuple_ b
+          | Inductive_vars({id=Id.Id id;def}) ->
+            Format.fprintf fmt "let rec T%d = %a" id pretty_tuple_ def
           | Mu{id=Id.Id id;var;body;init;body_cond} ->
-            pretty_definition_tuple_ fmt init;
             Format.fprintf fmt "let T%d = %a |> (mu %a" id pretty_tuple_ init pretty_tuple_ var;
-            Format.fprintf fmt ".@,  @[<hv>";            
-            pretty_definition_tuple_ fmt body;
-            pretty_definition fmt body_cond;
-            Format.fprintf fmt "assume(%a,%a)@])@\n" pretty body_cond pretty_tuple_ body 
-        end
+            Format.fprintf fmt ".@,  @[<hv>";
+            Format.fprintf fmt "assume(%a,%a)@])@\n" pretty body_cond pretty_tuple_ body
+
 
       and pretty_any fmt = function
         | Any x -> pretty fmt x
@@ -436,52 +426,49 @@ module MakeConstraints(Condition:Condition_map.Condition)() = struct
       and pretty_tuple_ fmt x =
         Immutable_array.pp_array ~pre:"<" ~suf:">" ~sep:"," pretty_any fmt x
 
-      and pretty_definition_tuple_ fmt x = 
+      and pretty_definition_tuple_ fmt x =
         Immutable_array.iter (pretty_definition_any fmt) x
       ;;
 
-      let pretty_deps = pretty_definition
       let pretty_tuple_deps = pretty_definition_tuple_
-      let pretty_tuple = pretty_tuple_    
-
+      let pretty_tuple = pretty_tuple_
     end
   end
 
   include Pretty.Pretty
 
 
-  module Parents = struct
+  module Superterms = struct
 
     module Param = struct
 
       type elt = Obj.t
-      
-      let get_parents: type a. a constraints -> parents = function
-        | Bool{parents} -> parents
-        | Integer{parents} -> parents
-        | Binary{parents} -> parents
-      ;;
 
-      let get_parents x = get_parents @@ Obj.obj x
-      
-      let set_parents: type a. a constraints -> parents -> unit = fun x parents ->
+      let get_superterms: type a. a constraints -> superterms = function
+        | Bool{superterms; _} -> superterms
+        | Integer{superterms; _} -> superterms
+        | Binary{superterms; _} -> superterms
+
+      let get_superterms x = get_superterms @@ Obj.obj x
+
+      let set_superterms: type a. a constraints -> superterms -> unit = fun x superterms ->
         match x with
-        | Bool r -> r.parents <- parents
-        | Integer r  -> r.parents <- parents
-        | Binary r -> r.parents <- parents
+        | Bool r -> r.superterms <- superterms
+        | Integer r  -> r.superterms <- superterms
+        | Binary r -> r.superterms <- superterms
       ;;
 
-      let set_parents x par = set_parents (Obj.obj x) par
-      
+      let set_superterms x par = set_superterms (Obj.obj x) par
+
     end
 
-    module Made = ParentMaker.Make(Param)
+    module Made = SupertermMaker.Make(Param)
 
     let create = Made.create
 
-    let add_one_parent ~child ~parent =
-      (* Constants cannot be improved, and have lots of parents.  Do
-         not register parents for constants.  *)
+    let add_one_superterm ~child ~parent =
+      (* Constants cannot be improved, and have lots of superterms.  Do
+         not register superterms for constants.  *)
       let is_constant: type a. a constraints -> 'b = function
         | Bool{term=(T0 _ |Empty) } -> true
         | Integer{term=(T0 _ |Empty) } -> true
@@ -489,40 +476,40 @@ module MakeConstraints(Condition:Condition_map.Condition)() = struct
         | _ -> false
        in
        if is_constant child then ()
-       else Made.add_one_parent ~child:(Obj.repr child) ~parent:(Obj.repr parent)
+       else Made.add_one_superterm ~subterm:(Obj.repr child) ~superterm:(Obj.repr parent)
     ;;
 
     let add_to_childs: type a. a constraints -> unit = fun parent ->
       let add_parent_term: type res. res constraints -> res complete_term -> unit = fun parent term ->
         match term with
-        | Empty | Unknown _ | Mu_formal _ | T0 _ -> ()
-        | Tuple_get(i,Mu _) -> ()       (* Do not redo fixpoints. *)
-        | Tuple_get(i,Nondet{a;b}) ->
+        | Empty | Unknown _ | Mu_formal _ | T0 _ | Inductive_var _ -> ()
+        | Tuple_get(i,(Mu _  | Inductive_vars _)) -> ()       (* Do not redo fixpoints. *)
+        | Tuple_get(i,Nondet{a;b})  ->
           let Any xa = Immutable_array.get a i in
-          add_one_parent ~child:xa ~parent;
+          add_one_superterm ~child:xa ~parent;
           let Any xb = Immutable_array.get b i in
-          add_one_parent ~child:xb ~parent
-        | T1 {a} -> add_one_parent ~child:a ~parent
+          add_one_superterm ~child:xb ~parent
+        | T1 {a} -> add_one_superterm ~child:a ~parent
         | T2 {a;b} ->
-          add_one_parent ~child:a ~parent; 
-          add_one_parent ~child:b ~parent
+          add_one_superterm ~child:a ~parent;
+          add_one_superterm ~child:b ~parent
       in
       let term = get_term parent in
       add_parent_term parent term
     ;;
 
-    (* With this we can remove the set of parents altogether (thereby
+    (* With this we can remove the set of superterms altogether (thereby
        allowing for no forward constraint propagation), if it takes
        too long (e.g. for now, on huge arrays which should be dealt
        with.) *)
     (* let add_to_childs _ = ();; *)
 
-    let iter_on_parents child f =
+    let iter_on_superterms child f =
       let child = Obj.repr child in
       let f x = f (Any (Obj.obj x)) in
-      Made.iter_on_parents ~child f
+      Made.iter_on_superterms child f
 
-    
+
   end
 
   (* Note: my benchs showed that, at least for the way I generate
@@ -536,11 +523,11 @@ module MakeConstraints(Condition:Condition_map.Condition)() = struct
 
     let hash2 x y = sdbm x y;;
     let hash3 x y z = sdbm x @@ sdbm y z
-    let hash4 x y z t = sdbm x @@ hash3 x y z 
+    let hash4 x y z t = sdbm x @@ hash3 x y z
 
     (* Note: we use different hashtables according to the type of the
        complete term. This should reduce the amount of collisions? *)
-    
+
 
     module Param = struct
 
@@ -550,18 +537,20 @@ module MakeConstraints(Condition:Condition_map.Condition)() = struct
         | Empty,_ -> assert false
         | Unknown _,_ -> assert false
         | Mu_formal _ ,_ -> assert false
+        | Inductive_var _ ,_ -> assert false
         | T0 {tag=tag1},T0{tag=tag2} -> TC.equal tag1 tag2
         | T1 {tag=tag1;a=a1},T1{tag=tag2;a=a2} ->
           TC.equal tag1 tag2 && (get_id_int a1) == (get_id_int a2)
         | T2 {tag=tag1;a=a1;b=b1},T2{tag=tag2;a=a2;b=b2} ->
           TC.equal tag1 tag2 && (get_id_int a1) == (get_id_int a2) && (get_id_int b1) == (get_id_int b2)
         | _ -> false
-      
+
       let hash: type a. a complete_term -> int = function
         | Tuple_get(i,_) -> assert false (* TODO: create an id for tuples. *)
-        | Empty -> assert false          (* Should not be hashed. *)
+        | Empty -> assert false     (* Should not be hashed *)
         | Unknown _ -> assert false        (* Should not be hashed: created every time. *)
         | Mu_formal _ -> assert false            (* Should not be hashed: fresh every time. *)
+        | Inductive_var _ -> assert false            (* Should not be hashed: fresh every time. *)
         | T0 {tag } -> TC.hash tag
         | T1 {tag; a} -> hash2 (TC.hash tag) (get_id_int a)
         | T2 {tag; a; b} -> hash3 (TC.hash tag) (get_id_int a) (get_id_int b)
@@ -570,42 +559,50 @@ module MakeConstraints(Condition:Condition_map.Condition)() = struct
     end
 
 
+    module type EphemeronHashCommon = sig
+      type key
+      type 'a t
+      val create: int -> 'a t
+      val find: 'a t -> key -> 'a
+      val replace: 'a t -> key -> 'a -> unit
+    end
+
     (* Note: If prefer_predictability_over_performance is false, the
        variables numbers can vary according to garbage collection
        cycles.
 
        TODO We should probably hash-cons nothing, or just the
        constants, this should be predictable and probably more
-       efficient. 
-      
-       Note: actually my benchmarks seem to run better 
+       efficient.
+
+       Note: actually my benchmarks seem to run better
        (more efficiently, and often taking less memory) when this is activated. *)
     module BoolParam = struct type t = boolean complete_term include Param end
     module HashBool =
       (val if Codex_config.hash_cons_constraints_with_weak_table()
-        then (module Ephemeron.K1.Make(BoolParam):Hashtbl.S with type key = boolean complete_term)
-        else (module Hashtbl.Make(BoolParam):Hashtbl.S with type key = boolean complete_term))
+        then (module Ephemeron.K1.Make(BoolParam):EphemeronHashCommon with type key = boolean complete_term)
+        else (module Hashtbl.Make(BoolParam):EphemeronHashCommon with type key = boolean complete_term))
     ;;
 
     module IntParam = struct type t = integer complete_term include Param end
     module HashInt =
       (val if Codex_config.hash_cons_constraints_with_weak_table()
-        then (module Ephemeron.K1.Make(IntParam):Hashtbl.S with type key = integer complete_term)
-        else (module Hashtbl.Make(IntParam):Hashtbl.S with type key = integer complete_term))
+        then (module Ephemeron.K1.Make(IntParam):EphemeronHashCommon with type key = integer complete_term)
+        else (module Hashtbl.Make(IntParam):EphemeronHashCommon with type key = integer complete_term))
     ;;
 
     module BinParam = struct type t = binary complete_term include Param end
     module HashBin =
       (val if Codex_config.hash_cons_constraints_with_weak_table()
-        then (module Ephemeron.K1.Make(BinParam):Hashtbl.S with type key = binary complete_term)
-        else (module Hashtbl.Make(BinParam):Hashtbl.S with type key = binary complete_term))
+        then (module Ephemeron.K1.Make(BinParam):EphemeronHashCommon with type key = binary complete_term)
+        else (module Hashtbl.Make(BinParam):EphemeronHashCommon with type key = binary complete_term))
     ;;
 
     let bool_hash = HashBool.create 117;;
     let int_hash = HashInt.create 117;;
     let bin_hash = HashBin.create 117;;
     module BDDHash = Ephemeron.K1.Make(Condition);;
-    let bddhash = BDDHash.create 117;; 
+    let bddhash = BDDHash.create 117;;
 
     module X = Hashtbl.Make(Condition);;
 
@@ -614,67 +611,88 @@ module MakeConstraints(Condition:Condition_map.Condition)() = struct
       with Not_found ->
         let bdd = bdd() in
         try let x =  BDDHash.find bddhash bdd in
-          (* Kernel.feedback "found boolean by bdd: old %a new %a" pretty x pretty (Bool{parents=Parents.create();term;bdd;id=Id.fresh()}); *)
+          let newer = (Bool{
+                        superterms = Superterms.create();
+                        parent = Root;
+                        id = Id.fresh();
+                        term; bdd }) in
+          Log.info (fun p -> p "%a" pretty_definition newer);
+          Codex_log.feedback "found boolean by bdd: old %a new %a" pretty x pretty newer;
           x
         with Not_found ->
-          let res = 
-            Bool { parents = Parents.create(); id = Id.fresh(); term; bdd }
-          in
+          let res = Bool {
+                      superterms = Superterms.create();
+                      id = Id.fresh();
+                      parent = Root;
+                      term; bdd } in
+          Log.info (fun p -> p "%a" pretty_definition res);
           (* Codex_log.feedback "Creating boolean %a" pretty res; *)
           HashBool.replace bool_hash term res;
           BDDHash.replace bddhash bdd res;
       (*   Kernel.feedback "bdd: %a term %a" Condition.pretty bdd *)
       (* pretty res; *)
-        Parents.add_to_childs res;
+        Superterms.add_to_childs res;
         res
-    ;;
 
     let integer term =
       try HashInt.find int_hash term
       with Not_found ->
-        let res = 
-          Integer { parents = Parents.create(); id = Id.fresh(); term }
-        in HashInt.replace int_hash term res;
-        Parents.add_to_childs res;
+        let res = Integer {
+                    superterms = Superterms.create();
+                    id = Id.fresh();
+                    parent = Root;
+                    term } in
+        Log.info (fun p -> p "%a" pretty_definition res);
+        HashInt.replace int_hash term res;
+        Superterms.add_to_childs res;
         res
-    ;;
 
     let binary ~size term =
       try HashBin.find bin_hash term
       with Not_found ->
-        let res = 
-          Binary { parents = Parents.create(); id = Id.fresh(); term; size }
-        in HashBin.replace bin_hash term res;
-        Parents.add_to_childs res;
+        let res = Binary {
+                    superterms = Superterms.create();
+                    id = Id.fresh();
+                    parent = Root;
+                    term; size } in
+        Log.info (fun p -> p "%a" pretty_definition res);
+        HashBin.replace bin_hash term res;
+        Superterms.add_to_childs res;
         res
-    ;;
-    
   end
 
-(* Similar to Hashcons, except that we do not need to hashcons because
-   what we create is always fresh. *)
+  (** Similar to Hashcons, except that we do not need to hashcons because
+      what we create is always fresh. *)
   module Fresh = struct
 
     (* Note: possibly no need to call add_to_childs here. *)
-
     let boolean term bdd =
-      let res = 
-        Bool { parents = Parents.create(); id = Id.fresh(); term; bdd } in
+      let res = Bool {
+                  superterms = Superterms.create();
+                  id = Id.fresh();
+                  parent = Root;
+                  term; bdd } in
       HashCons.BDDHash.replace HashCons.bddhash bdd res;
-      Parents.add_to_childs res;
+      (match term with Tuple_get _ -> () | _ ->  Log.info (fun p -> p "%a" pretty_definition res));
+      Superterms.add_to_childs res;
       res
-    ;;
-    
+
     let integer term =
-      let res = Integer { parents = Parents.create(); id = Id.fresh(); term } in
-      Parents.add_to_childs res; res
-    ;;
+      let res = Integer {
+        superterms = Superterms.create();
+        id = Id.fresh();
+        parent = Root;
+        term } in
+      (match term with Tuple_get _ -> () | _ ->  Log.info (fun p -> p "%a" pretty_definition res));
+      Superterms.add_to_childs res; res
 
     let binary ~size term =
-      let res = Binary { parents = Parents.create(); id = Id.fresh(); term; size } in
-      Parents.add_to_childs res; res
-    ;;
-
+      let res = Binary {
+        superterms = Superterms.create();
+        id = Id.fresh();
+        parent = Root;
+        term; size } in(match term with Tuple_get _  -> () | _ ->  Log.info (fun p -> p "%a" pretty_definition res));
+      Superterms.add_to_childs res; res
   end
 
   module Build = struct
@@ -694,10 +712,10 @@ module MakeConstraints(Condition:Condition_map.Condition)() = struct
 
       let bunion (Bool ba as a) (Bool bb as b) =
         HashCons.boolean
-          (T2 { tag = TC.BoolUnion; a; b; level = max (level a) (level b)})
+          (T2 { tag = TC.BoolUnion; a; b; level = max 0 @@ max (level a) (level b)})
           (fun () -> Condition.union ba.bdd bb.bdd)
       ;;
-      
+
       let (&&) (Bool ba as a) (Bool bb as b) =
         HashCons.boolean
           (T2 { tag = TC.And; a; b; level = max (level a) (level b)})
@@ -772,7 +790,7 @@ module MakeConstraints(Condition:Condition_map.Condition)() = struct
         if a == empty then empty
         else not a
       ;;
-      
+
       let (||) a b =
         if a == empty then empty
         else if b == empty then empty
@@ -782,7 +800,7 @@ module MakeConstraints(Condition:Condition_map.Condition)() = struct
       type boolean = TC.boolean t
       let assume _ = assert false (* Not used. *)
 
-      
+
     end
 
     module Integer = struct
@@ -792,7 +810,7 @@ module MakeConstraints(Condition:Condition_map.Condition)() = struct
       let one = iconst Z.one
       let unknown ~level = Fresh.integer (Unknown level)
       let empty = Fresh.integer Empty
-      
+
       let ar2_integer_integer_integer tag a b =
         HashCons.integer @@ T2 {tag; a; b; level = max (level a) (level b)};;
 
@@ -803,12 +821,12 @@ module MakeConstraints(Condition:Condition_map.Condition)() = struct
           if lvla = lvlb then get_id a >= get_id b
           else lvla >= lvlb
         in
-        let (a,b) = 
+        let (a,b) =
           if ge a b then (a,b) else (b,a) in
         ar2_integer_integer_integer tag a b
       ;;
 
-      
+
       let iadd = ar2_integer_integer_integer_commutative TC.Iadd
       let imul = ar2_integer_integer_integer_commutative TC.Imul
       let idiv = ar2_integer_integer_integer TC.Idiv
@@ -824,7 +842,7 @@ module MakeConstraints(Condition:Condition_map.Condition)() = struct
       let iadd:  integer t -> integer t -> integer t = fun a b ->
         match (a,b) with
         | Integer{term=T0{tag=TC.Iconst k}}, x when Z.equal k Z.zero -> x
-        | x,Integer{term=T0{tag=TC.Iconst k}} when Z.equal k Z.zero -> x          
+        | x,Integer{term=T0{tag=TC.Iconst k}} when Z.equal k Z.zero -> x
         | _,_ -> iadd a b
       ;;
 
@@ -833,21 +851,21 @@ module MakeConstraints(Condition:Condition_map.Condition)() = struct
           imul (iconst @@ Z.of_int 2) a
         end
         else iadd a b
-      
+
       let imul: integer t -> integer t -> integer t = fun a b ->
         match (a,b) with
         | Integer{term=T0{tag=TC.Iconst k}}, x when Z.equal k Z.zero -> a
         | x,Integer{term=T0{tag=TC.Iconst k}} when Z.equal k Z.zero -> b
         | Integer{term=T0{tag=TC.Iconst k}}, x when Z.equal k Z.one -> x
-        | x,Integer{term=T0{tag=TC.Iconst k}} when Z.equal k Z.one -> x          
+        | x,Integer{term=T0{tag=TC.Iconst k}} when Z.equal k Z.one -> x
         | _,_ -> imul a b
       ;;
-      
-      
+
+
 
       let old_ishr = ishr
       let old_iand = iand;;
-      let old_imod = imod;;      
+      let old_imod = imod;;
       (* Note: this creates a new Constraint, the constant "k1 + k2",
          which may have not been evaluated yet by the domain.
 
@@ -868,7 +886,7 @@ module MakeConstraints(Condition:Condition_map.Condition)() = struct
           Integer{term=T0{tag=TC.Iconst k2}} ->
           let a:integer t = a in
           iand (ishr a b) (iconst @@ Z.shift_right k1 @@ Z.to_int k2)
-          
+
         (* Note: modulo is not the best way to do this. *)
         (* MAYBE: just add an extract_bits operation to integers *)
         (* | Integer{term=T2{tag=TC.Imod; a; b=Integer{term=T0{tag=TC.Iconst k1}}}},
@@ -900,7 +918,7 @@ module MakeConstraints(Condition:Condition_map.Condition)() = struct
           iand a (iconst k12)
         | _ -> old_iand a b
       ;;
-      
+
      let ar2_integer_integer_boolean tag a b =
        HashCons.boolean (T2 {tag;a;b;level = max (level a) (level b)}) Condition.var ;;
 
@@ -908,7 +926,7 @@ module MakeConstraints(Condition:Condition_map.Condition)() = struct
         let (a,b) = if get_id a <= get_id b then (a,b) else (b,a) in
         ar2_integer_integer_boolean tag a b
       ;;
-     
+
       let ieq = ar2_integer_integer_boolean_commutative TC.Ieq
       let ile = ar2_integer_integer_boolean TC.Ile
 
@@ -937,28 +955,38 @@ module MakeConstraints(Condition:Condition_map.Condition)() = struct
         | _,_ -> ieq left right
       ;;
 
-      
 
 
-      
-      
+
+
+
       type boolean = TC.boolean t
-      type integer = TC.integer t          
+      type integer = TC.integer t
       let assume _ = assert false (* Not used. *)
       let iunknown () = assert false
-      
+
     end
 
     module Binary = struct
       type boolean = TC.boolean t
       type binary = TC.binary t
       let unknown ~size ~level = Fresh.binary ~size (Unknown level)
-      let empty = Fresh.binary Empty
+      let empty =
+        let emptyHash = Hashtbl.create 10 in
+        fun ~size ->
+          match Hashtbl.find emptyHash size with
+          | exception Not_found ->
+            let res = Fresh.binary ~size Empty in
+            Hashtbl.add emptyHash size res ;
+            res
+
+          | res -> res
+
       let buninit = empty
 
       let ar1_boolean_binary ~size tag a =
         HashCons.binary ~size @@ T1 {tag; a; level = (level a)};;
-                  
+
       let ar1_binary_binary ~size tag a =
         HashCons.binary ~size @@ T1 {tag; a; level = (level a)};;
 
@@ -979,7 +1007,7 @@ module MakeConstraints(Condition:Condition_map.Condition)() = struct
       ;;
 
       module TCBB = TC.Build.Binary
-      
+
       (* TODO: size is both in the constructor and in the constraint;
          it is probably useless to store it twice. *)
       let beq   ~size = ar2_binary_binary_boolean_commutative (TCBB.beq ~size)
@@ -988,7 +1016,7 @@ module MakeConstraints(Condition:Condition_map.Condition)() = struct
       let biadd  ~size ~nsw ~nuw ~nusw =
         ar2_binary_binary_binary_commutative ~size (TCBB.biadd ~size ~nsw ~nuw ~nusw)
       let bisub  ~size ~nsw ~nuw ~nusw =
-        ar2_binary_binary_binary ~size (TCBB.bisub ~size ~nsw ~nuw ~nusw)      
+        ar2_binary_binary_binary ~size (TCBB.bisub ~size ~nsw ~nuw ~nusw)
       let bimul  ~size ~nsw ~nuw =
         ar2_binary_binary_binary_commutative ~size (TCBB.bimul ~size ~nsw ~nuw)
       let bxor   ~size = ar2_binary_binary_binary_commutative ~size (TCBB.bxor ~size)
@@ -1000,16 +1028,16 @@ module MakeConstraints(Condition:Condition_map.Condition)() = struct
 
       (* Optimized version; necessary for binary analysis of ARM. *)
       let bimul(* : size:int -> binary -> binary -> binary *) =
-        fun ~size ~nsw ~nuw (Binary bx as x) (Binary by as y) ->        
+        fun ~size ~nsw ~nuw (Binary bx as x) (Binary by as y) ->
           match bx.term,by.term with
           | (T0 {tag = TC.Biconst(_,k)}),_  when Z.equal k Z.zero -> x
-          | _,(T0 {tag = TC.Biconst(_,k)})  when Z.equal k Z.zero -> y            
+          | _,(T0 {tag = TC.Biconst(_,k)})  when Z.equal k Z.zero -> y
           | (T0 {tag = TC.Biconst(_,k)}),_  when Z.equal k Z.one -> y
           | _,(T0 {tag = TC.Biconst(_,k)})  when Z.equal k Z.one -> x
           | _ -> old_bimul ~size ~nsw ~nuw x y
 
-      
-      
+
+
       (* Optimized version; necessary for binary analysis of ARM. *)
       let bxor: size:int -> binary -> binary -> binary =
         fun ~size (Binary bx as x) (Binary by as y) ->
@@ -1025,7 +1053,7 @@ module MakeConstraints(Condition:Condition_map.Condition)() = struct
       ;;
 
       (* Note: this does not work, because conda_bool in nondet is a condition since the beginning
-         of the program, it cannot be extracted to be evaluated. 
+         of the program, it cannot be extracted to be evaluated.
 
          I have added the "binofbool" term for a proper fix. *)
       let beq_:  size:int -> binary -> binary -> boolean = fun ~size left right ->
@@ -1053,7 +1081,7 @@ module MakeConstraints(Condition:Condition_map.Condition)() = struct
 
          Peut-être que je n'ai juste pas besoin de faire correspondre
          tous mes termes booléens à des trucs cudd, et de ne le faire
-         que dans le domaine? Ca pourrait marcher, et ca serait aussi 
+         que dans le domaine? Ca pourrait marcher, et ca serait aussi
          utile pour constraint_dominator.
 
          => Rendre optionelle la presence de bdds dans mes contraintes booléennes.
@@ -1071,7 +1099,7 @@ Oui, je pense que ca marcherait?
        dans le premier cas je calcule c && d && e
        dans le deuxième cas je calcule 1 && (c && d) && e
 
-       on doit donc aller plus vite, parce que d && c est déjà calculé. 
+       on doit donc aller plus vite, parce que d && c est déjà calculé.
 
        Pas tout a fait clair
 
@@ -1087,12 +1115,12 @@ Oui, je pense que ca marcherait?
             Boolean.not a
           else assert false
         in
-        match (left,right) with 
+        match (left,right) with
         | (Binary{term=T1{tag=TC.Bofbool(_);a}},
            Binary{term=T0{tag=TC.Biconst(_,k)}}) -> doit k a
         | (Binary{term=T0{tag=TC.Biconst(_,k)}},
            Binary{term=T1{tag=TC.Bofbool(_);a}}) -> doit k a
-          
+
           (* | Binary{term=T0{tag=TC.Biconst(_,k)}},
            *   Binary{term=Tuple_get(i,Nondet{conda_bool;a;condb_bool;b})}) ->
            * (match Immutable_array.get a i, Immutable_array.get b i with
@@ -1109,7 +1137,7 @@ Oui, je pense que ca marcherait?
         ar1_binary_binary ~size (TC.Bextract{size;index;oldsize});;
 
       let old_bextract ~size ~index ~oldsize = bextract;;
-          
+
       let bextract ~size ~index ~oldsize ((Binary x) as bx)  =
         match x.term with
         | T1 {tag= TC.Bextract{size=size';index=index';oldsize=oldsize'}; a} ->
@@ -1117,14 +1145,14 @@ Oui, je pense que ca marcherait?
           bextract ~size ~index:(index' + index) ~oldsize:oldsize' a
         | _ -> bextract ~size ~index ~oldsize bx
 
-      
+
       (* let beq_ ~size left right = *)
       (*   let res = beq ~size left right in *)
       (*   Codex_log.feedback "beq %a %a res %a" pretty left pretty right pretty res; *)
       (*   res *)
       (* ;; *)
 
-      
+
       let band   ~size = ar2_binary_binary_binary_commutative ~size (TCBB.band ~size)
       let bor    ~size = ar2_binary_binary_binary_commutative ~size (TCBB.bor ~size)
       let bsext  ~size ~oldsize = ar1_binary_binary ~size (TCBB.bsext ~size ~oldsize)
@@ -1137,15 +1165,24 @@ Oui, je pense que ca marcherait?
       let bisdiv ~size = ar2_binary_binary_binary ~size (TCBB.bisdiv ~size)
       let biudiv ~size = ar2_binary_binary_binary ~size (TCBB.biudiv ~size)
       let bismod ~size = ar2_binary_binary_binary ~size (TCBB.bismod ~size)
-      let biumod ~size = ar2_binary_binary_binary ~size (TCBB.biumod ~size)          
+      let biumod ~size = ar2_binary_binary_binary ~size (TCBB.biumod ~size)
       let bconcat ~size1 ~size2 =
         ar2_binary_binary_binary ~size:(size1 + size2) (TCBB.bconcat ~size1 ~size2);;
       let valid ~size _ = assert false
       let valid_ptr_arith ~size _ = assert false
-      let biconst ~size k = HashCons.binary ~size @@ T0 { tag=TC.Biconst(size,k)};;        
+      let biconst ~size k = HashCons.binary ~size @@ T0 { tag=TC.Biconst(size,k)};;
       let assume ~size _cond _store = assert false
 
-      let bunion ~size cond = ar2_binary_binary_binary ~size (TCBB.bunion ~size cond)
+      (* We do not want union to be considered a constant, so the min level is 0 for it.
+         Because of this, we inline ar2_binary_binary_binary and ar2_binary_binary_binary_commutative.
+      *)
+      let bunion ~size cond a b =
+        (* ar2_binary_binary_binary_commutative ~size (TCBB.bunion ~size cond) *)
+        let tag = (TCBB.bunion ~size cond) in
+        let (a,b) = if get_id a <= get_id b then (a,b) else (b,a) in
+        HashCons.binary ~size @@ T2 {tag; a; b; level = max 0 @@ max (level a) (level b)};;
+
+
     end
 
     module Mu_Formal = struct
@@ -1177,7 +1214,21 @@ Oui, je pense que ca marcherait?
 
        let level_tuple x = Immutable_array.fold_left (fun a (Any b) -> max a @@ level b) (-1) x;;
 
-           
+
+       (* Print a nondet constraint by separating each component. *)
+       let pretty_nondet_tuple fmt ((tuple:any Immutable_array.t),conda_bool,a,condb_bool,b) =
+         let len = Immutable_array.length tuple in
+         for i = 0 to len-1 do
+           Format.fprintf fmt "let %a = phi_nondet(%a when %a,%a when %a)@\n"
+             pretty_any (Immutable_array.get tuple i)
+             pretty_any (Immutable_array.get a i)
+             pretty conda_bool
+             pretty_any (Immutable_array.get b i)
+             pretty condb_bool
+         done
+       ;;
+
+
        (* Note: if two constraints are the same (especially when all
           true), simplify.  Else this creates huge BDDs. But this
           should have been already done by the caller, so we do
@@ -1186,17 +1237,59 @@ Oui, je pense que ca marcherait?
          (* Codex_log.feedback  "nondet level %d %d %d@\n tup1 %a@\n tup2 %a" level (level_tuple tup1) (level_tuple tup2) pretty_tuple tup1 pretty_tuple tup2; *)
         assert(level >= (level_tuple tup1) && level >= (level_tuple tup2));
         let tuple_ = Nondet({id=Id.fresh();conda_bool;a=tup1;condb_bool;b=tup2;level}) in
+        (* Log.info (fun p -> p "tutu %a" Pretty.Pretty.pretty_tuple_ tuple_); *)
         let orig = tuple_from_tuple_ tup1 tuple_ in
-        orig 
+        Log.info (fun p -> p "%a" pretty_nondet_tuple (orig,conda_bool,tup1,condb_bool,tup2));
+        orig
       ;;
-        
+
+      let inductive_vars_individual ~widening_id ~level ~def:left =
+        (* We fill the definition arbitrarily with left so make the typer happy. *)
+        Immutable_array.map (fun left ->
+            let Any left = left in
+            let f:type a b. a t -> any = fun left -> match left  with
+              | (Binary {size}) -> Any(Fresh.binary ~size (Inductive_var {widening_id;level;definition=left}))
+              | (Integer _) -> Any(Fresh.integer (Inductive_var {widening_id;level;definition=left}))
+              | (Bool _) -> Any(Fresh.boolean (Inductive_var {widening_id;level;definition=left}) @@ Condition.var ())
+            in f left
+          ) left
+
+      let inductive_vars_grouped ~widening_id ~level ~def =
+        let tuple_:tuple_ = Inductive_vars({id=Id.fresh();widening_id;level;def}) in
+        let orig = tuple_from_tuple_ def tuple_ in
+        orig
+
+      let inductive_vars =
+        if Codex_config.term_group_inductive_variable_by_tuple
+        then inductive_vars_grouped
+        else inductive_vars_individual
+
+
+
+
+
+      (* Print a nondet constraint by separating each component. *)
+      let pretty_mu_tuple fmt ((tuple:any Immutable_array.t),init,var,body,body_cond) =
+        let len = Immutable_array.length tuple in
+        for i = 0 to len-1 do
+          Format.fprintf fmt "let %a = phi_mu(init:%a,var:%a,body:%a with %a)@\n"
+            pretty_any (Immutable_array.get tuple i)
+            pretty_any (Immutable_array.get init i)
+            pretty_any (Immutable_array.get var i)
+            pretty_any (Immutable_array.get body i)
+            pretty body_cond
+        done
+      ;;
+
+
       let mu ~level ~init ~var ~body ~body_cond =
         (* Codex_log.feedback "%d %d %d %a %a" level (level_tuple init) (level_tuple body)
          *   Pretty.Pretty.pretty_tuple init           Pretty.Pretty.pretty_tuple body; *)
 
         let tuple_ = Mu({id=Id.fresh();init;var;body;level;body_cond}) in
+        (* Log.info (fun p -> p "toto %a" Pretty.Pretty.pretty_tuple_ tuple_); *)
         let orig = tuple_from_tuple_ init tuple_ in
-
+        Log.info (fun p -> p "%a" pretty_mu_tuple (orig,init,var,body,body_cond));
         if(Immutable_array.length init != 0) then begin
           assert (level >= (level_tuple init));
           assert ((level_tuple body) <= level + 1)
@@ -1204,13 +1297,13 @@ Oui, je pense que ca marcherait?
 
         orig
       ;;
-      
+
       (* Optimize the creation of terms in the case where nothing changes. Yields
          a small improvement in some benchmarks. *)
       let nondet ~level ~conda_bool ~a:tup1 ~condb_bool ~b:tup2 =
         if Immutable_array.length tup1 == 0 then tup1
         else nondet ~level ~conda_bool ~a:tup1 ~condb_bool ~b:tup2
-      
+
       let mu ~level ~init ~var ~body ~body_cond =
         if Immutable_array.length init == 0 then init
         else mu ~level ~init ~var ~body ~body_cond;;
@@ -1233,7 +1326,7 @@ Oui, je pense que ca marcherait?
         match x with
         | Binary _ -> x
         | _ -> assert false
-      
+
     end
   end
 
@@ -1241,5 +1334,23 @@ Oui, je pense que ca marcherait?
     let get_term = get_term
   end
 
-end
+  module UnionFind = Union_Find.Imperative.GenericRelational(struct
+    include T
+    let polyeq = polyeq
+    let pretty = pretty
 
+    let get_parent (type a) : a t -> a parent = function
+      | Bool { parent; _ } -> parent
+      | Integer { parent; _ } -> parent
+      | Binary { parent; _ } -> parent
+
+    let set_parent (type a) (child: a t) (parent : a parent) =
+      Superterms.add_one_superterm ~child ~parent;
+      match child with
+      | Bool x -> x.parent <- parent;
+      | Integer x -> x.parent <- parent
+      | Binary x -> x.parent <- parent
+
+    module Relation = Relation
+  end)
+end

@@ -19,84 +19,124 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Common module types for [Imperative] and [Functional] parameters. Defines
+(** Common module types for {!Imperative} and {!Functional} parameters. Defines
     the types of the functor parameters.
 
     Some vocabulary conventions:
-    - A {b term} is the type of elements of the union-find. Here it is
-      a generic type ['a t] (often a GADT/a type where ['a] is phantom)
-    - A {b node} is a term plus its parent pointers.
-    - A {b relation} is a type [('a,'b) t] modeling mathematical relation between
-      terms. The set of relations has a group structure.
+    - An {b elt} or {b element} is the type of elements of the union-find. Here it is
+      a generic type {{!GENERIC_ELT.t}['a GENERIC_ELT.t]} (often a GADT/a type where ['a] is phantom)
+    - A {b node} is an element plus its parent pointers.
+    - A {b relation} is a type {{!GENERIC_GROUP.t}[('a,'b) GENERIC_GROUP.t]} modeling mathematical relation between
+      elements. The set of relations has a monoid or group structure.
       Classical union-find only has a single relation:
       [type ('a, 'b) t = Equiv : ('a,'a) t])
-    - A {b value} is a type ['a t] of values associated with each class (or more
-      precisely, to the representative of each class).
-      Values and relations interact via a group action [Value.apply]. *)
+    - A {b value} is a type {{!GENERIC_VALUE.t}['a GENERIC_VALUE.t]} of values
+      associated with each class (or more precisely, to the representative element
+      of each class).
+      Values and relations interact via a group action {!GENERIC_VALUE.apply}. *)
 
-(** {2 Terms}
-    Terms are the elements in our union-find structures. *)
+(** {2 Elements} *)
 
-(** A type for generic terms stored in our imperative union-find structures. *)
-module type SIMPLE_GENERIC_TERM = sig
+(** A type for generic elements stored in our {!Imperative} union-find structures. *)
+module type SIMPLE_GENERIC_ELT = sig
   type 'a t
+  (** The type of elements (nodes) in the union-find structure *)
+
   val polyeq : 'a t -> 'b t -> ('a, 'b) PatriciaTree.cmp
+  (** polymorphic equality on elements *)
 end
 
-(** A type for generic terms stored in our functional union-find structures.
-    This should be a subtype [PatriciaTree.HeterogeneousKey]. *)
-module type GENERIC_TERM = sig
-  include SIMPLE_GENERIC_TERM
+(** A type for generic elements stored in our {!Functional} union-find structures.
+    This should be a super-type of {!PatriciaTree.HETEROGENEOUS_KEY}. *)
+module type GENERIC_ELT = sig
+  include SIMPLE_GENERIC_ELT
 
   val to_int : 'a t -> int
+  (** Returns a unique integer identifier associated with the given element (eg
+      hash-consed tag). See {!PatriciaTree.HETEROGENEOUS_KEY.to_int} *)
+
   val pretty : Format.formatter -> 'a t -> unit
+  (** Pretty printer *)
 end
 
 (** {2 Relations}
-    Relations between terms. Classical union find has a single equivalence
+    Relations between elements. Classical union find has a single equivalence
     relation, which can be mimicked with [type ('a, 'b) t = Equiv : ('a,'a) t])
     However, we can have more complex relation (any group structure) fairly easily *)
 
-(** A (possibly non-commutative) group structure, used to represent relations.
+(** A (possibly non-commutative) {{: https://en.wikipedia.org/wiki/Monoid}monoid} structure, used to represent relations.
 
-    @assumes that any module [G] implementing this should verify the axioms of a group:
-    - for all x, [G.compose x G.identity = G.compose G.identity x = x]
-    - for all x y z, [G.compose x (G.compose y z) = G.compose (G.compose x y) z]
-    - for all x, [G.compose x (G.inverse x) = G.compose (G.inverse x) x = G.identity]
-    (where [=] is [G.equal])
+    {b Assumes} that any module [G] implementing this should verify the axioms of a monoid:
+    - {b identity is neutral for compose}.
+      For all x, [G.compose x G.identity = G.compose G.identity x = x]
+    - {b compose is associative}.
+      For all x y z, [G.compose x (G.compose y z) = G.compose (G.compose x y) z]
 
-    Note: This isn't the "simple group" mathematical concept, this is a simple type
-    representing a "group". *)
-module type SIMPLE_GENERIC_GROUP = sig
+    where [=] is [G.equal] *)
+module type GENERIC_MONOID = sig
   type ('a, 'b) t
-
-  val compose : ('b, 'c) t -> ('a, 'b) t -> ('a, 'c) t
-  val inverse : ('a, 'b) t -> ('b, 'a) t
-  val identity : ('a, 'a) t
-
-end
-
-(** Same as [SIMPLE_GENERIC_GROUP], with some extra functions used in the
-    functional union-find. *)
-module type GENERIC_GROUP = sig
-  include SIMPLE_GENERIC_GROUP
+  (** The type of elements of the monoid.
+      Since these are used to represent relation between our generic union-find
+      elements {!GENERIC_ELT.t}, they have two type parameters, so an
+      [('a, 'b) t] represents a relation between ['a GENERIC_ELT.t] and
+      ['b GENERIC_ELT.t] *)
 
   val equal : ('a, 'b) t -> ('a, 'b) t -> bool
+  (** Equality of relations *)
+
   val pretty : Format.formatter -> ('a, 'b) t -> unit
+  (** Pretty printer for relations *)
+
+  val identity : ('a, 'a) t
+  (** The identity relation *)
+
+  val compose : ('b, 'c) t -> ('a, 'b) t -> ('a, 'c) t
+  (** Monoid composition, written using the functional convention
+      [compose f g] is {m f \circ g}.
+      Should be associative, and compatible with {!identity}:
+      - For all x, [G.compose x G.identity = G.compose G.identity x = x]
+      - For all x y z, [G.compose x (G.compose y z) = G.compose (G.compose x y) z] *)
+end
+
+(** A (possibly non-commutative) {{: https://en.wikipedia.org/wiki/Group_(mathematics)}group}
+    structure, used to represent relations.
+
+    {b Assumes} that any module [G] implementing this should verify the axioms of a group:
+    - {b identity is neutral for compose}.
+      For all x, [G.compose x G.identity = G.compose G.identity x = x]
+    - {b compose is associative}.
+      For all x y z, [G.compose x (G.compose y z) = G.compose (G.compose x y) z]
+    - {b inversion}.
+      For all x, [G.compose x (G.inverse x) = G.compose (G.inverse x) x = G.identity]
+
+    where [=] is [G.equal] *)
+module type GENERIC_GROUP = sig
+  include GENERIC_MONOID
+
+  val inverse : ('a, 'b) t -> ('b, 'a) t
+  (** Group inversion, should verify for all x:
+      [G.compose x (G.inverse x) = G.compose (G.inverse x) x = G.identity] *)
 end
 
 (** {2 Values}
-    Values associated with each relation class between terms,
-    values and relation interact via a group action *)
+    Values associated with each class.
+    Values and relation interact via a group action
+    {{!SIMPLE_GENERIC_VALUE.apply}[apply]} *)
 
 (** The values associated with each equivalence class in the imperative union-find *)
 module type SIMPLE_GENERIC_VALUE = sig
   type ('a, 'b) relation
+  (** The type of relations, should match {!GENERIC_MONOID.t}. *)
+
   type 'a t
+  (** The generic type of our values.
+      An ['a t] value is associated to each class of our union find whose
+      representative has type {{!GENERIC_ELT.t}['a GENERIC_ELT.t]}. *)
 
   val apply : 'a t -> ('a, 'b) relation -> 'b t
   (** [apply v r] is the value obtained by applying relation [r] to value [v]
-      [apply] should be a group action from [R : GENERIC_GROUP with type ('a,'b) t = ('a,'b) relation]
+      [apply] should be a group action from
+      {{!GENERIC_GROUP}[R : GENERIC_GROUP with type ('a,'b) t = ('a,'b) relation]}
       on the value ['a t]. Meaning it should verify the following:
       - [apply v R.identity = v]
       - [apply (apply v r2) r1 = apply v (R.compose r2 r1)] *)
@@ -110,6 +150,7 @@ module type GENERIC_VALUE = sig
   include SIMPLE_GENERIC_VALUE
 
   val equal : 'a t -> 'a t -> bool
+  (** Equality on values. *)
 
   val pretty : Format.formatter -> 'a t -> unit
   (** Only required for [Functional.XX.pretty] *)
@@ -118,7 +159,7 @@ module type GENERIC_VALUE = sig
   (** Union of values, only required for [Functional.XX.join] *)
 
   val is_top : 'a t -> bool
-  (** Only required for [Functional], top values can be removed
+  (** Only required for {!Functional}, top values can be removed
       from the data structure which allows smaller structures and faster access.
       This function only need to be an over-approximation:
       it can return [false] on top, but returning [true] on non-top leads to
@@ -127,23 +168,24 @@ end
 
 (** {2 Imperative nodes}
     Node representative for imperative union-find.
-    This can be used if terms have builtins pointer to their parents *)
+    Nodes contain both the elements in the union find and the parent pointer.
+    Nodes can be built on top of an element type (see {!Imperative.MakeNode} and
+    its variants). However, it is sometimes better to define the type of elements
+    that contains the pointer (avoids having to keep track of two types: the uf-node
+    and the element, as going back and forth can be costly). *)
 
 (** Simple union-find node, without values *)
 module type SIMPLE_UF_NODE = sig
-  module Node : SIMPLE_GENERIC_TERM
-  module Relation : SIMPLE_GENERIC_GROUP
+  include SIMPLE_GENERIC_ELT
+  module Relation : GENERIC_GROUP
 
-  type root = { mutable size : int }
-  (** The type of root nodes, attached to each representative *)
-
-  type 'a parent = Node : 'b Node.t * ('a, 'b) Relation.t -> 'a parent | Root of root
+  type 'a parent = Node : 'b t * ('a, 'b) Relation.t -> 'a parent | Root
   (** The type of parents. A term either points to:
       - a representative via a relation
       - a root if it is a representative *)
 
-  val get_parent : 'a Node.t -> 'a parent
-  val set_parent : 'a Node.t -> 'a parent -> unit
+  val get_parent : 'a t -> 'a parent
+  val set_parent : 'a t -> 'a parent -> unit
 end
 
 (** union-find node with values *)
@@ -154,11 +196,11 @@ module type UF_NODE = sig
   type 'a root = { mutable value : 'a Value.t; mutable size : int }
   (** The type of root nodes, attached to each representative *)
 
-  type 'a parent = Node : 'b Node.t * ('a, 'b) Relation.t -> 'a parent | Root of 'a root
+  type 'a parent = Node : 'b t * ('a, 'b) Relation.t -> 'a parent | Root of 'a root
   (** The type of parents. A term either points to:
       - a representative via a relation
       - a root if it is a representative *)
 
-  val get_parent : 'a Node.t -> 'a parent
-  val set_parent : 'a Node.t -> 'a parent -> unit
+  val get_parent : 'a t -> 'a parent
+  val set_parent : 'a t -> 'a parent -> unit
 end

@@ -1,0 +1,13 @@
+aliasing2.c:2.3-4: `a' -> ([1..0xFFFFFFFF] :
+                            ({self : Name(bar)* with (self != 0)[{0}].(0)* | (self != 0)}))
+aliasing2.c:2.7-8: `b' -> ([1..0xFFFFFFFF] : ({self : Name(foo)[{0}].(0)* | (self != 0)}))
+aliasing2.c:3.3-5: `*a' -> ([1..0xFFFFFFFF] : ({self : Name(foo)[{0}].(0)* | (self != 0)}))
+aliasing2.c:3.4-5: `a' -> ([1..0xFFFFFFFF] :
+                            ({self : Name(bar)* with (self != 0)[{0}].(0)* | (self != 0)}))
+aliasing2.c:3.8-10: `*b' -> [--..--]
+aliasing2.c:3.9-10: `b' -> ([1..0xFFFFFFFF] : ({self : Name(foo)[{0}].(0)* | (self != 0)}))
+Unproved regular alarms:
+Unproved additional alarms:
+Proved 4/4 regular alarms
+Unproved 0 regular alarms and 0 additional alarms.
+Solved 0/0 user assertions, proved 0

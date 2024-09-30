@@ -19,48 +19,48 @@
 #                                                                        #
 ##########################################################################
 
-# Build with docker build -t codexmin .
-# Run with docker run -ti codexmin bash
+# Build with: docker build -f Dockerfile.debian -t codexdebian .
+# Run with docker run -ti codexdebian bash
 # When a container runs:
-# Get frama_c_codex.exe with docker cp container:/home/opam/libase/_build/default/frama-c/frama_c_codex.exe .
-# Get binsec_codex.exe with docker cp container:/home/opam/libase/_build/default/binsec/binsec_codex.exe .
+# Get frama_c_codex.exe with docker cp container:/home/opam/codex/_build/default/frama-c/frama_c_codex.exe .
+# Get binsec_codex.exe with docker cp container:/home/opam/codex/_build/default/binsec/binsec_codex.exe .
 FROM ocaml/opam:debian-11-ocaml-4.14 as first
 ENV DEBIAN_FRONTEND=noninteractive
 # Installs binsec, then frama-c dependencies.
-RUN sudo apt-get update && sudo apt-get -y install --no-install-recommends libgmp-dev liblmdb-dev && \
+RUN sudo apt-get update && sudo apt-get -y install --no-install-recommends bc libgmp-dev liblmdb-dev && \
   sudo apt-get install -y --no-install-recommends pkg-config autoconf graphviz libexpat1-dev zlib1g-dev \
                          libcairo2-dev libexpat1-dev libgtk-3-dev libgtksourceview-3.0-dev \
                         libgnomecanvas2-dev cmake time z3 gcc-multilib && sudo apt-get clean
 # Install binsec and dependencies (libgmp, needed by zarith)
 RUN opam install binsec
 # Install Codex dependencies (including sexplib, optinonally used by frama-c dependencies)
-RUN opam install mlcuddidl lmdb sexplib ppx_sexp_conv
+RUN opam install mlcuddidl lmdb sexplib ppx_sexp_conv pacomb bheap qcheck-core ppx_inline_test
 # Install the Frama-C dependencies
 # RUN opam install --deps-only frama-c && opam install yojson=2.0.0
 # Install minimal frama-c dependencies.
-RUN opam install yojson=2.0.0 ppx_deriving_yojson ppx_import
+RUN opam install yojson=2.0.0 ppx_deriving_yojson ppx_import yaml ppx_deriving_yaml patricia-tree
 # Compile a patched version of Frama-C to support cudd.
 # The patched version also prevents the dynamic loading of JSON configuration, so that frama_c_codex.exe can be used as a standalone binary.
-RUN curl https://www.frama-c.com/download/frama-c-26.1-Iron.tar.gz -o frama-c-26.1-Iron.tar.gz
+RUN curl https://www.frama-c.com/download/frama-c-27.1-Cobalt.tar.gz -o frama-c-27.1-Cobalt.tar.gz
 COPY --chown=opam:opam nix/patch-frama-c.patch patch-frama-c.patch
 # Install frama-C, without the plugins to make the compilation faster.
 # We also remove the plugins so that the frama_c_codex.exe binary will not try loading them.
-RUN tar xzf frama-c-26.1-Iron.tar.gz \
+RUN tar xzf frama-c-27.1-Cobalt.tar.gz \
    && cd frama-c* \
    && patch -Np1 -i ../patch-frama-c.patch \
    && rm -R src/plugins \
    && eval $(opam env) && make && make install \
    && cd .. && rm -Rf frama-c*
 # Install more odvtk dependencies
-RUN sudo apt install libev-dev libssl-dev -y
+RUN sudo apt-get install libev-dev libssl-dev -y
 RUN opam install dream
 # Now install codex.
 RUN opam clean -a -c -s --logs && \
     rm -Rf opam-repository/.git && \
     rm -Rf opam-repository && \
     rm -Rf .opam/repo
-COPY --chown=opam:opam . /home/opam/libase
-RUN cd libase && eval $(opam env) && dune build binsec/binsec_codex.exe && cd frama-c && make build
+COPY --chown=opam:opam . /home/opam/codex
+RUN cd codex && eval $(opam env) && dune build
 # Optional: this further slims down the new image, which becomes kind of binary-only.
 # Works and allows a substantial gain in space, but currently the script for binsec call dune exec binsec_codex.exe, which tries to rebuild the binary and remove it. 
 # RUN cd  .opam && \
@@ -79,8 +79,6 @@ RUN cd libase && eval $(opam env) && dune build binsec/binsec_codex.exe && cd fr
 ## COPY --from=first /home/opam /home/opam
 ## 
 ## EXPOSE 8080
-# For an even slimmer version, we could just keep the binsec_codex.exe and frama_c_codex.exe executables.
-# This does not work for frama_c_codex.exe; maybe use appimage for that.
 
 
 # Local Variables:

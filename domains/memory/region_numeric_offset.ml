@@ -93,10 +93,12 @@ module Make_Address(Scalar:Domain_sig.Base) = struct
   
   let binary2scalar_binary ~size _ctx value = assert false
   let assume_type ~size _ctx value typ = assert false
+  let type_of ~size _ctx value = assert false
 
   let global_symbol ctx symb = assert false
   let add_global_symbol ~size ctx name binary = assert false
-  let add_global_scalar_symbol ~size ctx name binary = assert false
+
+  let analyze_summary _ctx funtyp args = assert false
 
   module Offset_transfer_functions = struct
     let offset_eq = beq
@@ -110,6 +112,8 @@ module Make_Address(Scalar:Domain_sig.Base) = struct
   end
   include Offset_transfer_functions  
   let query_boolean = Scalar.query_boolean
+
+  let contained_addresses ~size:_ _ = assert false
 end
 
 

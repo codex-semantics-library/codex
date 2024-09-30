@@ -33,8 +33,8 @@ module Pred : sig
     | Extract of int * int (** start index, length *)
 
   type binop =
-    | Add | Sub | Mul | And
-    | Or
+    | Add | Sub | Mul | And 
+    | Or | Mod
     | Concat of int * int (** Size 1, size 2. First argument is the most significant *)
 
   type expr =
@@ -54,6 +54,8 @@ module Pred : sig
 
   val compare : t -> t -> int
   val equal : t -> t -> bool
+  val pp_binop : Format.formatter -> binop -> unit
+  val pp_cmpop : Format.formatter -> cmpop -> unit
   val pp : Format.formatter -> t -> unit
 
   (** Helpers. *)
@@ -122,7 +124,7 @@ and descr =
   | Array of typ * value option
   (** Arguments: element type, and the number of elements, if statically
       known. *)
-  | Function of typ * typ list
+  | Function of funtyp
   | Name of string
   | Application of constr * (Pred.expr list)
   | Existential of typ * string * typ
@@ -134,11 +136,16 @@ and constr =
   (** Type and its parameters *)
   | Constructor of typ * (string list)
 
+and funtyp = { ret : typ ; args : typ list ; pure : bool}
+
 and typ =
-  (** Descr is mutable because of weak types, which lazily resolve the type.  *)
+  (* Descr and pred are mutable because of weak types, which lazily resolve the type.  *)
   { mutable descr : descr;
-    pred : Pred.t;
+    mutable pred : Pred.t;
   }
+
+type fundef = { funtyp : typ; inline : bool }
+
 
 val pp_descr : Format.formatter -> descr -> unit
 val pp : Format.formatter -> typ -> unit
@@ -147,17 +154,23 @@ val pp_constr : Format.formatter -> constr -> unit
 
 (* Only descr means: ignore the predicates.  *)
 (* Do not use the _descr version. *)
-(* val compare_descr : only_descr:bool -> descr -> descr -> int *)
 val compare : only_descr:bool -> typ -> typ -> int
 
 (* TODO: Remove the only_descr argument here. *)
 val equal : only_descr:bool -> typ -> typ -> bool
 
 (** equiv a b returns true if it can show that a is a subtype of b and b is a subtype a. *)
-val equiv_descr: only_descr:bool -> descr -> descr -> bool [@@@ocaml.deprecated "Please use equiv only."]
+val equiv_descr: only_descr:bool -> descr -> descr -> bool [@@ocaml.deprecated "Please use equiv only."]
 val equiv: only_descr:bool -> typ -> typ -> bool
 
+(* Checks syntatic equality between two constructors. *)
+val equal_constr : only_descr:bool -> constr -> constr -> bool
+
 val is_pointer_type : typ -> bool
+
+val is_flexible_array : typ -> bool
+
+val is_function_pure: typ -> bool
 
 (** [contains t u] determines whether t contains u. (Definition: t contains u
     iff t = u or a component of t (e.g. a structure member) contains u. *)
@@ -213,13 +226,27 @@ val apply: constr -> Pred.expr list -> typ
 
 val substitute_symbol: typ -> string -> string -> typ
 
-val add_function_name_definition: string -> typ -> unit
+val add_function_name_definition: string -> typ -> bool -> unit
 
 (** Retrieve the type associated to a function name. raise [Undefined_type] if not found. *)
 val function_of_name: string -> typ
 
+(** Retrieve the type associated to a function name, and whether it
+    was declared inline. raise [Undefined_type] if not found. *)
+val function_definition_of_name: string -> fundef
+
 (** Dump the function map, for debug purposes. *)
 val print_function_map: unit -> unit
+
+val get_function_names : unit -> string list
+
+val add_global_name_definition: string -> typ -> unit
+
+(** Retrieve the type associated to a function name. raise [Undefined_type] if not found. *)
+val global_of_name: string -> typ
+
+(** Dump the function map, for debug purposes. *)
+val print_global_map: unit -> unit
 
 (** Common base types.  *)
 val char: typ

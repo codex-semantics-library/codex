@@ -19,6 +19,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
+module Log = Tracelog.Make(struct let category = "Types.Parse_ctypes" end);;
 module Conversion = struct
 
   module Size = struct
@@ -27,6 +28,7 @@ module Conversion = struct
     let short_size = 2;;
     let int_size = 4;;
     let long_size = 8;;
+    let uint64_t_size = 8;;    
 
     let float_size = 4;;
     let double_size = 8;;
@@ -45,8 +47,9 @@ module Conversion = struct
       | Plus -> Add
       | Minus -> Sub
       | Mult -> Mul
-      | And -> And
-      | Or -> Or
+      | Bitwise_and -> And
+      | Bitwise_or -> Or
+      | Mod -> Mod
       | _ -> assert false
 
   let rec convert_expr expr =
@@ -74,7 +77,7 @@ module Conversion = struct
   let rec convert_predicate pred =
     let open Type_parse_tree in
     match pred with
-    | Binary(And, p1, p2) -> Ctypes.Pred.conjunction (convert_predicate p1) (convert_predicate p2)
+    | Binary(Logical_and, p1, p2) -> Ctypes.Pred.conjunction (convert_predicate p1) (convert_predicate p2)
     | Binary(op, e1, e2) -> binop_to_cmpop op e1 e2
     | _ -> Ctypes.Pred.True
 
@@ -90,28 +93,37 @@ module Conversion = struct
             };
         pred = pred;
       }
-    | Alias "word" -> base "short" Size.short_size pred
-    | Alias "long" -> base "long" Size.long_size pred
-    | Alias "int" -> base "int" Size.int_size pred
-    | Alias "short" -> base "short" Size.short_size pred
-    | Alias "char" -> base "char" Size.char_size pred
-    | Alias "double" -> base "double" Size.double_size pred
-    | Alias "float" -> base "float" Size.float_size pred
-    | Alias "void" -> {descr = Void; pred = Pred.True}
-    | Alias n -> {descr = Name(n); pred = pred}
+    | Name "word" -> base "short" Size.short_size pred
+    | Name "long" -> base "long" Size.long_size pred
+    | Name "uint64_t" -> base "uint64_t" Size.uint64_t_size pred
+    | Name "word8" -> base "word8" 8 pred
+    | Name "int" -> base "int" Size.int_size pred
+    (* An integer is like an int but it does not alias with int and we
+       should never directly take its address, so there is no
+       soundness issue when we refine it. *)
+    | Name "integer" -> base "integer" Size.int_size pred
+    | Name "word4" -> base "word4" 4 pred
+    | Name "short" -> base "short" Size.short_size pred
+    | Name "word2" -> base "word2" 2 pred
+    | Name "char" -> base "char" Size.char_size pred
+    | Name "word1" -> base "word1" 1 pred
+    | Name "double" -> base "double" Size.double_size pred
+    | Name "float" -> base "float" Size.float_size pred
+    | Name "void" -> {descr = Void; pred = Pred.True}
+    | Name n -> {descr = Name(n); pred = pred}
     | Pointer(t,Maybe_null) ->
       let pointed = convert_type t in
       { descr = Ptr {pointed; index=Zero}; pred=pred}
     | Pointer(t,Non_null) ->
       let pointed = convert_type t in
-      { descr = Ptr {pointed; index=Zero}; pred=(Pred.conjunction pred pred_nz)}
+      { descr = Ptr {pointed; index=Zero}; pred=(Pred.conjunction pred_nz pred)}
     | Array(t,e) -> 
       let elem_typ = convert_type t in
       begin match e with
       | Cst len -> {descr = Array (elem_typ, Some(Const len)); pred = pred}
       | Var symb -> {descr = Array (elem_typ, Some(Sym symb)); pred = pred}
       | _ ->
-          let expr = convert_predicate e in Codex_log.debug "invalid array size expression : %a" Pred.pp expr ;
+          let expr = convert_predicate e in Log.debug (fun p -> p "invalid array size expression : %a" Pred.pp expr);
           assert false (* An array length should be given by a predicate expression *)
       end
 
@@ -132,13 +144,13 @@ module Conversion = struct
         pred = pred;
       }
     
-    | Function(ret,args) -> 
+    | Function (ret,args) -> 
       let args = List.map convert_type args in
       let ret = convert_type ret in
-      { descr = Function(ret, args); pred=pred }
+      { descr = Function {ret; args; pure = false}; pred=pred }
 
     | Constraint (t,e) ->
-        convert_type_pred t (Pred.conjunction pred (convert_predicate e))
+        convert_type_pred t (Pred.conjunction (convert_predicate e) pred)
 
   and convert_type typ = convert_type_pred typ Ctypes.Pred.True
 
@@ -214,6 +226,20 @@ module Conversion = struct
     | Lambda (vars, typ) -> Constructor(convert_type typ, vars)
     | LambdaAlias n -> ConstrName n
 
+  let convert_function_type typ pure =
+    let open Type_parse_tree in
+    let open Ctypes in
+    match typ with
+    | Exists (v, tv, t) ->
+      let te = convert_type tv in
+      {descr = Existential (convert_type t, v, te); pred = True}
+    | Function(ret,args) -> 
+      let args = List.map convert_type args in
+      let ret = convert_type ret in
+      { descr = Function {ret; args; pure}; pred=True }
+
+    | _ -> assert false
+
   (* We work around circularity, at least for pointers, by using names as types.
     However, if used as a value, a structure should be defined before it is
     referenced in the definition of another type
@@ -221,41 +247,29 @@ module Conversion = struct
   let convert_definition (name,type_def) =
     let open Type_parse_tree in
     match type_def with
-    | Type (Function _ as f) -> Ctypes.add_function_name_definition name (convert_type f) 
+    | FunDef {inline; pure; funtyp=t} -> Ctypes.add_function_name_definition name (convert_function_type t pure) inline
     | Type t -> Ctypes.add_type_name_definition name (convert_type t)
     | Constr c -> Ctypes.add_constr_name_definition name (convert_constr c)
+    | Global t -> Ctypes.add_global_name_definition name (convert_type t)
   ;;
 
 end
 
 
 let parse_file name =
-  let file = Stdlib.open_in name in
-  let lexbuf = Lexing.from_channel file in
-  let parse_tree =
-    try Type_parser.annotations_eof Type_lexer.token lexbuf
-    with Type_parser.Error ->
-      let start_p = Lexing.lexeme_start_p lexbuf in
-      let end_p = Lexing.lexeme_end_p lexbuf in
-      let err = Format.asprintf "File `%s', line %d, column %d-%d: parsing error" name start_p.pos_lnum (start_p.pos_cnum - start_p.pos_bol) (end_p.pos_cnum - end_p.pos_bol) in
-      failwith err
-  in
+  let parse_tree = Type_parser.(parse_file name annotations) in
   List.iter Conversion.convert_definition parse_tree;
-  Ctypes.print_type_map () ;
-  Ctypes.print_constr_map () ;
-  Ctypes.print_function_map () ;
+  (* Ctypes.print_type_map () ; *)
+  (* Ctypes.print_constr_map () ; *)
+  (* Ctypes.print_function_map () ; *)
+  (* Ctypes.print_global_map () ; *)
   ()
 ;;
 
 (** Parses a string into [Ctypes.typ]
     @raise [Failure] if the string is not a valid type *)
 let type_of_string str =
-  let lexbuf = Lexing.from_string str in
-  let parse_tree =
-    try Type_parser.core_eof Type_lexer.token lexbuf
-    with Type_parser.Error ->
-      raise (Failure (Format.sprintf "type parsing error: '%s' is not a valid type" str))
-  in
+  let parse_tree = Type_parser.(parse_string str typeexpr) in
   Conversion.convert_type parse_tree
 ;;
             

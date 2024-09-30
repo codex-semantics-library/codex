@@ -23,16 +23,20 @@
 (* Note: we use the Common argument because we cannot just say
    Address.Context = Value.Context. *)
 module Make
-    (Common:Memory_sig.Fixed_size_value_domain)
+    (Value:Memory_sig.Fixed_size_value_domain)
+    (Block:Memory_sig.Block with module Value = Value)
     (Memory:Memory_sig.Memory
-     with module Address.Context = Common.Context
-      and module Value.Context = Common.Context
-      and type Value.binary = Common.binary
-      and type Address.binary = Common.binary
-      and type boolean = Common.boolean)
+     with module Address.Context = Value.Context
+     and module Block.Value.Context = Value.Context
+     and type Block.Value.binary = Value.binary
+     and type Address.binary = Value.binary
+     and type boolean = Value.boolean
+     and type address = Value.binary
+    )
   :sig
-    include Domain_sig.Base
-      with type binary = Common.binary
-      and type boolean = Common.boolean
+    include Memory_sig.Base
+      with type binary = Value.binary
+      and type boolean = Value.boolean
+      and type block = Block.block
       and module Context = Memory.Context
 end

@@ -19,6 +19,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
+open Frama_c_kernel
 module Make(Main:sig val main: Kernel_function.t end) = struct
 
   module VISet = Cil_datatype.Varinfo.Set;;
@@ -127,7 +128,6 @@ module Make(Main:sig val main: Kernel_function.t end) = struct
 
 
   let visit_fun acc vi =
-    Kernel.feedback "visiting function %s" vi.vname;
     (* let vi = Kernel_function.get_vi kf in *)
     let acc = {acc with functions_visited = VISet.add vi acc.functions_visited} in
     try

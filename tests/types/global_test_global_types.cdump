@@ -1,0 +1,8 @@
+global.c:6.10-18: `glob + 1' -> [6..0x7FFFFFFF]
+global.c:6.10-14: `glob' -> [5..0x7FFFFFFF]
+global.c:7.9-10: `j' -> [6..0x7FFFFFFF]
+Unproved regular alarms:
+Unproved additional alarms:
+Proved 0/0 regular alarms
+Unproved 0 regular alarms and 0 additional alarms.
+Solved 0/0 user assertions, proved 0

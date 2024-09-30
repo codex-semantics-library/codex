@@ -1,0 +1,13 @@
+ptr_arith.c:6.15-21: `(int *)(& a->p)' -> ([1..0xFFFFFFFF] : ({self : Name(struct foo)[{0}].(0)* | (self != 0)}))
+ptr_arith.c:6.15-21: `& a->p' -> ([1..0xFFFFFFFF] : ({self : Name(struct foo)[{0}].(0)* | (self != 0)}))
+ptr_arith.c:6.16-17: `a' -> ([1..0xFFFFFFFF] : ({self : Name(struct foo)[{0}].(0)* | (self != 0)}))
+ptr_arith.c:7.2-10: `ptr + 3' -> ([1..0xFFFFFFFF] : ({self : Name(struct foo)[{0}].(0)* | (self != 0)})) + 0xC
+ptr_arith.c:7.2-5: `ptr' -> ([1..0xFFFFFFFF] : ({self : Name(struct foo)[{0}].(0)* | (self != 0)}))
+ptr_arith.c:8.2-13: `ptr + -1' -> ([13..0xFFFFFFFF] : ({self : Name(struct foo)[{0}].(12)* | (self != 0)})) + 0x-4
+ptr_arith.c:8.2-5: `ptr' -> ([13..0xFFFFFFFF] : ({self : Name(struct foo)[{0}].(12)* | (self != 0)}))
+ptr_arith.c:9.8-11: `ptr' -> ([9..0xFFFFFFFB] : ({self : Name(struct foo)[{0}].(8)* | (self != 0)}))
+Unproved regular alarms:
+Unproved additional alarms:
+Proved 0/0 regular alarms
+Unproved 0 regular alarms and 0 additional alarms.
+Solved 0/0 user assertions, proved 0

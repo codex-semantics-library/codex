@@ -102,9 +102,26 @@ struct
   let biconst ~size k = C.ar0 (F.biconst ~size k)
   let buninit ~size = C.ar0 (F.buninit ~size)
   let valid ~size access_type = C.ar1 (F.valid ~size access_type)
-  let valid_ptr_arith ~size = C.ar2 (F.valid_ptr_arith ~size)
+  let valid_ptr_arith ~size arith_type = C.ar2 (F.valid_ptr_arith ~size arith_type)
   let bshift ~size ~offset ~max = C.ar1 (F.bshift ~size ~offset ~max)
   let bindex ~size scale = C.ar2 (F.bindex ~size scale)
+end
+
+module Convert_Block_Forward
+  (C:Conversion)
+  (F:Block_Forward with module Arity := C.From_Arity) =
+struct
+  type boolean = F.boolean
+  type value = F.value
+  type block = F.block
+  type offset = F.offset
+
+  let sizeof = C.ar1 F.sizeof
+  let concat ~size1 ~size2 = C.ar2 (F.concat ~size1 ~size2)
+  
+  let load ~size = C.ar2 (F.load ~size)
+  let store ~size = C.ar3 (F.store ~size)     
+  let binary_to_block ~size = C.ar1 (F.binary_to_block ~size)
 end
 
 module Convert_Memory_Forward
@@ -112,10 +129,15 @@ module Convert_Memory_Forward
   (F:Memory_Forward with module Arity := C.From_Arity) =
 struct
   type boolean = F.boolean
-  type binary = F.binary
+  type address = F.address
   type memory = F.memory
+  type block = F.block
+  type value = F.value
+  
   let load ~size= C.ar2 (F.load ~size)
   let store ~size= C.ar3 (F.store ~size)
+  let load_block = C.ar2 F.load_block
+  let store_block = C.ar3 F.store_block
   let memcpy ~size= C.ar3 (F.memcpy ~size)      
   let free = C.ar2 F.free      
   let malloc ~id ~malloc_size = C.ar1 (F.malloc ~id ~malloc_size)

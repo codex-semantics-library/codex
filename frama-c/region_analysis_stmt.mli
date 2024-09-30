@@ -19,8 +19,9 @@
 (*                                                                        *)
 (**************************************************************************)
 
-open Codex
-open Codex.Fixpoint.Region_analysis  
+
+open Codex.Fixpoint.Region_analysis
+open Frama_c_kernel
 
 (* Helper function to make region analysis on Frama-C stmts. Produces
    a Node suitable as an argument to the [Region_analysis.Make]
@@ -32,7 +33,7 @@ module MakeNode(M:sig
   type abstract_value
   val compile_node: stmt -> abstract_value -> (stmt edge * abstract_value) list
   val mu: (abstract_value -> abstract_value) -> abstract_value -> abstract_value
-  val join: abstract_value list -> abstract_value    
-    
+  val join: abstract_value list -> abstract_value
+
 end):Node with type abstract_value = M.abstract_value
           and type node = Cil_types.stmt

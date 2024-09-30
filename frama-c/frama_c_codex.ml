@@ -21,3 +21,6 @@
 
 (* Frama-C parses some json file that prevent using a standalone binary. Prevent that. *)
 Cil.init_builtins_ref := (fun () -> ());;
+
+(* Do not load other plugins as the plugin repository will not exist. *)
+Kernel.AutoLoadPlugins.set false;;

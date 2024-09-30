@@ -19,15 +19,24 @@
 ;;                                                                        ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+
+(library
+ (public_name "codex.types.type_parse_tree")
+ (name type_parse_tree)
+ (modules type_parse_tree)
+ (libraries zarith)
+)
+
 (library
  (public_name "codex.types")
  (name types)
- (libraries zarith codex.datatype_sig codex.codex_log)
- (modules ctypes type_lexer type_parser type_parse_tree parse_ctypes)
-)
+ (libraries zarith codex.datatype_sig tracelog codex.types.type_parse_tree codex.types.parser)
+ (modules ctypes parse_ctypes)
+ )
 
-(menhir
- (modules type_parser))
-
-(ocamllex
- (modules type_lexer))
+(library
+ (public_name "codex.types.parser")
+ (name Type_parser)
+ (modules Type_parser)
+ (libraries pacomb zarith codex.types.type_parse_tree tracelog)
+ (preprocess (pps pacomb.ppx)))

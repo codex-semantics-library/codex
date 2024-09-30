@@ -1,0 +1,15 @@
+comparison2.c:5.10-12: `*a' -> [--..--]
+comparison2.c:5.11-12: `a' -> ([1..0xFFFFFFFF] : ({self : int(4)[{0}].(0)* | (self != 0)}))
+comparison2.c:6.5-10: `0 < n' -> {0; 1}
+comparison2.c:6.9-10: `n' -> [--..--]
+comparison2.c:6.31-36: `0 < n' -> {0x1}
+comparison2.c:6.35-36: `n' -> [1..0x7FFFFFFF]
+comparison2.c:7.25-31: `0 >= n' -> {0x1}
+comparison2.c:7.30-31: `n' -> [-0x80000000..0]
+Unproved regular alarms:
+Unproved additional alarms:
+Proved 1/1 regular alarms
+Unproved 0 regular alarms and 0 additional alarms.
+comparison2.c:6: assertion is TRUE (valid) (proved with abstract interpretation)
+comparison2.c:7: assertion is TRUE (valid) (proved with abstract interpretation)
+Solved 2/2 user assertions, proved 2

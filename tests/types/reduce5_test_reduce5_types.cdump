@@ -1,0 +1,15 @@
+reduce5.c:13.9-19: `tree->root' -> ([1..0xFFFFFFFF] : ({self : Name(struct rbnode)[{0}].(0)* | (self != 0)}))
+reduce5.c:13.9-13: `tree' -> ([1..0xFFFFFFFF] : ({self : Name(struct rbtree)[{0}].(0)* | (self != 0)}))
+reduce5.c:14.6-17: `node->right' -> ([1..0xFFFFFFFF] : ({self : Name(struct rbnode)[{0}].(0)* | (self != 0)}))
+reduce5.c:14.6-10: `node' -> ([1..0xFFFFFFFF] : ({self : Name(struct rbnode)[{0}].(0)* | (self != 0)}))
+reduce5.c:15.6-20: `root->left > (struct rbnode *)0' -> {0; 1}
+reduce5.c:15.6-16: `root->left' -> {0} or ([1..0xFFFFFFFF] : (Name(struct rbnode))[{0}].0*)
+reduce5.c:15.6-10: `root' -> ([1..0xFFFFFFFF] : ({self : Name(struct rbnode)[{0}].(0)* | (self != 0)}))
+reduce5.c:16.4-8: `node' -> ([1..0xFFFFFFFB] : ({self : Name(struct rbnode)[{0}].(0)* | (self != 0)}))
+reduce5.c:16.18-28: `root->left' -> ([1..0xFFFFFFFF] : (Name(struct rbnode))[{0}].0*)
+reduce5.c:16.18-22: `root' -> ([1..0xFFFFFFFF] : ({self : Name(struct rbnode)[{0}].(0)* | (self != 0)}))
+Unproved regular alarms:
+Unproved additional alarms:
+Proved 5/5 regular alarms
+Unproved 0 regular alarms and 0 additional alarms.
+Solved 0/0 user assertions, proved 0

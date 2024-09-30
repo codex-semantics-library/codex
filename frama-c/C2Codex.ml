@@ -19,19 +19,20 @@
 (*                                                                        *)
 (**************************************************************************)
 
+open Frama_c_kernel
 module Codex = Codex
 module VarMap = Codex.Extstdlib.Map.Make(Cil_datatype.Varinfo);;
 module StringMap = Map.Make(String);;
 
 (* We use a kinstr because lval that do not have eids, and eids
    are sometimes incorrect... *)
-module ExpInStmt = 
+module ExpInStmt =
   Datatype.Pair_with_collections
     (Cil_datatype.Kinstr)
     (Cil_datatype.Exp)
     (struct let module_name = "ExpInStmt2" end)
 
-module LvalInStmt = 
+module LvalInStmt =
   Datatype.Pair_with_collections
     (Cil_datatype.Kinstr)
     (Cil_datatype.Lval)
@@ -39,16 +40,27 @@ module LvalInStmt =
 
 module Log = Tracelog.Make(struct let category = "C2Codex" end);;
 
+(* Fresh symbolic symbols from existential functions *)
+let fresh_int =
+  let fresh_counter = ref (0 : int) in
+  fun () ->
+    incr fresh_counter ;
+    !fresh_counter
+
+let fresh_symbol () = Format.sprintf "&%d" (fresh_int ()) ;;
+
 module Compile_type = struct
 
   module StringHash = Datatype_sig.StringHash;;
-  let hash_comp_types = StringHash.create 17;;    
+  let hash_comp_types = StringHash.create 17;;
   (* Hashtbl.Make(struct include String let hash = Hashtbl.hash end) *)
 
   let rec cil_type_to_ctype typ =
     let open Cil_types in
     let module Ctypes = Codex.Types.Ctypes in
     match Cil.unrollType typ with
+    | TVoid([]) ->
+      Ctypes.({descr = Void; pred=Pred.True})
     | TInt (IInt,_) ->
       let size = Cil.bytesSizeOf typ in
       assert (size = 4);
@@ -71,9 +83,9 @@ module Compile_type = struct
       let size = Cil.bytesSizeOf typ in
       assert (size = 4) ;
       let nb_items = List.length eitems in
-      let pred = Ctypes.Pred.(conjunction (sgeq @@ Const Z.zero) (slt @@ Const (Z.of_int nb_items))) in 
+      let pred = Ctypes.Pred.(conjunction (sgeq @@ Const Z.zero) (slt @@ Const (Z.of_int nb_items))) in
       Ctypes.({descr = Base (size, "int"); pred})
-      
+
     | TPtr (pointed,attr) ->
       let ptyp = cil_type_to_ctype pointed in
       let pred = if List.exists (function Attr("notnull",_) -> true | _ -> false) attr
@@ -98,10 +110,10 @@ module Compile_type = struct
             | None -> assert false (* Not handled if not a pointer to it. *)
             | Some fields ->
               (* Put normal fields; add padding and replace bitfields by ints as needed. *)
-              let (st_members,last_offset,_) = 
+              let (st_members,last_offset,_) =
                 List.fold_left (fun (acc,last_offset,num_padding) fi ->
                     if(fi.fbitfield <> None) then (acc,last_offset,num_padding)
-                    (* we see bitfields like padding bytes. *)                                             
+                    (* we see bitfields like padding bytes. *)
                     else
                       let (field_offset,field_size) = Cil.fieldBitsOffset fi in
                       (* Codex_log.feedback "Field %s offset %d size %d " fi.fname field_offset field_size; *)
@@ -122,16 +134,16 @@ module Compile_type = struct
                       ((field_offset,fi.fname,cil_type_to_ctype fi.ftype)::acc,last_offset,num_padding)
                   ) ([],0,0) fields
               in
-              let st_members = 
+              let st_members =
                 if(last_offset = st_byte_size)
                 then st_members
-                else 
+                else
                   let name = cname ^ "_last_padding" in
                   let size = st_byte_size - last_offset in
                   let typ = Ctypes.({descr = Base (size, name); pred=Pred.True}) in
                   (last_offset, name, typ)::st_members
               in
-              List.rev st_members 
+              List.rev st_members
           in
           (* TODO: Check attributes for better translation of predicates from C types. *)
           let struct_type = Ctypes.{ descr = Structure { st_byte_size = Some st_byte_size;
@@ -160,6 +172,8 @@ module type CallingContext = Datatype_sig.S
 (* module Make(CallingContext:CallingContext)(Domain:Codex.Domains.Domain_sig.Base) = struct *)
 module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_with_types) = struct
 
+  let exploring_pure_function = ref false ;;
+
   (* The context in which an instruction is called. *)
   type context = {
 
@@ -176,6 +190,64 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
   }
   ;;
 
+  (* Overrides actual domain module for it to deal with function pointers *)
+
+  let function_to_ctype kf =
+    let open Types.Ctypes in
+    try function_of_name @@ Kernel_function.get_name kf
+    with Undefined_type _ ->
+      let formals = Kernel_function.get_formals kf in
+      let ret = Compile_type.cil_type_to_ctype @@ Kernel_function.get_return_type kf in
+      let args = formals |> List.map (fun vi ->
+        let size = Cil.bitsSizeOf vi.Cil_types.vtype in
+        let ctyp = Compile_type.cil_type_to_ctype vi.vtype in
+        ctyp)
+      in {descr = Function {ret; args; pure = false}; pred = Pred.True}
+
+
+  (* This hack consists in adding a mapping from Domain.binary to kf
+     to retrieve functions from their values.  However, it only works
+     if the function was not modified (e.g. no +1-1 on the function
+     pointer, and more importantly, no join between several function
+     pointers). Instead, we should be able to inspect a Domain.binary,
+     list all the globals to which it points, to retrieve all the
+     pointers. *)
+  module Domain = struct
+    include Domain
+
+    (* Utility functions and map to deal notably with function pointers *)
+
+    let fun_map : (Domain.binary, Cil_types.varinfo) Hashtbl.t = Hashtbl.create 12345 ;;
+
+    let add_pointed_function ptr v = Hashtbl.add fun_map ptr v
+    let get_pointed_function ptr = Hashtbl.find fun_map ptr
+    let is_function_pointer ptr = Hashtbl.mem fun_map ptr
+
+    let binary_pretty ~size ctx fmt value =
+      if is_function_pointer value then
+        let v = get_pointed_function value in
+        Format.fprintf fmt "(@[<hov 2>%a@] -> &%a}" (Domain.binary_pretty ~size ctx) value Cil_datatype.Varinfo.pretty v
+
+      else Domain.binary_pretty ~size ctx fmt value
+
+    let has_type ~size ctx typ value =
+      let open Types.Ctypes in
+      Log.debug (fun p -> p "C2Codex.has_type ~size:%d %a %a" size pp typ (binary_pretty ~size ctx) value);
+      match typ.descr with
+      | Ptr {pointed = {descr = Function _}} ->
+        let v = get_pointed_function value in
+        let kf = Globals.Functions.get v in
+        let funtyp = function_to_ctype kf in
+        let ptyp = Types.Ctypes.{descr = Ptr {pointed=funtyp;index = Zero}; pred = Pred.True} in
+        let typ = {typ with pred = Pred.True} in
+        if equal ~only_descr:false typ ptyp
+        then true
+        else ( Codex_log.alarm "incompatible_function_pointer" ; false )
+
+      | _ -> has_type ~size ctx typ value
+
+  end
+
   (* A state is either bottom, or a tuple with a memory, a mapping
      from variable names to their addresses, and a mapping from
      strings to their addresses. *)
@@ -189,7 +261,7 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
   let pretty_state fmt state =
     Format.fprintf fmt "@[<v>loop nesting:%d@ kinstr:%a@ mem:%a ctx:%a@]"
       state.context.loop_nesting_level
-      Cil_datatype.Kinstr.pretty state.context.kinstr 
+      Cil_datatype.Kinstr.pretty state.context.kinstr
       (Domain.memory_pretty state.context.ctx) state.mem
       Domain.context_pretty state.context.ctx
   ;;
@@ -197,10 +269,10 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
   let pretty_state_option fmt state =
     match state with
     | None -> Format.fprintf fmt "<no state>"
-    | Some s -> pretty_state fmt s 
+    | Some s -> pretty_state fmt s
 
 
-  
+
   (* Table where to register assertions. Note that it is imperative, but
      it should be easy to switch to a functional version (using the
      state monad to pass it). *)
@@ -221,7 +293,7 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
       end);;
 
     module LocationMap = Cil_datatype.Location.Map;;
-    
+
     (* We want a fix order, to display the list of alarms. *)
     let alarm_table = ref AlarmMap.empty;;
     let assertion_table = ref LocationMap.empty;;
@@ -236,15 +308,15 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
     ;;
 
     let register_assertion loc bool state =
-      let ctx = state.context.ctx in      
+      let ctx = state.context.ctx in
       let level = state.context.loop_nesting_level in
       if level > 0 then ()
       else begin
         let qbool = Domain.query_boolean ctx bool in
         let status,how =
           match qbool with
-          | Lattices.Quadrivalent.True -> "TRUE (valid)", "abstract interpretation" 
-          | Lattices.Quadrivalent.Bottom -> "TRUE (dead)", "abstract interpretation" 
+          | Lattices.Quadrivalent.True -> "TRUE (valid)", "abstract interpretation"
+          | Lattices.Quadrivalent.Bottom -> "TRUE (dead)", "abstract interpretation"
           | Lattices.Quadrivalent.False -> "FALSE (invalid)", "abstract interpretation"
           | Lattices.Quadrivalent.Top -> begin
               if not @@ Codex_config.try_hard_on_assertions()
@@ -289,20 +361,20 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
     ;;
 
 
-    
+
   end
 
   let iter_on_alarms f =
-    Assertion_Table.AlarmMap.iter (fun (a,l) v  -> f a l v) !Assertion_Table.alarm_table;;  
+    Assertion_Table.AlarmMap.iter (fun (a,l) v  -> f a l v) !Assertion_Table.alarm_table;;
 
   let iter_on_assertions f =
     Assertion_Table.LocationMap.iter (fun loc l ->
         List.iter (fun (bool,how) ->
             f loc bool how
           ) l
-      ) !Assertion_Table.assertion_table;;  
+      ) !Assertion_Table.assertion_table;;
 
-  
+
   module Register_Table = struct
 
     module CallingContextHash = Hashtbl.Make(CallingContext)
@@ -323,7 +395,7 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
 
   end
 
-  let exp_to_value (ki,exp) = 
+  let exp_to_value (ki,exp) =
     let open Register_Table in
     ExpInStmtHash.find exptrie (ki,exp);;
 
@@ -335,8 +407,8 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
       true
     with Not_found -> false
   ;;
-          
-  
+
+
 
   (* Give a unique malloc_id per hash. In particular, this allows that
      when there is a jump into a scope, both "malloced" local
@@ -360,29 +432,55 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
     assert(not @@ VarMap.mem vi state.var_addresses);
     let ctx = state.context.ctx in
     let exception Function_Type in
+    let exception Global_Var of Types.Ctypes.typ in
     let addr,mem = try
+        try let typ = Types.Ctypes.global_of_name vi.vname in raise (Global_Var typ) with Types.Ctypes.Undefined_type _ -> () ;
         let malloc_size =
-          try Cil.bytesSizeOf vi.Cil_types.vtype
-          with Cil.SizeOfError _ ->
-            if Cil.isFunctionType vi.Cil_types.vtype
-            then raise Function_Type
-            else
-              Kernel.warning "Could not compute the size of type %a for %a, defaulting  to 1"
-                Cil_datatype.Typ.pretty vi.Cil_types.vtype
-                Cil_datatype.Varinfo.pretty vi;
-            1
+          if Cil.isFunctionType vi.Cil_types.vtype
+          then raise Function_Type
+          else
+            try Cil.bytesSizeOf vi.Cil_types.vtype
+            with Cil.SizeOfError _ ->
+                Kernel.warning "Could not compute the size of type %a for %a, defaulting  to 1"
+                  Cil_datatype.Typ.pretty vi.Cil_types.vtype
+                  Cil_datatype.Varinfo.pretty vi;
+              1
         in
         let size = 8 * malloc_size in
         let addr,mem = Domain.Memory_Forward.malloc ~id ~malloc_size ctx state.mem in
         match initf with
         | None -> addr,mem       (* No initial write. *)
-        | Some initf -> 
+        | Some initf ->
           let to_store = initf ~size in
           let mem = Domain.Memory_Forward.store ctx ~size mem addr to_store in
           addr,mem
-      (* Functions are not deallocated, so we don't have to allocate anything. 
+      (* Functions are not deallocated, so we don't have to allocate anything.
          MAYBE: do the same for every global variables of unknown size? *)
-      with Function_Type -> Domain.binary_unknown ctx ~size:(Codex_config.ptr_size()), state.mem
+      with
+        | Function_Type ->
+          let kf = Globals.Functions.get vi in
+          let size = Codex_config.ptr_size() in
+          let ptr = try
+              let Types.Ctypes.{funtyp;inline} = Types.Ctypes.function_definition_of_name @@ Kernel_function.get_name kf in
+              if inline then Domain.binary_unknown ~size ctx
+              else
+                let ptyp = Types.Ctypes.{descr = Ptr {pointed=funtyp; index=Zero}; pred = Pred.neq (Const Z.zero)} in
+                Domain.binary_unknown_typed ~size ctx ptyp
+
+            with Types.Ctypes.Undefined_type _ -> Domain.binary_unknown ~size:(Codex_config.ptr_size()) ctx
+
+          in
+            Domain.add_pointed_function ptr vi ;
+            ptr, state.mem
+
+        | Global_Var typ ->
+          let malloc_size = Types.Ctypes.sizeof typ in
+          let size = 8 * malloc_size in
+          let addr,mem = Domain.Memory_Forward.malloc ~id ~malloc_size ctx state.mem in
+          let to_store = Domain.binary_unknown_typed ~size ctx typ in
+          Domain.add_global_symbol ~size ctx vi.vname to_store ;
+          let mem = Domain.Memory_Forward.store ctx ~size mem addr to_store in
+          addr,mem
     in
     let var_addresses = VarMap.add vi addr state.var_addresses in
     {state with mem;var_addresses}
@@ -403,14 +501,14 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
   let block_entry state block =
     let ctx = state.context.ctx in
     let locals = block.Cil_types.blocals in
-    let to_store ~size = 
+    let to_store ~size =
       if Codex_options.UnknownUninitialized.get() then
         (* The SVComp competition has a wrong interpretation of the C
            standard, and assumes that uninitialized local variables can have
            any value (instead of no value). This block of code allows to
            have this interpretation. *)
         Domain.binary_unknown ~size ctx
-      else Domain.Binary_Forward.buninit ~size ctx 
+      else Domain.Binary_Forward.buninit ~size ctx
     in
     List.fold_left (fun state vi -> allocate_var state vi @@ Some to_store) state locals
   ;;
@@ -446,7 +544,7 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
     | Cil_types.(Var _,NoOffset) -> true
     | _ -> false
 
-  
+
 
   type bitfield = {
     bit_offset: int;
@@ -461,10 +559,10 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
     bitfield: bitfield option;
   }
 
-  
+
   module Expression = struct
 
-    let ptr_bit_size = Cil.bitsSizeOf Cil.voidPtrType;;  
+    let ptr_bit_size = Cil.bitsSizeOf Cil.voidPtrType;;
 
       let bofbool_join ~size ctx cond =
         let one = Domain.Binary_Forward.biconst ~size Z.one ctx in
@@ -478,7 +576,7 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
         | Some ctx, None -> Some(one, ctx)
         | Some thenctx, Some elsectx ->
         let Domain.Context.Result(_,tup,deserialize) =
-          Domain.serialize_binary ~size thenctx one elsectx zero (true, Domain.Context.empty_tuple)
+          Domain.serialize_binary ~size thenctx one elsectx zero (true, Domain.Context.empty_tuple ())
         in
         let newctx,res_tup = Domain.typed_nondet2 thenctx elsectx tup in
         let res,_ = deserialize newctx res_tup in
@@ -486,15 +584,15 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
       ;;
 
       let bofbool_join ~size ctx cond =
-        Log.trace (fun p -> p "bofbool_join size:%d" size) (fun fmt _ -> ()) (fun () -> 
+        Log.trace (fun p -> p "bofbool_join size:%d" size) (fun () ->
             bofbool_join ~size ctx cond)
       ;;
-      
+
       (* bofbool_join is actually faster (often) and more precise *)
       let bofbool_constr ~size ctx cond =
         Domain.Binary_Forward.bofbool ~size ctx cond
 
-      
+
     (* In expressions, we use the state monad to avoid passing the
        state everywhere. *)
     module State_Monad:sig
@@ -504,15 +602,19 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
       val (let*): 'a m -> ('a -> 'b m) -> 'b m
       val run: state -> 'a m -> ('a * state) option
       (* val tracem: 'a Tracelog.log -> (Format.formatter -> 'b -> unit) -> 'b m -> 'b m *)
-      val tracem_bin: size:int -> 'a Tracelog.log -> Domain.binary m -> Domain.binary m
-      val tracem_bool: 'a Tracelog.log -> Domain.boolean m -> Domain.boolean m                    
+      val tracem_bin: size:int -> ?loc:Codex_options.Location.t -> 'a Tracelog.log -> Domain.binary m -> Domain.binary m
+      val tracem_bool: 'a Tracelog.log -> ?loc:Codex_options.Location.t -> Domain.boolean m -> Domain.boolean m
       val get_state: unit -> state m
       (* val get_context: context m           *)
       (* val get_ctx: Domain.Context.t m *)
       val load: size:int -> Domain.binary -> Domain.binary m
       val value_of_truth: size:int -> Domain.boolean -> Domain.binary m
+
+      (** [add_assumption] and [register_alarm] both assume the boolean is true,
+          but [register_alarm] also raises an alarm if the assumption is unsatified. *)
+      val add_assumption: Domain.boolean -> unit m
       val register_alarm: (Alarms.alarm * Cil_types.location) -> Domain.boolean -> unit m
-      val register_lvalue: Cil_types.lval -> Domain.binary -> unit m;;      
+      val register_lvalue: Cil_types.lval -> Domain.binary -> unit m;;
       val register_expression: Cil_types.exp -> Domain.binary -> unit m;;
       val register_boolean_expression: Cil_types.exp -> Domain.boolean -> unit m;;
 
@@ -538,37 +640,37 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
         | None -> None
       let ( let* ) = (>>=);;
       let run state x = x state
-      let tracem log pp_ret (f:'a m) = 
-        (fun state -> 
-           let res = Log.trace log pp_ret (fun () ->
+      let tracem log ?loc ~pp_ret (f:'a m) =
+        (fun state ->
+           let res = Log.trace log ?loc ~pp_ret (fun () ->
                let x = run state f in
                x)
            in res
         )
       ;;
-      let tracem_bin ~size log (f:Domain.binary m) = 
+      let tracem_bin ~size ?loc log (f:Domain.binary m) =
         let pp_ret_option fmt = function
           | None -> Format.fprintf fmt "None"
           | Some(ret,state) ->
-            let ctx = state.context.ctx in 
-            Domain.binary_pretty ~size ctx fmt ret 
+            let ctx = state.context.ctx in
+            Domain.binary_pretty ~size ctx fmt ret
         in
-        tracem log pp_ret_option f;; 
+        tracem log ?loc ~pp_ret:pp_ret_option f;;
 
-      let tracem_bool log (f:Domain.boolean m) = 
+      let tracem_bool log ?loc (f:Domain.boolean m) =
         let pp_ret_option fmt = function
           | None -> Format.fprintf fmt "None"
           | Some(ret,state) ->
-            let ctx = state.context.ctx in 
+            let ctx = state.context.ctx in
             Domain.boolean_pretty ctx fmt ret
         in
-        tracem log pp_ret_option f;;
+        tracem log ?loc ~pp_ret:pp_ret_option f;;
       ;;
-      
-        
-      
+
+
+
       let get_state () = fun (state) -> Some (state,state);;
-      let get_context = fun (state) -> Some(state.context,state);;            
+      let get_context = fun (state) -> Some(state.context,state);;
       let get_ctx = fun (state) -> Some(state.context.ctx,state);;
       let load ~size address state =
         match Domain.Memory_Forward.load ~size state.context.ctx state.mem address with
@@ -582,12 +684,9 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
         | Some(res,ctx) -> Some (res, {state with context = {state.context with ctx}})
       ;;
 
-      
-      let register_alarm (alarm,loc) bool = fun state ->
-        let ctx = state.context.ctx in
-        (* Codex_log.feedback "register alarm boolean = %a" (Domain.boolean_pretty ctx) bool; *)
-        let qbool = Domain.query_boolean ctx bool in
-        Assertion_Table.register_alarm qbool (alarm,loc,state.context.kinstr) state;
+      (** [add_assumption bool qbool state] assumes that the boolean term [bool],
+          whose queried value is [qbool], is [True] in [state]. *)
+      let add_assumption bool qbool state =
         match qbool with
         | Lattices.Quadrivalent.False | Lattices.Quadrivalent.Bottom -> None
         | Lattices.Quadrivalent.True -> Some((), state)
@@ -599,8 +698,24 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
               let context = {state.context with ctx} in
               Some((),{state with context})
           end
-      ;;
-      
+
+      (** Adds the assumption that [bool] is true, also raises an alarm if that
+          boolean can't be proved to be true. *)
+      let register_alarm (alarm,loc) bool state =
+        let ctx = state.context.ctx in
+        (* Codex_log.feedback "register alarm boolean = %a" (Domain.boolean_pretty ctx) bool; *)
+        let qbool = Domain.query_boolean ctx bool in
+        Assertion_Table.register_alarm qbool (alarm,loc,state.context.kinstr) state;
+        add_assumption bool qbool state
+
+      (** Adds the assumption that [bool] is true, like {!register_alarm}, but
+          doesn't add any alarm. *)
+      let add_assumption bool state =
+        let ctx = state.context.ctx in
+        (* Codex_log.feedback "register alarm boolean = %a" (Domain.boolean_pretty ctx) bool; *)
+        let qbool = Domain.query_boolean ctx bool in
+        add_assumption bool qbool state
+
       let register_lvalue lval bin = return ();;    (* TODO *)
       let register_expression exp bin = fun state ->
         let level = state.context.loop_nesting_level in
@@ -610,8 +725,14 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
           let h = ExpInStmtHash.find exptrie (state.context.kinstr,exp) in
           let size = Cil.(bitsSizeOf (typeOf exp)) in
           (* Codex_log.feedback "Registering %a (%a) with %s" Cil_datatype.Exp.pretty exp ExpInStmt.pretty (state.context.kinstr,exp)  (Format.asprintf "%a" (Domain.binary_pretty ~size state.context.ctx) bin); *)
-          CallingContextHash.replace h state.context.calling_context
-            (Format.asprintf "%a" (Domain.binary_pretty ~size state.context.ctx) bin);
+          (* The way Interpreted_automata work, mean that conditions
+             are evaluated several time. In particular for switch, we
+             have several assume(e != case). Registering e after these
+             statements yield the wrong value. Thus, we want to
+             register the first values. *)
+          if not @@ (CallingContextHash.mem h state.context.calling_context)
+          then CallingContextHash.replace h state.context.calling_context
+              (Format.asprintf "%a" (Domain.binary_pretty ~size state.context.ctx) bin);
         end;
         Some((),state)
       ;;
@@ -621,7 +742,7 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
         let h = ExpInStmtHash.find exptrie (state.context.kinstr,exp) in
         let x = match (Format.asprintf "%a" (Domain.boolean_pretty state.context.ctx) bool) with
           | "{true}" -> "{1}"
-          | "{false}" -> "{0}"            
+          | "{false}" -> "{0}"
           | "{true;false}" -> "{0; 1}"
           | "{}" -> "{}"
           | x -> x
@@ -632,8 +753,8 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
       ;;
 
 
-      (* This is more similar to what we had before. The advantage is that it forces 
-         propagation of the boolean expression, which is otherwise not done. 
+      (* This is more similar to what we had before. The advantage is that it forces
+         propagation of the boolean expression, which is otherwise not done.
          The performance cost is not important (the precision increase exists, but is also rare). *)
       let register_boolean_expression exp bool = fun state ->
         let size = 32 in
@@ -652,9 +773,9 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
         type ('a,'b,'r) ar2 = 'a -> 'b -> state -> ('r * state) option
         type ('a,'b,'c,'r) ar3 = 'a -> 'b -> 'c -> state -> ('r * state) option
       end
-      
+
       module Transfer_functions = struct
-      
+
         module Conversion(* :Transfer_functions.Conversions.Conversion *) = struct
           module From_Arity = Domains.Domain_sig.Context_Arity_Forward(Domain.Context);;
           module To_Arity = State_Monad_Arity
@@ -683,39 +804,94 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
       end
 
       include Transfer_functions
-          
+
 
     end
 
 
     open State_Monad;;
 
+    exception Flexible_array_members
+
     (* Change the size of a value. *)
     let cast_size ~sext ~from_size ~to_size v =
-      if from_size > to_size 
+      if from_size > to_size
       then Binary_Forward.bextract ~index:0 ~size:to_size ~oldsize:from_size v
-      else if from_size < to_size 
+      else if from_size < to_size
       then (if sext then Binary_Forward.bsext
             else Binary_Forward.buext) ~size:to_size ~oldsize:from_size v
       else return v
     ;;
-    
+
     let z_of_integer c = Z.of_string @@ Integer.to_string c;;
-    
+
     let constant ~size cst =
       let open Cil_types in
         match cst with
         | CInt64(c,_,_) -> Binary_Forward.biconst ~size (z_of_integer c)
         | CChr c -> Binary_Forward.biconst ~size (z_of_integer (Cil.charConstToInt c))
-        | CEnum {eival;_} ->
+        | CEnum ({eival;_} as enum) ->
           (match Cil.isInteger eival with
-           | None -> assert false   (* Should not happen *)
+           | None ->
+              begin match eival with
+              | {enode=UnOp(Neg,eival,_)} -> (
+                match Cil.isInteger eival with
+                  | None -> assert false
+                  | Some v -> Binary_Forward.biconst ~size (z_of_integer v)
+                )
+              | _ -> assert false
+              end
            | Some v -> Binary_Forward.biconst ~size (z_of_integer v))
         | CStr str -> let* state = get_state () in return @@ StringMap.find str state.string_addresses
         | CWStr _ws -> (* return (Conv.loc_of_wstring env ws) *) assert false
         | CReal _ -> binary_unknown ~size
     ;;
 
+    (** [assert_no_signed_overflow exp ~small_size ~wide_size value]
+        Adds assertion ensuring that [value], a signed binary value of size
+        [~wide_size] bits, can correctly fit on [~small_size] bits without
+        over/underflow. *)
+    let assert_no_signed_overflow exp ~small_size ~wide_size value =
+      let two_pow_size = Z.shift_left Z.one (small_size-1) in
+      (* Upper bound *)
+      let upper_bound = Z.sub two_pow_size Z.one in
+      let* upper_bound_val = Binary_Forward.biconst ~size:wide_size upper_bound in
+      let* upper_overflow = Binary_Forward.bisle ~size:wide_size value upper_bound_val in
+      let* () =
+        if Codex_options.OverflowAlarms.get ()
+        then register_alarm (Alarms.Overflow(Alarms.Signed, exp, upper_bound, Alarms.Upper_bound), exp.eloc) upper_overflow
+        else add_assumption upper_overflow in
+      (* lower bound *)
+      let lower_bound = Z.neg two_pow_size in
+      let* lower_bound_val = Binary_Forward.biconst ~size:wide_size lower_bound in
+      let* lower_underflow = Binary_Forward.bisle ~size:wide_size lower_bound_val value in
+      if Codex_options.OverflowAlarms.get ()
+      then register_alarm (Alarms.Overflow(Alarms.Signed, exp, lower_bound, Alarms.Lower_bound), exp.eloc) lower_underflow
+      else add_assumption lower_underflow
+
+    (** [binop_with_overflow_guard exp ~small_size ~wide_size binop v1 v2]
+        returns [binop ~size:small_size v1 v2], but first it ensures that no
+        overflow occurs by computing [binop ~size:wide_size v1 v2] and checking
+        that it fits on [~small_size] bits.
+
+        @param ~small_size should be the size of terms [v1] and [v2]
+        @param ~wide_size should be large enough to ensure that
+               [binop ~size:wide_size v1 v2] does not overflow
+        @param exp is the full Cil expression (i.e. [exp.enode = BinOp(binop, v1, v2)])
+               It is used for error reporting when creating overflow alarms. *)
+    let binop_with_overflow_guard exp ~small_size ~wide_size binop v1 v2 =
+      let* v1_wide = Binary_Forward.bsext ~size:wide_size ~oldsize:small_size v1 in
+      let* v2_wide = Binary_Forward.bsext ~size:wide_size ~oldsize:small_size v2 in
+      let* full_op = binop ~size:wide_size v1_wide v2_wide in
+      let* () = assert_no_signed_overflow exp ~small_size ~wide_size full_op in
+      binop ~size:small_size v1 v2
+
+    (** Same as {!binop_with_overflow_guard}, but for a unary operator *)
+    let unop_with_overflow_guard exp ~small_size ~wide_size unop v =
+      let* v_wide = Binary_Forward.bsext ~size:wide_size ~oldsize:small_size v in
+      let* full_op = unop ~size:wide_size v_wide in
+      let* () = assert_no_signed_overflow exp ~small_size ~wide_size full_op in
+      unop ~size:small_size v
 
     let rec expression' exp =
       let exp_size = Cil.(bitsSizeOf (typeOf exp)) in
@@ -736,7 +912,7 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
           (if Cil.typeHasQualifier "volatile" @@ Cil.typeOfLval lv
            then binary_unknown ~size
            else State_Monad.load ~size address)
-        in 
+        in
         begin match loc.bitfield with
           | None -> return v
           | Some {bit_offset;bit_size} ->
@@ -747,7 +923,7 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
             in
             if bit_size == exp_size then return res
             else let op = match Cil.unrollType @@ Cil.typeOf exp with
-                | TInt(ikind,_) -> if Cil.isSigned ikind then Binary_Forward.bsext ~oldsize:bit_size else Binary_Forward.buext ~oldsize:bit_size 
+                | TInt(ikind,_) -> if Cil.isSigned ikind then Binary_Forward.bsext ~oldsize:bit_size else Binary_Forward.buext ~oldsize:bit_size
                 | _ -> assert false in
               op ~size:exp_size res
         end
@@ -757,15 +933,18 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
       (* Most of the time this allows to merge indice 0 with the others
          in our abstract domain for offsets. *)
       | StartOf lv ->
-        let* loc = lvalue lv in 
+        let* loc = lvalue lv in
         let* zero = Binary_Forward.biconst Z.zero ~size:ptr_bit_size in
-        let (TArray(t,_,_)) = Cil.unrollType @@ Cil.typeOfLval lv in
-        Binary_Forward.bindex ~size:ptr_bit_size (Cil.bytesSizeOf t) loc.address zero
-      | BinOp(bop, e1, e2, _) -> binop exp_size bop e1 e2
-      | UnOp(uop, e1, _) -> unop exp_size uop e1
+        begin
+          match Cil.unrollType @@ Cil.typeOfLval lv with
+          | (TArray(t,_,_)) -> Binary_Forward.bindex ~size:ptr_bit_size (Cil.bytesSizeOf t) loc.address zero
+          | _ -> assert false
+        end
+      | BinOp(bop, e1, e2, _) -> binop exp exp_size bop e1 e2
+      | UnOp(uop, e1, _) -> unop exp exp_size uop e1
       | SizeOf(typ) -> Binary_Forward.biconst ~size:exp_size (Z.of_int (Cil.bytesSizeOf typ))
-      | SizeOfE(exp) -> 
-        Binary_Forward.biconst ~size:exp_size (Z.of_int (Cil.bytesSizeOf (Cil.typeOf exp))) 
+      | SizeOfE(exp) ->
+        Binary_Forward.biconst ~size:exp_size (Z.of_int (Cil.bytesSizeOf (Cil.typeOf exp)))
       | CastE(to_typ,subexp) ->
         let from_typ = Cil.typeOf subexp in
         let* subexp = expression subexp in
@@ -789,13 +968,13 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
          | (TPtr _ | TArray _) , (TPtr _ | TArray _) -> return subexp
          | (TInt _ | TEnum _ | TPtr _), (TInt _ | TEnum _ | TPtr _)
            when Cil.bitsSizeOf from_typ == Cil.bitsSizeOf to_typ -> return subexp
-         | _, _ -> Kernel.fatal "cast not handled: from %a to %a (sizes: %d and %d)" 
+         | _, _ -> Kernel.fatal "cast not handled: from %a to %a (sizes: %d and %d)"
                      Cil_datatype.Typ.pretty from_typ Cil_datatype.Typ.pretty to_typ
                      (Cil.bitsSizeOf from_typ) (Cil.bitsSizeOf to_typ))
       | _ -> Kernel.fatal "Expression not implemented: %a" Cil_datatype.Exp.pretty exp
 
     and expression: Cil_types.exp -> Domain.binary m = fun exp ->
-      State_Monad.tracem_bin ~size:Cil.(bitsSizeOf (typeOf exp)) 
+      State_Monad.tracem_bin ~size:Cil.(bitsSizeOf (typeOf exp)) ~loc:(Codex_options.Location.Expression exp)
         (fun p -> p "Expression %a" Cil_datatype.Exp.pretty exp)  @@
       let* result = expression' exp in
       let* () = register_expression exp result in
@@ -810,7 +989,7 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
         | TNamed _ -> assert false
         | TVoid _ -> assert false
         | TComp _ -> assert false
-        | TBuiltin_va_list _ -> assert false                  
+        | TBuiltin_va_list _ -> assert false
       in
       let size = Cil.bitsSizeOf typ in
       let open Cil_types in
@@ -828,7 +1007,7 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
       | _ -> assert false
 
 
-    and binop exp_size bop e1 e2 =
+    and binop exp exp_size bop e1 e2 =
       let open Cil_types in
       let* v1 = expression e1 in
       let* v2 = expression e2 in
@@ -854,10 +1033,31 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
           binary_unknown ~size:exp_size
 
         (* Arithmetical operations. *)
-        | PlusA -> Binary_Forward.biadd ~size:exp_size ~nsw ~nuw ~nusw v1 v2
-        | MinusA -> Binary_Forward.bisub ~size:exp_size ~nsw ~nuw ~nusw v1 v2
-        | Mult -> Binary_Forward.bimul ~size:exp_size ~nsw ~nuw v1 v2
-        | Div | Mod -> 
+        | PlusA ->
+          if nsw then
+            (* if a and b fit on n bits, then a+b will always fit on n+1 bit *)
+            binop_with_overflow_guard
+              exp ~small_size:exp_size ~wide_size:(exp_size+1)
+              (Binary_Forward.biadd ~nsw ~nuw ~nusw) v1 v2
+          else
+            Binary_Forward.biadd ~size:exp_size ~nsw ~nuw ~nusw v1 v2
+        | MinusA ->
+          if nsw then
+            (* if a and b fit on n bits, then a+b will always fit on n+1 bit *)
+            binop_with_overflow_guard
+              exp ~small_size:exp_size ~wide_size:(exp_size+1)
+              (Binary_Forward.bisub ~nsw ~nuw ~nusw) v1 v2
+          else
+            Binary_Forward.bisub ~size:exp_size ~nsw ~nuw ~nusw v1 v2
+        | Mult ->
+          if nsw && false then (* TODO: activate this overflow assertion and migrate tests *)
+            (* if a and b fit on n bits, then a*b will always fit on 2*n bit *)
+            binop_with_overflow_guard
+              exp ~small_size:exp_size ~wide_size:(2*exp_size)
+              (Binary_Forward.bimul ~nsw ~nuw) v1 v2
+          else
+            Binary_Forward.bimul ~size:exp_size ~nsw ~nuw v1 v2
+        | Div | Mod ->
           let* zero = Binary_Forward.biconst ~size:exp_size Z.zero in
           let* bool = Binary_Forward.beq ~size:(exp_size) zero v2  in
           let* bool = Boolean_Forward.not bool in
@@ -889,8 +1089,18 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
           let* v2 = cast_size ~sext:false ~from_size ~to_size:exp_size v2 in
           (match (Cil.isSignedInteger typ,op) with
            (* Note: the behaviour of shifting negative values is actually unspecified. *)
-           | (true,Shiftlt) ->  Binary_Forward.bshl ~size:exp_size ~nsw ~nuw v1 v2
-           | (true,Shiftrt) ->  Binary_Forward.bashr ~size:exp_size v1 v2
+           | (true,Shiftlt) ->
+                if false (* TODO: activate this overflow assertion and migrate tests *)
+                then binop_with_overflow_guard
+                       exp ~small_size:exp_size ~wide_size:(2*exp_size)
+                       (Binary_Forward.bshl ~nsw ~nuw) v1 v2
+                else Binary_Forward.bshl ~size:exp_size ~nsw ~nuw v1 v2
+           | (true,Shiftrt) ->
+                if false (* TODO: activate this overflow assertion and migrate tests *)
+                then binop_with_overflow_guard
+                       exp ~small_size:exp_size ~wide_size:(2*exp_size)
+                       Binary_Forward.bashr v1 v2
+                else Binary_Forward.bashr ~size:exp_size v1 v2
            | (false,Shiftlt) -> Binary_Forward.bshl ~size:exp_size ~nsw ~nuw v1 v2
            | (false,Shiftrt) -> Binary_Forward.blshr ~size:exp_size v1 v2
            | _ -> assert false
@@ -906,7 +1116,7 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
           let k = Cil.(bytesSizeOf (typeOf_pointed (typeOf e1))) in
           let index_size = Cil.bitsSizeOf typ_e2 in
           let sext = (Cil.isSignedInteger typ_e2) in
-          let* off = cast_size ~sext ~from_size:index_size ~to_size:ptr_bit_size v2 in          
+          let* off = cast_size ~sext ~from_size:index_size ~to_size:ptr_bit_size v2 in
           Binary_Forward.bindex ~size:ptr_bit_size k v1 off
         | MinusPI ->
           let k = Cil.(bytesSizeOf (typeOf_pointed (typeOf e1))) in
@@ -925,12 +1135,14 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
         (* Boolean specials. *)
         | LAnd | LOr -> assert false
 
-    and unop exp_size uop e1 =
+    and unop exp exp_size uop e1 =
       match uop with
       | Neg ->
         let* v1 = expression e1 in
-        let* zero = Binary_Forward.biconst ~size:exp_size Z.zero in
-        Binary_Forward.bisub ~size:exp_size ~nsw:true ~nuw:false ~nusw:false zero v1
+        let unop ~size v =
+          let* zero = Binary_Forward.biconst ~size Z.zero in
+          Binary_Forward.bisub ~size ~nsw:true ~nuw:false ~nusw:false zero v in
+        unop_with_overflow_guard exp ~small_size:exp_size ~wide_size:(exp_size+1) unop v1
       | LNot ->
         let* (v1:Domain.boolean) = cond_node e1 in
         let* notv1 = Boolean_Forward.not v1 in
@@ -948,16 +1160,83 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
            with Not_found -> Codex_log.fatal "Could not find %a" Cil_datatype.Varinfo.pretty var)
         | Mem exp -> expression exp
 
+    (* loffset specifically for (unsized) flexible array members *)
+    and loffset_array typ (v:Domain.binary) offs =
+      Log.debug (fun p -> p "Evaluation loffset_array with typ : %a and v : %a and off : %a"
+        Cil_types_debug.pp_typ typ
+        Domain.Binary.pretty v
+        Cil_types_debug.pp_offset offs);
+      let open Cil_types in
+      (* Note: max should be None for C99 flexible array members. But even then, pointer arithmetics
+         cannot go before the array. *)
+      let do_field fi ~byte_offset ~byte_size remaining_offset =
+        let* v = Binary_Forward.bshift
+            ~size:ptr_bit_size ~offset:byte_offset ~max:None v in
+        loffset fi.ftype v remaining_offset
+      in
+
+      match offs with
+      | NoOffset -> assert false
+      | Field(fi,NoOffset) when fi.fbitfield <> None -> assert false
+
+      (* Cannot be a bitfield. *)
+      | Field(fi,offs) -> begin
+          let (bit_offset,bit_size) = Cil.bitsOffset typ (Field(fi,NoOffset)) in
+          assert(bit_offset mod 8 == 0);
+          assert(bit_size mod 8 == 0);
+          do_field fi ~byte_offset:(bit_offset / 8) ~byte_size:(bit_size / 8) offs
+        end
+
+      | Index(exp,offs) ->
+        let pointed_typ = Cil.typeOf_array_elem typ in
+        let* off = expression exp in
+        let typ_exp = Cil.typeOf exp in
+        let size = Cil.(bitsSizeOf typ_exp) in
+        let k = Cil.bytesSizeOf pointed_typ in
+        let* off = cast_size ~sext:(Cil.isSignedInteger typ_exp)
+          ~from_size:size ~to_size:ptr_bit_size off in
+        let next = fun () ->
+          let* v = Binary_Forward.bindex ~size:ptr_bit_size k v off in
+          loffset pointed_typ v offs
+        in
+
+        (* This is to help the analysis. We already have \valid, but
+           these stricter conditions help reduce the abstract state. *)
+        (match Cil.unrollType typ with
+         | TArray(_elt_typ,length,_) -> begin
+             match length, Kernel.SafeArrays.get() with
+             | Some length, true ->
+               let alarm1 = Alarms.Index_out_of_bound(exp,None) in
+               let alarm2 = Alarms.Index_out_of_bound(exp,Some length) in
+               let length = z_of_integer @@
+                 match (Cil.constFoldToInt ~machdep:true length)
+                 with None -> assert false | Some x -> x in
+               let* zero = Binary_Forward.biconst ~size:ptr_bit_size Z.zero in
+               let* boolean1 = Binary_Forward.bisle ~size:ptr_bit_size zero off in
+               let* () = register_alarm (alarm1,exp.eloc) boolean1 in
+               let* bound = Binary_Forward.biconst ~size:ptr_bit_size length in
+               let* boolean2 = Binary_Forward.bisle ~size:ptr_bit_size bound off in
+               let* boolean2 = Boolean_Forward.not boolean2 in
+               let* () = register_alarm (alarm2,exp.eloc) boolean2 in
+               next ()
+             | _ -> next ()
+           end
+         | TPtr _ -> assert false
+         | _ -> assert false
+        );
+
+
     (* TODO: On renvoie (addresse,taille de la lvalue en bits,offset en bits,taille en bits) *)
     and loffset typ (v:Domain.binary) offs =
       let open Cil_types in
+      try
       let size =
         try Cil.bitsSizeOf typ
         with Cil.SizeOfError _ ->
         match Cil.unrollType typ with
         | TFun _ ->
           Codex_config.function_size()
-        | TArray(_,None,_) -> assert false
+        | TArray(_,None,_) -> raise Flexible_array_members
         | _ -> assert false
       in
       (* Note: max should be None for C99 flexible array members. But even then, pointer arithmetics
@@ -1005,7 +1284,7 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
              | Some length, true ->
                let alarm1 = Alarms.Index_out_of_bound(exp,None) in
                let alarm2 = Alarms.Index_out_of_bound(exp,Some length) in
-               let length = z_of_integer @@ 
+               let length = z_of_integer @@
                  match (Cil.constFoldToInt ~machdep:true length)
                  with None -> assert false | Some x -> x in
                let* zero = Binary_Forward.biconst ~size:ptr_bit_size Z.zero in
@@ -1020,7 +1299,8 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
            end
          | TPtr _ -> assert false
          | _ -> assert false
-        );
+        )
+      with Flexible_array_members -> loffset_array typ v offs
 
     and lvalue' (host,offs) =
       let* v = lhost host in
@@ -1052,8 +1332,8 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
         return res
 
       | CastE(to_typ,e) when Cil.isIntegralType @@ Cil.unrollType to_typ -> cond_node' e
-    
-      | _ -> 
+
+      | _ ->
 
         (* The conversion to boolean depends on the static type of e. In
            every case we compare against 0, but 0 means "null pointer" for
@@ -1068,10 +1348,10 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
           let* eqzero = Binary_Forward.beq ~size cond izero in
           Boolean_Forward.not eqzero
         | _ -> Codex_options.fatal "Not yet implemented cond_node %a" Cil_datatype.Exp.pretty e
-                 
+
     and cond_node e =
       State_Monad.tracem_bool (fun p -> p "Condition node %a" Cil_datatype.Exp.pretty e) (cond_node' e)
-                 
+
   end
 
   open Expression.State_Monad
@@ -1084,7 +1364,7 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
       if bit_size == newvsize then newv
       else Domain.Binary_Forward.bextract ~oldsize:newvsize ~index:0 ~size:bit_size ctx newv
     in
-    let previous = 
+    let previous =
       (if bit_offset == 0 then newv
        else
          let prev = Domain.Binary_Forward.bextract ~oldsize ~index:0 ~size:bit_offset ctx old in
@@ -1095,13 +1375,16 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
     if end_index == oldsize
     then previous
     else
-      let next = 
-        Domain.Binary_Forward.bextract ~oldsize ~index:end_index ~size:(oldsize - end_index) ctx old 
+      let next =
+        Domain.Binary_Forward.bextract ~oldsize ~index:end_index ~size:(oldsize - end_index) ctx old
       in
       (* Kernel.feedback "concat2 term %a size2 %d" Term.pretty (Obj.magic previous) end_index; *)
       Domain.Binary_Forward.bconcat ~size1:(oldsize - end_index) ~size2:end_index ctx next previous
   ;;
 
+
+  module AddrSet = Set.Make(Domain.Binary) ;;
+  let local_addresses = ref AddrSet.empty ;;
 
   (* Note: could be in the monad, as a unit m. *)
   let store_lvalue ~instr_loc lv newv newvsize state =
@@ -1112,23 +1395,41 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
          then return ()
          else
            let* valid = Binary_Forward.valid ~size:loc.size Transfer_functions.Write loc.address in
-           register_alarm (Alarms.Memory_access(lv,Alarms.For_writing),instr_loc) valid 
+           register_alarm (Alarms.Memory_access(lv,Alarms.For_writing),instr_loc) valid
   in
        return loc)
     with
     | None -> None
     | Some(loc,state) -> begin
+        if !exploring_pure_function then begin
+          (* Codex_log.check "impure_store" ; *)
+          Log.debug (fun p -> p "Checking if lval %a causes impure store" Cil_types_debug.pp_lval lv);
+          match lv with
+          | Var var, NoOffset when not var.vglob -> ()
+          | Mem {enode=Lval (Var var, _)} as base, _ ->
+            let addr = (try VarMap.find var state.var_addresses with Not_found -> Codex_log.fatal "Could not find %a" Cil_datatype.Varinfo.pretty var) in
+            (* let addr = return @@ run state @@ Expression.lhost base in *)
+            let ptrsize = Codex_config.ptr_size() in
+            let ptr,_ = Domain.Memory_Forward.load ~size:ptrsize state.context.ctx state.mem addr in
+            if AddrSet.mem ptr !local_addresses then ()
+            else
+              Codex_log.alarm "impure_store" ;
+              Codex_log.error "Store on expression lhost %a is impure" Cil_types_debug.pp_lhost base ;
+          | _ ->
+              Codex_log.alarm "impure_store" ;
+              Codex_log.error "Store on expression %a is impure" Cil_types_debug.pp_lval lv ;
+        end ;
         let ctx = state.context.ctx in
         match loc.bitfield with
         | None -> begin
             match Domain.Memory_Forward.store ~size:loc.size ctx (state.mem) loc.address newv with
             | exception Domains.Memory_sig.Memory_Empty -> None
-            | mem -> 
+            | mem ->
               (* Kernel.feedback "store at location %a made on term %a" pp_location instr_loc L.Memory.pp (the_mem state); *)
               Some {state with mem}
           end
         | Some bitfield ->
-          (* MAYBE: optimize the case bitfield.bit_offset mod 8 == 0 && bitfield.bit_size mod 8 == 0:  *) 
+          (* MAYBE: optimize the case bitfield.bit_offset mod 8 == 0 && bitfield.bit_size mod 8 == 0:  *)
           let mem = state.mem in
           let oldv,mem = Domain.Memory_Forward.load  ~size:loc.size ctx mem loc.address in
           let tostore = bitfield_replace ctx oldv loc.size bitfield newv newvsize in
@@ -1157,7 +1458,7 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
             let mem = Domain.Memory_Forward.store ~size ctx state.mem address.address value in
             Some {state with mem }
         end
-      | CompoundInit(ct,initl) -> 
+      | CompoundInit(ct,initl) ->
         let doinit off init typ state =
           match state with
           | None -> None
@@ -1174,7 +1475,7 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
   ;;
 
 
-  
+
   module Builtin = struct
 
     let show_each ret f args instr_loc state =
@@ -1188,7 +1489,7 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
           acc >>= fun acc ->
           let size = Cil.(bitsSizeOf (typeOf arg)) in
           Expression.expression arg >>= fun arg ->
-          return ((size,arg)::acc)) (return []) args 
+          return ((size,arg)::acc)) (return []) args
       in
       match m with
       | None -> None
@@ -1220,7 +1521,7 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
         end
     ;;
 
-    let verifier_assume ret _f args instr_loc state =    
+    let verifier_assume ret _f args instr_loc state =
       let arg = match args with | [arg] -> arg | _ -> assert false in
       match run state @@ Expression.cond_node arg with
       | None -> None
@@ -1237,7 +1538,7 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
           Some state
 
     (* Note: called assert, but it most like a check: the state is unmodified. *)
-    let verifier_assert ret _f args instr_loc state =    
+    let verifier_assert ret _f args instr_loc state =
       let arg = match args with | [arg] -> arg | _ -> assert false in
       match run state @@ Expression.cond_node arg with
       | None -> None
@@ -1248,22 +1549,22 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
         | None -> None
         | Some ctx -> Some {state with context = { state.context with ctx }}
 
-    let verifier_check ret _f args instr_loc state =    
+    let verifier_check ret _f args instr_loc state =
       let arg = match args with | [arg] -> arg | _ -> assert false in
       match run state @@ Expression.cond_node arg with
       | None -> None
-      | Some (arg,state) -> 
+      | Some (arg,state) ->
         Assertion_Table.register_assertion instr_loc arg state ;
         Some state
 
-    
-    let verifier_error ret _f args instr_loc state =    
+
+    let verifier_error ret _f args instr_loc state =
       assert(args = []);
       Assertion_Table.register_reachability_check instr_loc state;
       None
 
 
-    let verifier_nondet_int ret _f args instr_loc state =    
+    let verifier_nondet_int ret _f args instr_loc state =
       assert(args = []);
       let ctx = state.context.ctx in
       let level = Domain.Context.level ctx in
@@ -1276,7 +1577,7 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
         state
     ;;
 
-    
+
     let free ret f args instr_loc state =
       let arg = match args with
         | [x] -> x
@@ -1284,28 +1585,38 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
       in
       match run state @@ Expression.expression arg with
       | None -> None
-      | Some (arg,state) -> 
+      | Some (arg,state) ->
         let mem = Domain.Memory_Forward.free state.context.ctx state.mem arg in
         Some {state with mem}
     ;;
 
-    
+
     let malloc ret _f args instr_loc state =
-      let module Ctypes = Codex.Types.Ctypes in      
+      let module Ctypes = Codex.Types.Ctypes in
       (* let open Lang.Memory in *)
       let sizeexp = match args with
         | [x] -> x
         | _ -> failwith "Wrong number arguments to malloc"
       in
-      let malloc_size = match Cil.constFoldToInt ~machdep:true sizeexp with
+      let malloc_size,state = match run state @@ Expression.expression sizeexp with
+        | None -> failwith "Size of malloc gives <bottom>"
+        | Some res -> res
+      in
+      (* let malloc_size = match Cil.constFoldToInt ~machdep:true sizeexp with
         | Some size -> Z.to_int size
         | None -> assert false
-      in
+      in *)
       (* Does the lvalue has a type that we want to treat specially? (Here we
          only support variable lvalues.) *)
       (* Really do the malloc. *)
+      let size = Codex_config.ptr_size () in
       let untyped () =
         Codex_options.feedback "malloc: default case";
+        let malloc_size =
+          match Domain.Query.(binary_is_singleton ~size @@ binary ~size state.context.ctx malloc_size) with
+          | None -> assert false
+          | Some sz -> Z.to_int sz
+        in
         let sid = match state.context.kinstr with Kglobal -> assert false | Kstmt stmt -> stmt.sid in
         let id = Codex.Transfer_functions.Malloc_id.fresh ("malloc" ^ string_of_int sid) in
         let ptr,mem = Domain.Memory_Forward.malloc ~id ~malloc_size state.context.ctx state.mem in
@@ -1320,28 +1631,85 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
       let state = match ret with
         (* We replace malloc by a "pure malloc" + storing an uninitialized value. *)
         | Some lval when Codex_config.handle_malloc_as_unknown_typed_pointers() ->
-          let vtype = Cil.typeOfLval lval in
-          let mytype = Compile_type.cil_type_to_ctype vtype in
-          Codex_options.feedback "malloc: typed case with type %a at loc %a" Cil_types_debug.pp_typ vtype Cil_types_debug.pp_location instr_loc;
-          let mytype = match mytype.Ctypes.descr, mytype.Ctypes.pred with
-            | Ctypes.(Ptr _, pred) -> {mytype with Ctypes.pred = Ctypes.Pred.conjunction pred @@ Ctypes.Pred.(neq (Const Z.zero))}                                           
-            | _ -> assert false
-          in
-          let level = state.context.loop_nesting_level in
-          let ptr = Domain.binary_unknown_typed ~size:32 state.context.ctx mytype in
-          let z = Domain.Binary_Forward.(beq ~size:32 state.context.ctx ptr (biconst ~size:32 Z.zero state.context.ctx)) in
-          let nz = Domain.Boolean_Forward.not state.context.ctx z in
-          match Domain.assume state.context.ctx nz with
-          | None -> None
-          | Some newctx ->
-            let state = {state with context = {state.context with ctx = newctx}} in
-          begin match store_lvalue ~instr_loc lval ptr malloc_size state with
-            | None -> None
-            | Some state -> 
-              let init_val = Domain.Binary_Forward.buninit ~size:(8*malloc_size) state.context.ctx in
-              let mem = 
-                Domain.Memory_Forward.store ~size:(8*malloc_size) state.context.ctx state.mem ptr init_val in
-              Some {state with mem}
+          begin
+            match Domain.Query.(binary_is_singleton ~size @@ binary ~size state.context.ctx malloc_size) with
+            | Some sz ->
+              let malloc_size = Z.to_int sz in
+              if not @@ Codex_options.UseWeakTypes.get() then
+                let vtype = Cil.typeOfLval lval in
+                let mytype = Compile_type.cil_type_to_ctype vtype in
+                Codex_options.feedback "malloc: typed case with type %a at loc %a" Cil_types_debug.pp_typ vtype Cil_types_debug.pp_location instr_loc;
+                let mytype = match mytype.Ctypes.descr, mytype.Ctypes.pred with
+                  | Ctypes.(Ptr _, pred) -> {mytype with Ctypes.pred = Ctypes.Pred.conjunction pred @@ Ctypes.Pred.(neq (Const Z.zero))}
+                  | _ -> assert false
+                in
+                let level = state.context.loop_nesting_level in
+                let ptr = Domain.binary_unknown_typed ~size:32 state.context.ctx mytype in
+                let z = Domain.Binary_Forward.(beq ~size:32 state.context.ctx ptr (biconst ~size:32 Z.zero state.context.ctx)) in
+                let nz = Domain.Boolean_Forward.not state.context.ctx z in
+                local_addresses := AddrSet.add ptr !local_addresses ;
+                match Domain.assume state.context.ctx nz with
+                | None -> None
+                | Some newctx ->
+                  let state = {state with context = {state.context with ctx = newctx}} in
+                begin match store_lvalue ~instr_loc lval ptr malloc_size state with
+                  | None -> None
+                  | Some state ->
+                    let init_val = Domain.Binary_Forward.buninit ~size:(8*malloc_size) state.context.ctx in
+                    begin
+                      match Domain.Memory_Forward.store ~size:(8*malloc_size) state.context.ctx state.mem ptr init_val with 
+                      | exception Domains.Memory_sig.Memory_Empty -> None
+                      | mem -> Some {state with mem}
+                    end
+                end
+              else
+                (* Codex_log.debug "size of malloc is %d" malloc_size ; *)
+                let weak_type = Ctypes.{descr = Weak (Ctypes.word ~byte_size:malloc_size); pred = Pred.True} in
+                let mytype = Ctypes.{descr = Ptr {pointed = weak_type; index=Zero}; pred = Ctypes.Pred.(neq (Const Z.zero))} in
+                Log.debug (fun p -> p "Allocating type %a of size %d with malloc" Ctypes.pp mytype malloc_size);
+                let level = state.context.loop_nesting_level in
+                let ptr_size = Codex_config.ptr_size () in
+                let ptr = Domain.binary_unknown_typed ~size:ptr_size state.context.ctx mytype in
+                let z = Domain.Binary_Forward.(beq ~size:ptr_size state.context.ctx ptr (biconst ~size:ptr_size Z.zero state.context.ctx)) in
+                let nz = Domain.Boolean_Forward.not state.context.ctx z in
+                local_addresses := AddrSet.add ptr !local_addresses ;
+                begin
+                  match Domain.assume state.context.ctx nz with
+                  | None -> None
+                  | Some newctx ->
+                    let state = {state with context = {state.context with ctx = newctx}} in
+                    begin match store_lvalue ~instr_loc lval ptr malloc_size state with
+                      | None -> None
+                      | Some state ->
+                        let init_val = Domain.Binary_Forward.buninit ~size:(8 * malloc_size) state.context.ctx in
+                        begin
+                          match Domain.Memory_Forward.store ~size:(8 * malloc_size) state.context.ctx state.mem ptr init_val with 
+                          | exception Domains.Memory_sig.Memory_Empty -> None
+                          | mem -> Some {state with mem}
+                        end
+                    end
+                end
+
+            | None ->
+              let sz_symb = fresh_symbol () in
+              Domain.add_global_symbol ~size state.context.ctx sz_symb malloc_size ;
+              let array_type = Ctypes.{descr = Array (word ~byte_size:1, Some (Sym sz_symb)) ; pred = Pred.True} in
+              let weak_type = Ctypes.{descr = Weak array_type; pred = Pred.True} in
+              let mytype = Ctypes.{descr = Ptr {pointed = weak_type; index=Zero}; pred = Ctypes.Pred.(neq (Const Z.zero))} in
+              Log.debug (fun p -> p "Allocating array type %a of size %a with malloc" Ctypes.pp mytype (Domain.binary_pretty ~size state.context.ctx) malloc_size);
+              let level = state.context.loop_nesting_level in
+              let ptr_size = Codex_config.ptr_size () in
+              let ptr = Domain.binary_unknown_typed ~size:ptr_size state.context.ctx mytype in
+              let z = Domain.Binary_Forward.(beq ~size:ptr_size state.context.ctx ptr (biconst ~size:ptr_size Z.zero state.context.ctx)) in
+              let nz = Domain.Boolean_Forward.not state.context.ctx z in
+              local_addresses := AddrSet.add ptr !local_addresses ;
+              begin
+                match Domain.assume state.context.ctx nz with
+                | None -> None
+                | Some newctx ->
+                  let state = {state with context = {state.context with ctx = newctx}} in
+                  store_lvalue ~instr_loc lval ptr size state
+              end
           end
         | _ -> untyped ()
       in
@@ -1349,9 +1717,9 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
     ;;
 
 
-    
+
   end
-  
+
 
 
   (* TODO: Define an alist of builtins instead. *)
@@ -1376,7 +1744,7 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
       | "__VERIFIER_error" -> Builtin.verifier_error ret f args instr_loc state
       | "__VERIFIER_nondet_int" -> Builtin.verifier_nondet_int ret f args instr_loc state
       | "malloc" -> Builtin.malloc ret f args instr_loc state
-      | "free" -> Builtin.free ret f args instr_loc state                                                      
+      | "free" -> Builtin.free ret f args instr_loc state
       | _ -> Codex_log.fatal "Need to handle builtin %s" f.Cil_types.vname
   ;;
 
@@ -1395,24 +1763,45 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
        store_lvalue ~instr_loc lv value size state)
   ;;
 
-  type funcall = 
+  type funcall =
     Kernel_function.t -> (int * Domain.binary) list -> state ->
-    (int * Domain.binary) option * state option  
+    (int * Domain.binary) option * state option
 
-  (* Known definition. *)  
+  (* Known definition. *)
   let call_known ~funcall state ret f args instr_loc =
     let kf = Globals.Functions.get f in
     let retval,state = funcall kf args state in
     match state,ret,retval with
     | None, _, _ -> None
     | Some state, None,_ -> Some state
-    | Some _, Some _, None -> 
+    | Some _, Some _, None ->
       Codex_log.fatal "Expected a return value, but the function does not return one."
     | Some state, Some lvalue, Some (retsize,retval) ->
       let expected_size = (Cil.bitsSizeOf (Cil.getReturnType f.Cil_types.vtype)) in
       assert(retsize == expected_size);
       store_lvalue ~instr_loc lvalue retval retsize state
   ;;
+
+  let return_called rtyp state ret retval instr_loc =
+    match state, ret, retval with
+    | None, _, _ -> None
+    | Some state, None, _ -> Some state
+    | Some _, Some _, None ->
+      Codex_log.fatal "Expected a return value, but the function does not return one."
+    | Some state, Some lvalue, Some (retsize,retval) ->
+      let expected_size = 8 * Types.Ctypes.sizeof rtyp in
+      assert(retsize == expected_size);
+      store_lvalue ~instr_loc lvalue retval retsize state
+
+  (* Procedures to analyze functions interproceduraly *)
+
+  let check_argument_types ctx typs args =
+    not @@ List.exists2 (fun typ (sz,arg) -> not @@ Domain.has_type ~size:sz ctx typ arg) typs args
+
+  let analyze_summary funtyp args state =
+    let _, ret, mem = Domain.analyze_summary state.context.ctx funtyp args state.mem in
+    ret, {state with mem}
+
 
   (* Handle the call instruction for non builtins. *)
   let call ~funcall ret lhost args instr_loc state =
@@ -1428,14 +1817,30 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
     | None -> None
     | Some (args,state) -> begin
         let args = List.rev args in
-        let f = match lhost with
-          | Cil_types.Var f -> f
-          | _ -> assert false        (* TODO: enumerate. *)
-        in
-        let kf = Globals.Functions.get f in
-        if not (Kernel_function.is_definition (Globals.Functions.get f))
-        then call_to_unknown state ret f args instr_loc
-        else call_known ~funcall state ret f args instr_loc
+        match run state @@ Expression.lhost lhost with
+        | None -> assert false
+        | Some(loaded,state) ->
+          let typ = Domain.type_of ~size:(Codex_config.ptr_size()) state.context.ctx loaded in
+          begin match typ with
+            (* If there is a type: use it as a summary. *)
+            | Some {descr = Ptr {pointed = {descr = (Function {ret = rtyp})} as funtyp}} ->
+              Log.debug (fun p -> p "Calling function summary from typed pointer %a" (Domain.binary_pretty ~size:32 state.context.ctx) loaded);
+              let retval, state = analyze_summary funtyp args state in
+              let retval, state, rtyp =  retval, Some state, rtyp in
+              return_called rtyp state ret retval instr_loc
+            (* Otherwise: call the function (if there is no definition, make up something. *)
+            | _ when Domain.is_function_pointer loaded ->
+              let f = Domain.get_pointed_function loaded in
+              let kf = Globals.Functions.get f in
+              Log.debug (fun p -> p "Calling function %a from untyped pointer" Kernel_function.pretty kf);
+              begin
+                if not (Kernel_function.is_definition kf)
+                then call_to_unknown state ret f args instr_loc
+                else call_known ~funcall state ret f args instr_loc
+              end
+            (* We could not retrieve the function from the value (e.g. join between function pointers). *)
+            | _ -> assert false
+          end
       end
   ;;
 
@@ -1444,13 +1849,13 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
     let funcall:funcall = funcall in
     match instr with
     | Skip _ -> Some state
-    | Asm _ -> 
+    | Asm _ ->
       Codex_options.warning "Skipping assembly instruction";
       Some state
     (* Optional optimisation. *)
     | Set(lvdst,({enode=Lval(lvsrc);_} as exp),instr_loc) when false ->
       let f (state:state) : ((compiled_lvalue * compiled_lvalue) * state) option =
-        let open Expression.State_Monad in 
+        let open Expression.State_Monad in
         run state @@
         (Expression.lvalue lvdst >>= fun ptrdst ->
         Expression.lvalue lvsrc >>= fun ptrsrc ->
@@ -1459,7 +1864,7 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
       let _size = (Cil.bitsSizeOf @@ Cil.typeOf exp) in
       begin match f state with
         | None -> None
-        | Some((ptrdst,ptrsrc),state) -> 
+        | Some((ptrdst,ptrsrc),state) ->
           let _addrdst = ptrdst.address and _addrsrc = ptrsrc.address in
           (* Does not work yet for memcopies in bitfields. *)
           assert (ptrdst.bitfield == None);
@@ -1471,15 +1876,15 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
        that the analysis would be faster (and more precise, as it
        would delay the copies) if we would just call memcpy here, but
        I do not have it for now. *)
-    (* Note: this is not an optimisation at all, and slows things down. 
+    (* Note: this is not an optimisation at all, and slows things down.
        I need to have memcpy instead. *)
-    | Set(lvdst,exp,instr_loc) 
+    | Set(lvdst,exp,instr_loc)
       when false && Cil.isStructOrUnionType @@ Cil.unrollType @@ Cil.typeOf exp ->
       let open Cil_types in
       let lvsrc = match exp.enode with Lval lv -> lv | _ -> assert false in
       let rec f lvdst lvsrc (state : state) : state option =
         let typ = Cil.unrollType @@ Cil.typeOfLval lvsrc in
-        Codex_log.feedback "Type of %a is %a" Cil_datatype.Lval.pretty lvsrc Cil_datatype.Typ.pretty typ;        
+        Codex_log.feedback "Type of %a is %a" Cil_datatype.Lval.pretty lvsrc Cil_datatype.Typ.pretty typ;
         if Cil.isArithmeticOrPointerType typ then
           match run state @@ (Expression.expression (Cil.dummy_exp @@  Lval lvsrc)) with
           | None -> None
@@ -1513,7 +1918,7 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
             let state = List.fold_left (fun state fi ->
                 match state with
                 | None -> None
-                | Some state -> 
+                | Some state ->
                   let lvsrc = Cil.addOffsetLval (Field(fi,NoOffset)) lvsrc in
                   let lvdst = Cil.addOffsetLval (Field(fi,NoOffset)) lvdst in
                   f lvdst lvsrc state
@@ -1536,12 +1941,12 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
     (* Note: we let the builtins compile the arguments as they wish
        (can be compiled as a boolean, to a constant...)  *)
     | Call(ret,{enode=Lval(Var f,NoOffset);_},args,instr_loc)
-        when is_builtin f.vname -> 
+        when is_builtin f.vname ->
         call_builtin ret f args instr_loc state
     | Local_init(ret,ConsInit(f,args,Plain_func),instr_loc)
       when is_builtin f.vname ->
       let ret = (Some (Var ret,NoOffset)) in
-        call_builtin ret f args instr_loc state      
+        call_builtin ret f args instr_loc state
 
     | Call(ret,{enode=Lval(lhost,NoOffset);_},args,instr_loc) ->
       call ~funcall ret lhost args instr_loc state
@@ -1558,51 +1963,71 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
       | None -> Format.fprintf fmt "<bottom>"
       | Some _ -> Format.fprintf fmt "some state"
     in
-  Log.trace (fun p -> p "Instruction %a" Cil_datatype.Instr.pretty instr) pp_ret (fun () -> 
-      instruction' ~funcall:funcall instr state)
+    Log.trace ~loc:(Codex_options.Location.Instruction instr)
+      (fun p -> p "Instruction %a" Cil_datatype.Instr.pretty instr) ~pp_ret
+      (fun () ->
+         instruction' ~funcall:funcall instr state)
   ;;
-  
+
+
+  type return_result =
+    | Return_fails
+    | Return_result of {return_state:state;return_value:(int * Domain.binary) option}
+
+    (* Returns either a state option (None = Bottom), or the result of
+       a return instruction (a state and possibly a value) *)
+  type ret_transition =
+    | State of state option
+    | Return of return_result
+
   let transition ~funcall:funcall transition state =
     (* Codex_log.feedback "Doing transition: state=%a" pretty_state state; *)
     let open Interpreted_automata in
     match transition with
-    | Skip -> Some state,None
-    | Return (None,_) -> Some state,None
+    | Skip -> State (Some state)
+    | Return (None,_) ->
+      Log.trace (fun p -> p "Instruction return;") (fun () ->
+          (Return (Return_result{return_state=state;return_value=None}):ret_transition))
     | Return (Some exp,_) ->
-      (* We evaluate in case the expression modifies the state. *)
-      begin match run state @@ Expression.expression exp with
-        | None -> None,None
-        | Some (value, state) -> Some state, Some (Cil.bitsSizeOf @@ Cil.typeOf exp, value)
-      end
+      Log.trace
+        (fun p -> p "Instruction return %a;" Cil_datatype.Exp.pretty exp)
+        (fun () ->
+           (* We evaluate in case the expression modifies the state. *)
+           begin match run state @@ Expression.expression exp with
+             | None -> (Return Return_fails:ret_transition)
+             | Some (value, state) ->
+               let return_value = Some(Cil.bitsSizeOf @@ Cil.typeOf exp, value) in
+               (Return (Return_result{return_state=state;return_value}))
+           end)
     (* Note: the evaluation of guards is done twice, but it is probably not a problem. *)
     | Guard (e,k,_) -> begin
         match run state @@ Expression.cond_node e with
-        | None -> None,None
+        | None -> State None
         | Some (bool,state) ->
           let ctx = state.context.ctx in
           let bool = match k with Then -> bool | Else -> Domain.Boolean_Forward.not ctx bool in
             let ctx = Domain.assume ctx bool in
             match ctx with
-            | None -> None, None
-            | Some ctx -> 
+            | None -> State None
+            | Some ctx ->
               let state = { state with context = { state.context with ctx } } in
-              Some state,None
+              State (Some state)
       end
     | Prop _ -> assert false
     | Instr (i,s) ->
       (* Codex_log.feedback "Doing instruction %a@." Cil_datatype.Instr.pretty i; *)
       let state' = instruction ~funcall s i state in
       begin match state' with
-        | None -> None,None
-        | Some state' -> 
+        | None -> State None
+        | Some state' ->
           (* Codex_log.feedback "After %a: mem=%a level=%d %d" *)
           (*   Cil_datatype.Instr.pretty i (Domain.memory_pretty state'.context.ctx) state'.mem state'.context.loop_nesting_level (Domain.Context.level state'.context.ctx); *)
-          Some(state'),None
+          State (Some(state'))
       end
-    | Enter b -> Some (block_entry state b),None
-    | Leave b -> Some (block_close state b),None
+    | Enter b -> State (Some (block_entry state b))
+    | Leave b -> State (Some (block_close state b))
   ;;
-  
+
 
   let cond_node exp state =
     Expression.State_Monad.run state @@ Expression.cond_node exp
@@ -1638,13 +2063,13 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
         let type_kf = function_of_name @@ Kernel_function.get_name kf in
         (*Codex_log.debug "%a" pp type_kf;*)
         let args = match type_kf.descr with
-        | Function (r, a) ->
+        | Function {args} ->
           List.map (fun t ->
           let size = sizeof t * 8 in
-          (size,Domain.binary_unknown_typed ctx ~size t)) a
+          (size,Domain.binary_unknown_typed ctx ~size t)) args
         | _ -> assert false
         in args
-      
+
       with Undefined_type a ->
         let formals = Kernel_function.get_formals kf in
         let args = formals |> List.map (fun vi ->
@@ -1654,6 +2079,39 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
         in args
     ;;
 
+    let rec compute_initial_function_args_ret funtyp ctx =
+      let open Types.Ctypes in
+      match funtyp.descr with
+      | Function {ret; args} ->
+        List.map (fun t ->
+          let size = sizeof t * 8 in
+          (size,Domain.binary_unknown_typed ctx ~size t)) args, ret
+      | Existential (ft, var, tvar) ->
+        let sz = 8 * sizeof tvar in
+        let res = Domain.binary_unknown_typed ~size:sz ctx tvar in
+        let symb = fresh_symbol () in
+        Domain.add_global_symbol ~size:sz ctx symb res ;
+        let newft = substitute_symbol ft var symb in
+        compute_initial_function_args_ret newft ctx
+
+      | _ -> assert false
+
+
+    let compute_initial_function_args_ret kf ctx =
+      let open Types.Ctypes in
+      try
+        let funtyp = function_of_name @@ Kernel_function.get_name kf in
+        compute_initial_function_args_ret funtyp ctx
+
+      with Undefined_type a ->
+        let rtyp = Compile_type.cil_type_to_ctype @@ Kernel_function.get_return_type kf in
+        let formals = Kernel_function.get_formals kf in
+        let args = formals |> List.map (fun vi ->
+          let size = Cil.bitsSizeOf vi.Cil_types.vtype in
+          let ctyp = Compile_type.cil_type_to_ctype vi.vtype in
+          (size,Domain.binary_unknown_typed ctx ~size ctyp))
+        in args, rtyp
+    ;;
 
 
     let initialize_strings strings_used state =
@@ -1665,7 +2123,7 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
           let to_store =
             let bitvector =
               (* big-endian representation of integers. *)
-              if false then 
+              if false then
                 let rec loop acc i =
                   if i < String.length str then
                     let char = String.get str i in
@@ -1673,7 +2131,7 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
                     let acc = Z.(lor) (Z.shift_left acc 8) (Z.of_int value) in
                     loop acc (i + 1)
                   else Z.shift_left acc 8 (* trailing zero *)
-                in loop Z.zero 0 
+                in loop Z.zero 0
               else
                 (* little-endian one. *)
                 let rec loop acc i =
@@ -1694,22 +2152,22 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
         ) strings_used state
     ;;
 
-    
+
 
     let initialize_function_ptrs functions_used state =
       (* TODO: This relies on the fact that size of functions is defined,
          which is not the case in MSVC. *)
       Cil_datatype.Varinfo.Set.fold (fun f state ->
-          allocate_var state f @@ Some (fun ~size -> 
+          allocate_var state f @@ Some (fun ~size ->
               Domain.binary_unknown ~size state.context.ctx)
         ) functions_used state
     ;;
 
-    
+
     (* Given a memory term, returns a memory term where the initial values
-       of global variables have been written. If libentry, only 
+       of global variables have been written. If libentry, only
        const variables are written.  *)
-    let initialize_global_variables ~libentry (state:state) globals_used = 
+    let initialize_global_variables ~libentry (state:state) globals_used =
       let module Memory = Domain.Memory_Forward in
       let module Binary = Domain.Binary_Forward in
       let open Cil_types in
@@ -1745,7 +2203,7 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
           (var.vstorage == Extern && not var.vdefined)
           (* We could be more precise here: if there is const somewhere in
              a subtype, then some part of the value may be known (e.g. in
-             a array of structs, some fields could be const). *)      
+             a array of structs, some fields could be const). *)
           || (libentry && not (is_const var.vtype)) in
         let {init} = Globals.Vars.find var in
         let init_unknown ~size = Domain.binary_unknown ~size state.context.ctx in
@@ -1799,7 +2257,7 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
             (* Note: as these should be constant expressions and
                lvalues, state should not change. But everything should
                still work if we were analyzing C++. *)
-            let m = 
+            let m =
               Expression.expression e >>= fun value ->
               (* TODO: maybe we should compile lvalue only once. *)
               Expression.lvalue lv >>= fun address ->
@@ -1814,7 +2272,7 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
                 let mem = Memory.store ~size (state.context.ctx) state.mem address.address value in
                 Some {state with mem}
             end
-          | Some state, CompoundInit(ct,initl) -> 
+          | Some state, CompoundInit(ct,initl) ->
             let doinit off init typ acc = doit (Cil.addOffsetLval off lv) init typ acc in
             (* Note: [implicit:true] handles incomplete initializers for us. *)
             Cil.foldLeftCompound
@@ -1829,7 +2287,7 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
 
     ;;
 
-    
+
 
   end
 
@@ -1843,9 +2301,20 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.With_focusing.S_
     let state = Initial_State.initialize_function_ptrs P.functions_used state in
     let state = Initial_State.initialize_strings P.strings_used state in
     let state = Initial_State.initialize_global_variables ~libentry:(Kernel.LibEntry.get()) state P.globals_used in
-    
+
     state,args
 
+  let initial_state_ret kf root =
+    let ctx = Initial_State.initial_ctx() in
+    let context = {ctx;calling_context=root;kinstr=Cil_types.Kglobal;loop_nesting_level=0} in
+    let state = Initial_State.initial_state context in
+    let args, rtyp = Initial_State.compute_initial_function_args_ret kf ctx in
 
-  
+    let module P = Globals_needed.Make(struct let main = kf end) in
+    let state = Initial_State.initialize_function_ptrs P.functions_used state in
+    let state = Initial_State.initialize_strings P.strings_used state in
+    let state = Initial_State.initialize_global_variables ~libentry:(Kernel.LibEntry.get()) state P.globals_used in
+
+    state,args,rtyp
+
 end

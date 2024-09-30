@@ -19,6 +19,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
+module Cil_types = Frama_c_kernel.Cil_types
+
 (* Iterate on all expressions, printing their location and what the
    function f outc (indent,ki,exp) returns, where indent is the
    indendation and (ki,exp) identifies the expression in its

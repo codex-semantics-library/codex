@@ -28,41 +28,45 @@
 (* MAYBE: put with_bottom here. This would handle the cases where we
    return memory_empty which is not catched first by an alarm. *)
 module Make
-    (Common:Memory_sig.Fixed_size_value_domain)
-    (Whole_Memory:Memory_sig.Memory
-     with module Address.Context = Common.Context
-      and module Value.Context = Common.Context
-      and type Value.binary = Common.binary
-      and type Address.binary = Common.binary
-      and type boolean = Common.boolean
+    (Value:Memory_sig.Fixed_size_value_domain)
+    (Block:Memory_sig.Block with module Value = Value)
+    (Memory:Memory_sig.Memory
+     with module Address.Context = Value.Context
+     and module Block.Value.Context = Value.Context
+     and type Block.Value.binary = Value.binary
+     and type Address.binary = Value.binary
+     and type boolean = Value.boolean
+     and type address = Value.binary
     )
   :sig
-    include Domain_sig.Base
-      with type binary = Whole_Memory.Value.binary
-      and type boolean = Whole_Memory.boolean
-      and module Context = Whole_Memory.Context
+    include Memory_sig.Base
+      with type binary = Value.binary
+      and type boolean = Value.boolean
+      and type block = Block.block
+      and module Context = Memory.Context
   end
 = struct
-  module Operable_Value = Common
+  module Operable_Value = Value
   include Operable_Value
 
 
-  let name = "Memory_domain(" ^ Scalar.name ^ ")";;
-  let unique_id = Domain_sig.Fresh_id.fresh name;;
+  let name () = "Memory_domain(" ^ Scalar.name() ^ ")";;
+  let unique_id () = Domain_sig.Fresh_id.fresh (name ());;
 
   type size = int;;  
   type boolean_mapping = int
   type integer_mapping = int
   
   module Types = struct
-    type boolean = Whole_Memory.boolean
+    type boolean = Operable_Value.boolean
     type binary = Operable_Value.binary
-    type memory = { mem: Whole_Memory.memory } [@@unboxed]
+    type memory = { mem: Memory.memory } [@@unboxed]
+    type block = Block.block
   end
   include Types
 
   (**************** Context ****************)
-  module Context = Whole_Memory.Context
+  module Context = Memory.Context
 
   (************** Global symbols **************)
 
@@ -71,14 +75,14 @@ module Make
 
   (**************** Pretty printing ****************)
 
-  let memory_pretty ctx fmt mem = (Whole_Memory.pretty ctx) fmt mem.mem
+  let memory_pretty ctx fmt mem = (Memory.pretty ctx) fmt mem.mem
   let boolean_pretty _ctx = Boolean.pretty
 
   (**************** Tuple fonctions ****************)
 
   let typed_serialize_mem: Context.t -> memory -> Context.t -> memory -> 'a Context.in_acc -> (memory,'a) Context.result =
     fun ctxa a ctxb b (included, acc) ->
-      let Context.Result(included,acc,d_mem) = Whole_Memory.serialize ctxa a.mem ctxb b.mem
+      let Context.Result(included,acc,d_mem) = Memory.serialize ctxa a.mem ctxb b.mem
         (included, acc) in
       Context.Result(included,acc,fun ctx x ->
           let mem,x = d_mem ctx x in          
@@ -87,24 +91,40 @@ module Make
   ;;
                                 
   let memory_empty ctx = {
-      mem = Whole_Memory.memory_empty ctx;
+      mem = Memory.memory_empty ctx;
     }
   ;;
 
+  let block_empty ctx = assert false
+
   (**************** Fixpoint computation ****************)
   let serialize_memory = typed_serialize_mem;;
-  let serialize_binary = Operable_Value.serialize
+  let serialize_binary = Operable_Value.serialize;;
+  let serialize_block = Block.serialize;;
 
   (**************** Operation on values. ****************)
   let binary_pretty = Operable_Value.binary_pretty
+  let block_pretty = Block.pretty
   let binary_unknown_typed = Operable_Value.binary_unknown_typed
+
+  (******************* Operations on memory blocks *****************)
+
+  let block_unknown ~size:_ _ = assert false
   
   (**************** Transfer functions. ****************)
+
+  module Block_Forward = struct
+    let sizeof ctx a = assert false
+    let concat ~size1 ~size2 ctx a b = assert false
+    let load ~size ctx a = assert false
+    let store ~size ctx a b = assert false
+    let binary_to_block ~size ctx a = assert false
+  end
 
   module Memory_Forward = struct
 
     let load ~size ctx mem at =
-      let res = Whole_Memory.load ~size ctx mem.mem at in
+      let res = Memory.load ~size ctx mem.mem at in
       res, mem
     
     (* TODO: Implement memcpy. *)
@@ -113,7 +133,7 @@ module Make
     let store ~(size:int) ctx mem (at:binary) (value:binary) =
       (* Codex_log.feedback "################storing %a" (Operable_Value.binary_pretty ~size ctx) at; *)
       try
-        { mem = Whole_Memory.store ~size ctx mem.mem at value }
+        { mem = Memory.store ~size ctx mem.mem at value }
       with Memory_sig.Memory_Empty ->
         Codex_log.feedback "Memory_domain.after store: memory empty";
         raise Memory_sig.Memory_Empty
@@ -127,21 +147,22 @@ module Make
         res
     ;;
           
-    
+    let load_block ctx mem at = assert false ;;
+    let store_block ctx mem at value = assert false ;;
     
     let malloc ~id ~malloc_size ctx mem =
-      let ptr,mem' = Whole_Memory.malloc ~id ~malloc_size ctx mem.mem in
+      let ptr,mem' = Memory.malloc ~id ~malloc_size ctx mem.mem in
       ptr, {mem=mem'}
     ;;
 
     let free ctx mem ptr =
-      { mem = Whole_Memory.free ctx mem.mem ptr
+      { mem = Memory.free ctx mem.mem ptr
       }
     ;;
 
     let unknown ~level ctx =
       (* assert(level == ctx.level); *)
-      { mem = Whole_Memory.unknown ~level ctx }
+      { mem = Memory.unknown ~level ctx }
   end
 
   module Binary_Forward = Operable_Value.Binary_Forward
@@ -183,10 +204,19 @@ module Make
                      
 
   let should_focus : size:int -> Context.t -> memory -> binary -> (binary * int * int) option = fun ~size ctx memory address ->
-    Whole_Memory.should_focus ~size ctx memory.mem address
+    Memory.should_focus ~size ctx memory.mem address
 
   let may_alias : ptr_size:int -> Context.t -> size1:int -> size2:int -> binary -> binary -> bool =
     fun ~ptr_size ctx ~size1 ~size2 addr1 addr2 ->
-    Whole_Memory.may_alias ~ptr_size ctx ~size1 ~size2 addr1 addr2
+    Memory.may_alias ~ptr_size ctx ~size1 ~size2 addr1 addr2
+
+  let is_weak : size:int -> Context.t -> binary -> bool = fun ~size ctx address ->
+    Memory.is_weak ~size ctx address
+  
+  let contained_addresses : size:int -> Context.t -> binary -> (int * binary) list = fun ~size ctx value ->
+    Operable_Value.contained_addresses ~size ctx value
+
+  let shared_addresses : Context.t -> memory -> Context.t -> memory -> (binary * binary) list = fun ctxa mema ctxb memb ->
+    Memory.shared_addresses ctxa mema.mem ctxb memb.mem
 
 end

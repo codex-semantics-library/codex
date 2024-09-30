@@ -20,6 +20,7 @@
 (**************************************************************************)
 
 open Codex
+open Frama_c_kernel
 
 (* Build semantic equations: conversion/interpretation of CIL to/into
    a simpler internal language. *)
@@ -109,7 +110,7 @@ module type Lang = sig
                                                                    (* and module Ref_Addr = Ref_addr_non_modular.Ref_Addr *)
     val binary_unknown: size:int -> binary m
   end
-  
+
 
   (****************************************************************)
   (* Operations on truth values, and basic predicates. *)
@@ -131,9 +132,10 @@ module type Lang = sig
   module Memory: sig
     include Transfer_functions.Memory_Forward with module Arity := Monadic_Arity
                                               and type memory = memory
-                                              and type binary = binary
+                                              and type address = binary
                                               and type boolean = boolean
-   val assume: (boolean,memory,memory) Monadic_Arity.ar2    
+                                              and type value = binary
+   val assume: (boolean,memory,memory) Monadic_Arity.ar2
    val pp : Format.formatter -> memory -> unit
   end
 
@@ -186,10 +188,10 @@ module type Conv = sig
   val return_continuation: env -> Cil_types.stmt -> L.continuation;;
 
   val register_alarm: Alarms.alarm -> Cil_types.location -> L.boolean -> unit L.m
-  val register_lvalue: Cil_types.lval -> L.binary -> unit L.m;;      
+  val register_lvalue: Cil_types.lval -> L.binary -> unit L.m;;
   val register_expression: Cil_types.exp -> L.binary -> unit L.m;;
-  val register_boolean_expression: Cil_types.exp -> L.boolean -> unit L.m;;  
-  
+  val register_boolean_expression: Cil_types.exp -> L.boolean -> unit L.m;;
+
 (* TODO: conversion des types C vers la representation dans Lang.
    Exemple of conversions: just the size of the type, or a
    description of the layout, etc. *)
@@ -206,16 +208,16 @@ module Make(L:Lang)(Conv:Conv with module L = L) = struct
   (* Transform the initial monad into a state monad, to thread other
      things during the compilation of expressions; here we thread the
      memory, which gets changed by the various alarms and assertions. *)
-  
-  
+
+
   (* Note: we use option types as there may be no mem, for
      instance when evaluating constant expressions during
-     initialization. 
+     initialization.
      MAYBE: always require mem. *)
   type state = { mem: L.memory option; };;
 
   module M' = struct
-      
+
     module Monadic_Arity:sig
       (* Monadic operations on the state monad. *)
       type 'a m
@@ -230,7 +232,7 @@ module Make(L:Lang)(Conv:Conv with module L = L) = struct
       val run: state -> 'a m -> ('a * state) L.Monadic_Arity.m
 
       val register_alarm: (Alarms.alarm * Cil_types.location) -> L.boolean -> unit m
-      val register_lvalue: Cil_types.lval -> L.binary -> unit m                    
+      val register_lvalue: Cil_types.lval -> L.binary -> unit m
       val register_expression: Cil_types.exp -> L.binary -> unit m
       val register_boolean_expression: Cil_types.exp -> L.boolean -> unit m
 
@@ -239,10 +241,10 @@ module Make(L:Lang)(Conv:Conv with module L = L) = struct
 
       (* Load with the memory hidden. *)
       val load: size:int -> L.binary -> L.binary m
-      
+
     end = struct
       type 'a m = state -> ('a * state) L.Monadic_Arity.m
-          
+
       let return x = fun mem -> L.Monadic_Arity.return (x,mem)
       let bind x f =
         fun s ->
@@ -253,13 +255,13 @@ module Make(L:Lang)(Conv:Conv with module L = L) = struct
       (* Lift a value inside the L monad to the M monad. *)
       let return2 x = fun state ->
         L.Monadic_Arity.bind x (fun v -> L.Monadic_Arity.return (v,state));;
-      
+
       type 'r ar0 = 'r m
       type ('a,'r) ar1 = 'a -> 'r m
       type ('a,'b,'r) ar2 = 'a -> 'b -> 'r m
       type ('a,'b,'c,'r) ar3 = 'a -> 'b -> 'c -> 'r m
       type ('a,'r) variadic = 'a list -> 'r m
-      
+
       let run state (x:'a m) = x state
 
       let register_alarm_with_assume (alarm,loc) bool = fun st ->
@@ -278,31 +280,31 @@ module Make(L:Lang)(Conv:Conv with module L = L) = struct
         then register_alarm_with_assume
         else register_alarm_no_assume
       ;;
-        
-      
-      let register_lvalue exp bin = return2 (Conv.register_lvalue exp bin)          
+
+
+      let register_lvalue exp bin = return2 (Conv.register_lvalue exp bin)
       let register_expression exp bin = return2 (Conv.register_expression exp bin)
-      let register_boolean_expression exp bin = 
-        return2 (Conv.register_boolean_expression exp bin)          
-      
+      let register_boolean_expression exp bin =
+        return2 (Conv.register_boolean_expression exp bin)
+
 
       let binary_unknown ~size = return2 (L.Binary.binary_unknown ~size)
 
-      let load ~size address = 
+      let load ~size address =
         fun state ->
         let mem = match state.mem with None -> assert false | Some mem -> mem in
-        L.Monadic_Arity.bind 
+        L.Monadic_Arity.bind
           (L.Memory.load ~size mem address)
           (fun (res,mem) ->
              let state = {mem=Some mem} in
              L.Monadic_Arity.return (res,state))
 
-      
+
     end
 
     let value_of_truth size bool =
       Monadic_Arity.return2 (L.value_of_truth size bool)
-    
+
     module Conversion = struct
       module From_Arity = L.Monadic_Arity
       module To_Arity = Monadic_Arity
@@ -321,11 +323,12 @@ module Make(L:Lang)(Conv:Conv with module L = L) = struct
     module Boolean:Transfer_functions.Boolean_Forward with module Arity := Monadic_Arity
                                                        and type boolean = L.boolean =
       Transfer_functions.Conversions.Convert_Boolean_Forward(Conversion)(L.Boolean)
-        
+
     module Memory:Transfer_functions.Memory_Forward with module Arity := Monadic_Arity
-                                                    and type binary = L.binary
+                                                    and type address = L.binary
                                                     and type boolean = L.boolean
-                                                    and type memory = L.memory =
+                                                    and type memory = L.memory
+                                                    and type value = L.binary =
     struct
       include Transfer_functions.Conversions.Convert_Memory_Forward(Conversion)(L.Memory)
       (* Use Monadic_Arity.load instead. *)
@@ -334,15 +337,15 @@ module Make(L:Lang)(Conv:Conv with module L = L) = struct
 
   end
 
-    
+
   module M = M'
-    
+
   let return = M.Monadic_Arity.return
   let (>>=) = M.Monadic_Arity.bind
 
   (**************** Compilation of expressions ****************)
-    
-  let ptr_bit_size = Cil.bitsSizeOf Cil.voidPtrType;;  
+
+  let ptr_bit_size = Cil.bitsSizeOf Cil.voidPtrType;;
 
   let cast_size ~sext ~from_size ~to_size v =
     if from_size > to_size then M.Binary.bextract ~index:0 ~size:to_size ~oldsize:from_size v
@@ -362,16 +365,16 @@ module Make(L:Lang)(Conv:Conv with module L = L) = struct
   }
 
   let z_of_integer c = Z.of_string @@ Integer.to_string c;;
-  
+
   let constant env ~size = function
     | CInt64(c,_,_) ->
-       M.Binary.biconst size (z_of_integer c)
+       M.Binary.biconst ~size (z_of_integer c)
     | CChr c ->
-       M.Binary.biconst size (z_of_integer (Cil.charConstToInt c))
+       M.Binary.biconst ~size (z_of_integer (Cil.charConstToInt c))
     | CEnum {eival} ->
        (match Cil.isInteger eival with
        | None -> assert false   (* Should not happen *)
-       | Some v -> M.Binary.biconst size (z_of_integer v))
+       | Some v -> M.Binary.biconst ~size (z_of_integer v))
     | CStr s -> return (Conv.loc_of_string env s)
     | CWStr ws -> return (Conv.loc_of_wstring env ws)
     | CReal _ -> M.Monadic_Arity.binary_unknown ~size
@@ -412,19 +415,19 @@ module Make(L:Lang)(Conv:Conv with module L = L) = struct
       M.Binary.biconst Z.zero ~size:ptr_bit_size >>= fun zero ->
       let (TArray(t,_,_)) = Cil.unrollType @@ Cil.typeOfLval lv in
       M.Binary.bindex ~size:ptr_bit_size (Cil.bytesSizeOf t) loc.address zero
-      
+
     | BinOp(bop, e1, e2, _) -> binop env exp_size bop e1 e2
     | UnOp(uop, e1, _) -> unop env exp_size uop e1
     | SizeOf(typ) ->
-       M.Binary.biconst exp_size (Z.of_int (Cil.bytesSizeOf typ))
+       M.Binary.biconst ~size:exp_size (Z.of_int (Cil.bytesSizeOf typ))
     | SizeOfE(exp) ->
-       M.Binary.biconst exp_size (Z.of_int (Cil.bytesSizeOf (Cil.typeOf exp)))
+       M.Binary.biconst ~size:exp_size (Z.of_int (Cil.bytesSizeOf (Cil.typeOf exp)))
     | CastE(to_typ,subexp) ->
        let from_typ = Cil.typeOf subexp in
        expression env subexp >>= fun subexp ->
        (match Cil.unrollType from_typ, Cil.unrollType to_typ with
        | (TInt (from_kind,_) | TEnum({ekind = from_kind},_)),
-         (TEnum({ekind = to_kind},_) | TInt (to_kind,_)) -> 
+         (TEnum({ekind = to_kind},_) | TInt (to_kind,_)) ->
          (match Cil.bitsSizeOfInt from_kind, Cil.bitsSizeOfInt to_kind with
          | from,to_ when from == to_ -> return subexp
          | from,to_ when from < to_ ->
@@ -437,12 +440,12 @@ module Make(L:Lang)(Conv:Conv with module L = L) = struct
        | TFloat _, (TInt _ | TEnum _)
        | (TInt _ | TEnum _), TFloat _
        | TFloat _, TFloat _ -> M.Monadic_Arity.binary_unknown ~size:(Cil.bitsSizeOf to_typ)
-           
+
        (* Conversion between pointers, and putting pointers in arrays *)
        | (TPtr _ | TArray _) , (TPtr _ | TArray _) -> return subexp
        | (TInt _ | TEnum _ | TPtr _), (TInt _ | TEnum _ | TPtr _)
          when Cil.bitsSizeOf from_typ == Cil.bitsSizeOf to_typ -> return subexp
-       | _, _ -> Kernel.fatal "cast not handled: from %a to %a (sizes: %d and %d)" 
+       | _, _ -> Kernel.fatal "cast not handled: from %a to %a (sizes: %d and %d)"
                    Cil_datatype.Typ.pretty from_typ Cil_datatype.Typ.pretty to_typ
                    (Cil.bitsSizeOf from_typ) (Cil.bitsSizeOf to_typ))
     | _ -> Kernel.fatal "Expression not implemented: %a" Cil_datatype.Exp.pretty exp
@@ -451,7 +454,7 @@ module Make(L:Lang)(Conv:Conv with module L = L) = struct
     expression' env exp >>= fun result ->
     M.Monadic_Arity.register_expression exp result >>= fun () ->
     M.Monadic_Arity.return result
-  
+
   and apply_binpred bop typ v1 v2 =
     let signed = match (Cil.unrollType typ) with
       | Cil_types.TInt(ikind,_) | Cil_types.TEnum({Cil_types.ekind = ikind},_) -> Cil.isSigned ikind
@@ -461,7 +464,7 @@ module Make(L:Lang)(Conv:Conv with module L = L) = struct
       | TNamed _ -> assert false
       | TVoid _ -> assert false
       | TComp _ -> assert false
-      | TBuiltin_va_list _ -> assert false                  
+      | TBuiltin_va_list _ -> assert false
     in
     let size = Cil.bitsSizeOf typ in
     let res =
@@ -475,7 +478,7 @@ module Make(L:Lang)(Conv:Conv with module L = L) = struct
       | _ -> assert false
     in res
 
-       
+
   and binop env exp_size bop e1 e2 =
     (* TODO:
        - Generate alarms (actually, do not do it here; use alarms
@@ -509,7 +512,7 @@ module Make(L:Lang)(Conv:Conv with module L = L) = struct
     let nuw = false in
     let nsw = Cil.isSignedInteger typ_e1 in
     let nusw = false in (* TODO : to check *)
-    
+
     (* v1 op v2 *)
     let apply bop = match bop with
       (* Filter arithmetical floating-point operations first. *)
@@ -522,7 +525,7 @@ module Make(L:Lang)(Conv:Conv with module L = L) = struct
       | MinusA -> M.Binary.bisub ~size:exp_size ~nsw ~nuw ~nusw
       | Mult -> M.Binary.bimul ~size:exp_size ~nsw ~nuw
       | Div | Mod -> fun v1 v2 ->
-        M.Binary.biconst exp_size Z.zero >>= fun zero ->
+        M.Binary.biconst ~size:exp_size Z.zero >>= fun zero ->
         M.Binary.beq ~size:(exp_size) (* exp_size *) zero v2 >>= fun bool ->
         M.Boolean.not bool >>= fun bool ->
         M.Monadic_Arity.register_alarm (Alarms.Division_by_zero e2,e2.eloc) bool >>= fun () ->
@@ -561,7 +564,7 @@ module Make(L:Lang)(Conv:Conv with module L = L) = struct
          let k = Cil.(bytesSizeOf (typeOf_pointed (typeOf e1))) in
          let index_size = Cil.bitsSizeOf typ_e2 in
          add_shift ~sext:(Cil.isSignedInteger typ_e2) ~index_size k
-      | MinusPI -> fun v1 v2 -> 
+      | MinusPI -> fun v1 v2 ->
         let k = Cil.(bytesSizeOf (typeOf_pointed (typeOf e1))) in
         let index_size = Cil.bitsSizeOf typ_e2 in
         cast_size ~sext:(Cil.isSignedInteger typ_e2) ~from_size:index_size ~to_size:ptr_bit_size v2 >>= fun off ->
@@ -589,7 +592,7 @@ module Make(L:Lang)(Conv:Conv with module L = L) = struct
        M.Binary.biconst ~size:exp_size Z.zero >>= fun zero ->
        M.Binary.bisub ~size:exp_size ~nsw:true ~nuw:false ~nusw:false zero v1
     | LNot -> cond_node env e1 >>= fun (v1:L.boolean) ->
-      M.Boolean.not v1 >>= fun notv1 ->      
+      M.Boolean.not v1 >>= fun notv1 ->
       M.value_of_truth exp_size notv1
     | BNot ->
        expression env e1 >>= fun v1 ->
@@ -625,7 +628,7 @@ module Make(L:Lang)(Conv:Conv with module L = L) = struct
     | Field(fi,NoOffset) when fi.fbitfield <> None ->
       let (bit_offset,bit_size) = Cil.bitsOffset typ offs in
       return {address = v; size; bitfield = Some({bit_offset;bit_size})}
-        
+
     (* Cannot be a bitfield. *)
     | Field(fi,offs) -> begin
         let (bit_offset,bit_size) = Cil.bitsOffset typ (Field(fi,NoOffset)) in
@@ -646,7 +649,7 @@ module Make(L:Lang)(Conv:Conv with module L = L) = struct
          M.Binary.bindex ~size:ptr_bit_size k v off >>= fun v ->
          loffset env pointed_typ v offs
        in
-       
+
        (* This is to help the analysis. We already have \valid, but
           these stricter conditions help reduce the abstract state. *)
        (match Cil.unrollType typ with
@@ -694,13 +697,13 @@ module Make(L:Lang)(Conv:Conv with module L = L) = struct
       apply_binpred op Cil.(unrollType (typeOf e1)) v1 v2 >>= fun res ->
       M.Monadic_Arity.register_boolean_expression e res >>= fun () ->
       M.Monadic_Arity.return res
-      
+
     | UnOp(LNot,e1,_) ->
        cond_node env e1 >>= fun v ->
        M.Boolean.not v >>= fun res ->
        M.Monadic_Arity.register_boolean_expression e res >>= fun () ->
        M.Monadic_Arity.return res
-    | _ -> 
+    | _ ->
 
     (* TODO: We need to compile the type. *)
 
@@ -719,7 +722,7 @@ module Make(L:Lang)(Conv:Conv with module L = L) = struct
     | _ -> Codex_options.fatal "Not yet implemented cond_node %a" Cil_datatype.Exp.pretty e
 
   (**************** Compilation of statements (invoke the state monad) ****************)
-       
+
   let make_state ~mem = {mem=Some mem;};;
   let dummy_state = {mem=None;};;
   let (>>=) = L.Monadic_Arity.bind
@@ -763,16 +766,16 @@ module Make(L:Lang)(Conv:Conv with module L = L) = struct
     match loc.bitfield with
     | None ->
       (* Kernel.feedback "store at location %a made on term %a" pp_location instr_loc L.Memory.pp (the_mem state); *)
-      L.Memory.store loc.size (the_mem state) loc.address newv
+      L.Memory.store ~size:loc.size (the_mem state) loc.address newv
     | Some bitfield ->
-      (* MAYBE: optimize the case bitfield.bit_offset mod 8 == 0 && bitfield.bit_size mod 8 == 0:  *) 
+      (* MAYBE: optimize the case bitfield.bit_offset mod 8 == 0 && bitfield.bit_size mod 8 == 0:  *)
       let mem = the_mem state in
-      L.Memory.load loc.size mem loc.address >>= fun (oldv, mem) ->
+      L.Memory.load ~size:loc.size mem loc.address >>= fun (oldv, mem) ->
       bitfield_replace env oldv loc.size bitfield newv newvsize >>= fun tostore ->
-      L.Memory.store loc.size mem loc.address tostore
+      L.Memory.store ~size:loc.size mem loc.address tostore
 
   ;;
-    
+
   let init var (env:Conv.env) ~mem init =
     let rec doit lv init typ mem =
       let size = Cil.bitsSizeOf typ in
@@ -785,8 +788,8 @@ module Make(L:Lang)(Conv:Conv with module L = L) = struct
          M.Monadic_Arity.return (value,address)) >>= fun ((value,address),state) ->
         assert(address.bitfield == None);
         let mem = the_mem state in
-        L.Memory.store size mem address.address value
-      | CompoundInit(ct,initl) -> 
+        L.Memory.store ~size mem address.address value
+      | CompoundInit(ct,initl) ->
         let doinit off init typ acc =
           acc >>= fun mem ->
           doit (Cil.addOffsetLval off lv) init typ mem in
@@ -802,7 +805,7 @@ module Make(L:Lang)(Conv:Conv with module L = L) = struct
 
   (**************** Builtins and calls to unknown functions. ****************)
 
-  
+
   let call_to_unknown env mem ret f args instr_loc =
     Codex_options.warning ~once:true "Warning: no definition for %a" Cil_datatype.Varinfo.pretty f;
     M.Monadic_Arity.run (make_state ~mem) @@
@@ -830,17 +833,17 @@ module Make(L:Lang)(Conv:Conv with module L = L) = struct
                 "__VERIFIER_nondet_int"]
   ;;
 
-  
+
   let instruction env ~mem = function
     | Skip _ -> return mem
-    | Asm _ -> 
+    | Asm _ ->
       Codex_options.warning "Skipping assembly instruction";
       return mem
     (* Optional optimisation. *)
     | Set(lvdst,({enode=Lval(lvsrc)} as exp),instr_loc) when false ->
       let f mem =
         M'.Monadic_Arity.run (make_state ~mem) @@
-        let (>>=) = M.Monadic_Arity.bind in        
+        let (>>=) = M.Monadic_Arity.bind in
         lvalue env lvdst >>= fun ptrdst ->
         lvalue env lvsrc >>= fun ptrsrc ->
         M.Monadic_Arity.return (ptrdst,ptrsrc)
@@ -850,14 +853,14 @@ module Make(L:Lang)(Conv:Conv with module L = L) = struct
       let addrdst = ptrdst.address and addrsrc = ptrsrc.address in
       (* Does not work yet for memcopies in bitfields. *)
       assert (ptrdst.bitfield == None);
-      assert (ptrsrc.bitfield == None);      
+      assert (ptrsrc.bitfield == None);
       L.Memory.memcpy ~size (the_mem state) addrsrc addrdst
-      
+
     (* Optimisation: when copying structures, copy each field.  Note
        that the analysis would be faster (and more precise, as it
        would delay the copies) if we would just call memcpy here, but
        I do not have it for now. *)
-    (* Note: this is not an optimisation at all, and slows things down. 
+    (* Note: this is not an optimisation at all, and slows things down.
        I need to have memcpy instead. *)
     | Set(lvdst,exp,instr_loc) when false && Cil.isStructOrUnionType @@ Cil.unrollType @@ Cil.typeOf exp ->
       let open Cil_types in
@@ -866,12 +869,12 @@ module Make(L:Lang)(Conv:Conv with module L = L) = struct
         (* let return = L.Monadic_Arity.return in *)
         let (>>=) = L.Monadic_Arity.bind in
         let typ = Cil.unrollType @@ Cil.typeOfLval lvsrc in
-        Codex_log.feedback "Type of %a is %a" Cil_datatype.Lval.pretty lvsrc Cil_datatype.Typ.pretty typ;        
+        Codex_log.feedback "Type of %a is %a" Cil_datatype.Lval.pretty lvsrc Cil_datatype.Typ.pretty typ;
         if Cil.isArithmeticOrPointerType typ then
           mem >>= fun mem ->
           M'.Monadic_Arity.run (make_state ~mem) @@
           (* M.Memory.load ~size:(Cil.bitsSizeOf typ) addr >>= fun (value,state) -> *)
-          expression env (Cil.dummy_exp @@  Lval lvsrc) >>= fun (value,state) ->          
+          expression env (Cil.dummy_exp @@  Lval lvsrc) >>= fun (value,state) ->
           store_lvalue ~instr_loc env lvdst value (Cil.bitsSizeOf typ) (the_mem state)
         else if Cil.isArrayType typ then begin
           (* The type should be known statically. *)
@@ -916,8 +919,8 @@ module Make(L:Lang)(Conv:Conv with module L = L) = struct
       when not (Kernel_function.is_definition (Globals.Functions.get f)) ->
       assert(not @@ is_builtin f.vname);
       call_to_unknown env mem ret f args instr_loc
-    | Call _ as i -> Kernel.fatal "instr %a" Cil_datatype.Instr.pretty i        
-    | Local_init(vi,AssignInit i,_) -> init vi env mem i
+    | Call _ as i -> Kernel.fatal "instr %a" Cil_datatype.Instr.pretty i
+    | Local_init(vi,AssignInit i,_) -> init vi env ~mem i
     | Local_init(vi,ConsInit(f,args,_),instr_loc)
       when not (Kernel_function.is_definition (Globals.Functions.get f)) ->
       assert(not @@ is_builtin f.vname);
@@ -1005,7 +1008,7 @@ module Make(L:Lang)(Conv:Conv with module L = L) = struct
     | TLogic_coerce _ -> assert false
     | _ -> Kernel.fatal "Term is %a" Cil_datatype.Term.pretty t
 
-  
+
   let predicate env mem predicate =
     match predicate.pred_content with
     | Pfalse -> L.Boolean.false_
@@ -1016,7 +1019,7 @@ module Make(L:Lang)(Conv:Conv with module L = L) = struct
       assert false
     | _ -> assert false
 
-  
+
   let statement_unused_for_now env ~mem stmt =
     (* Handles ACSL assertions. *)
     let mem = Annotations.fold_code_annot (fun _ annot acc ->
@@ -1030,5 +1033,5 @@ module Make(L:Lang)(Conv:Conv with module L = L) = struct
                  Cil_datatype.Code_annotation.pretty annot; acc
       ) stmt mem in
     statement env ~mem stmt
-    
+
 end

@@ -171,7 +171,7 @@ let type_at_offset symbols typ offset : cell_typ =
 let subtype symbols ((t,i) : cell_typ) ((u,j) : cell_typ) =
   (*Log.result "subtype@ %a@ %a" pp_cell_typ (t,i) pp_cell_typ (u,j);*)
   let open Ctypes in
-  if Ctypes.equiv_descr ~only_descr:false t.descr u.descr && i = j then
+  if Ctypes.equiv ~only_descr:false t u && i = j then
     u.pred = Pred.True || t.pred = u.pred
   else
     if not (u.pred = Pred.True || t.pred = u.pred) then false
@@ -351,6 +351,7 @@ module Make (Memory : MEMORY) = struct
       | Application _ -> failwith ("Use of a non-applied constructor type")
       | Existential _ -> failwith ("Use of a non-instantiated existential type")
       | Union _ -> failwith ("Use of an ambiguous union type")
+      | Weak _ -> failwith ("Use of an ambiguous weak type")
 
     and propagate_type path ~mutate (typ : Ctypes.typ) a =
       match typ.descr with
@@ -385,6 +386,7 @@ module Make (Memory : MEMORY) = struct
           | Application _ -> failwith ("Use of a non-applied constructor type")
           | Existential _ -> failwith ("Use of a non-instantiated existential type")
           | Union _ -> failwith ("Use of an ambiguous union type")
+          | Weak _ -> failwith ("Use of an ambiguous weak type")
 
           end
       | Ptr{pointed = {descr=Array (elem_t, Some ar_sz);_} as pointed_t; index = PastEnd} ->
@@ -439,6 +441,7 @@ module Make (Memory : MEMORY) = struct
       | Application _ -> failwith ("Use of a non-applied constructor type")
       | Existential _ -> failwith ("Use of a non-instantiated existential type")
       | Union _ -> failwith ("Use of an ambiguous union type")
+      | Weak _ -> failwith ("Use of an ambiguous weak type")
 
     and propagate_guarded path ~mutate typ a =
       Log.result "propagate_guarded@ %a@ ~mutate:%B@ %a@ %a" Path.pp path

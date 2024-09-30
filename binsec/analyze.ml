@@ -19,24 +19,32 @@
 (*                                                                        *)
 (**************************************************************************)
 
+module Log = Tracelog.Make(struct let category = "Analyze" end)
 open Codex
 module Ctypes = Types.Ctypes
 
 module Logger = Codex_logger
-open Analysis_settings
 
 module Create () = struct
 
 module Dba2CodexC = Dba2Codex.Create ()
 
 let initialize_codex () =
+  (* Tracelog.set_verbosity_level `Debug ; *)
   Codex_log.register (module Codex_logger.Codex_logger);
   if not (Codex_options.UseShape.get ()) then begin
     Framac_ival.Ival.set_small_cardinal @@ max 8 @@ Codex_options.NbTasks.get ();
     (* Codex_config.set_widen false; *)
   end;
   Codex_config.set_valid_absolute_addresses @@ (Z.one,Z.of_int (1 lsl 30));
-  Codex_config.set_ptr_size 32;;
+  Codex_config.set_ptr_size 32;
+  (* Map binsec debug level verbosity to tracelog. We have two levels: 0, 1 and 2.*)
+  (match (Codex_options.Debug_level.get(),Codex_options.Loglevel.get()) with
+   | x, _ when x >= 2 -> Tracelog.set_verbosity_level `Debug
+   | _, "debug" -> Tracelog.set_verbosity_level `Debug
+   | 1, _ -> Tracelog.set_verbosity_level `Info
+   | _ -> ())
+;;
 
 
 let () =
@@ -50,7 +58,7 @@ let results_tbl = Hashtbl.create 10000;;
 
 (*module Arch = Ks_arch.Make(RB)(Dba2Codex.Domain)*)
 
-module Arch = X86_arch.Make (Dba2CodexC.Domain) (Dba2CodexC.EvalPred)
+module Arch = X86_arch.Make (Dba2CodexC.Domain)
 
 open Dba2CodexC
 
@@ -59,9 +67,6 @@ open Dba2CState
 
 module Record_cfg = Record_cfg.Make(State)
 
-module type SETTINGS = Analysis_settings.S with module Record_cfg = Record_cfg
-  with module State := State
-
 let () = Builtin_types.force_load;;
 
 let type_of_name = Ctypes.type_of_name
@@ -69,13 +74,9 @@ let type_of_name = Ctypes.type_of_name
 let bunknown ~size ctx =
   Domain.binary_unknown ~size ctx
 
-let m_settings =
-  (* if Codex_options.AnalyzeKernel.get () then *)
-  (*   (module X86_settings.Make(Dba2CodexC.TSettingC)(Arch.Registers)(Dba2CState.State)(Record_cfg) : SETTINGS) *)
-  (* else *) (module Hooks.Make(Dba2CState.State)(Record_cfg):SETTINGS)
-
-module Settings = (val m_settings)
+module Settings = Hooks.Make(Dba2CState.State)(Record_cfg)
 open Settings
+module Addr_tbl = Hooks.Addr_tbl
 
 module Cfg = Cfg_analysis.Cfg
 
@@ -244,7 +245,7 @@ let rec do_regex dhunk state_table regex =
             Logger.result "In-dhunk join with right branch never taken";
             other
         | Some state1, Some state2 ->
-          Logger.result "[in-dhunk join] nondet...";          
+          Logger.result "[in-dhunk join] nondet...";
           let new_state = State.join state1 state2 in
           Dhunk_regex_tbl.add state_table regex new_state;
           Some new_state
@@ -298,10 +299,23 @@ end = struct
     List.fold_left f empty l
 end
 
+let check_return_type state rtyp =
+  (* Checks the expected return type against the value of register eax *)
+  let eax = State.get ~size:32 state "eax" in
+  match rtyp with
+  | None
+  | Some Ctypes.{descr=Void} -> ()
+  | Some typ when not state.is_bottom ->
+    Log.debug (fun p -> p "Checking that the return value in eax has the expected type.");
+    let size = 8 * Ctypes.sizeof typ in
+    ignore (Domain.has_type ~size state.ctx typ eax)
+
+  | _ -> ()
+
 let transfer_instruction_nostub address state =
   let instr = decode_instr address in
   let dhunk = instr.Instruction.dba_block in
-  Codex_log.debug "exploration_only : %b" !exploration_only ;
+  Log.debug (fun p -> p "exploration_only : %b" !exploration_only);
   Logger.result "address: %a@ instruction: %a@\nblock: %a"
     Virtual_address.pp address
     Mnemonic.pp instr.Instruction.mnemonic
@@ -311,7 +325,7 @@ let transfer_instruction_nostub address state =
 let transfer_instruction address trace state =
   let warn_skip () =
     Logger.alarm "manual_stub" in
-  match Addr_tbl.find skip_table address with
+  match Settings.find_hook address with
   | (SkipTo (_skip_type, dest), msg) ->
       warn_skip ();
       Logger.result "Skipping to %a. Reason: %s" Virtual_address.pp dest msg;
@@ -336,6 +350,19 @@ let transfer_instruction address trace state =
       Logger.alarm "manual_stub";
       Logger.result "Changing state before instruction. Reason: @[<hov 2>%s@]" msg;
       trace, transfer_instruction_nostub address @@ f state
+
+  | (Return typ, msg) ->
+      warn_skip ();
+      Logger.result "@[<hov 2>Reaching return instruction. Reason: %s@]" msg;
+      check_return_type state typ ;
+      trace, Addr_map.empty
+  | (EntryCall (name,ftyp), msg) ->
+      Logger.alarm "manual_stub";
+      Logger.result "Replacing by a hook for later function calls. Reason: @[<hov 2>%s@]" msg;
+      Settings.add_function_hook ~name address ftyp ;
+      trace, transfer_instruction_nostub address state
+
+
   | exception Not_found ->
       trace, transfer_instruction_nostub address state
 
@@ -407,15 +434,13 @@ let rec analyze_block (prevstate : Dba2CState.State.t) trace block =
           Record_cfg.end_fork trace;
          )
 
-and previous_func = ref "<start>"
-
-(** Like {analyze_address} but does not call {next} on the first, and thus will
-   not stop if {address} was already visited. *)
+(** Like [analyze_address] but does not call [next] on the first, and thus will
+   not stop if [address] was already visited. *)
 and analyze_address_nocheck state trace address =
   let warn_skip () =
     Logger.error "Manual skip at %a!" Virtual_address.pp address in
   let successors =
-    match Addr_tbl.find skip_table address with
+    match Settings.find_hook address with
       | (SkipTo (skip_type, dest), msg) ->
           if !exploration_only && skip_type = NotWhenInterpreting then begin
             (* Ignore skips when in "concrete interpreter" *)
@@ -447,6 +472,16 @@ and analyze_address_nocheck state trace address =
           Logger.alarm "manual_stub";
           (* Handled lower in this function *)
           None
+      | (Return typ, msg) ->
+          warn_skip ();
+          check_return_type state typ ;
+          Logger.result "@[<hov 2>Reaching return instruction. Reason: %s@]" msg;
+          Some []
+
+      | (EntryCall (name,ftyp), msg) ->
+          Logger.alarm "manual_stub";
+          Settings.add_function_hook ~name address ftyp ;
+          None
 
       | exception Not_found -> None
   in
@@ -466,7 +501,7 @@ and analyze_address_nocheck state trace address =
       end
   | Some [x] -> (f[@tailcall]) x
   (* Uncomment this to keep only the first trace. *)
-  (* | l -> f (List.hd l) *)  
+  (* | l -> f (List.hd l) *)
   | Some succs -> (Logger.result "Warning: forking paths";
           Record_cfg.start_fork trace;
           List.iteri (fun i x ->
@@ -479,7 +514,7 @@ and analyze_address_nocheck state trace address =
          )
   | None -> begin
       let new_state =
-        match Addr_tbl.find skip_table address with
+        match Settings.find_hook address with
         | (ChangeState f, msg) ->
             warn_skip ();
             Logger.result "@[<hov 2>Manual state modification. Reason: %s@]" msg;
@@ -525,10 +560,13 @@ and analyze_address' state trace address =
   end
   else (analyze_block[@taillcall]) state trace dba_block
 
+exception Recursive_call
+
 let rec destination rx =
   let open Fixpoint.Regex in
   match rx with
-  | Empty | Epsilon -> raise @@ Invalid_argument "destination"
+  | Empty -> raise @@ Invalid_argument "destination"
+  | Epsilon -> raise @@ Invalid_argument "destination" (* raise Recursive_call *)
   | Append (_,_,(_,dst)) -> dst
   | Join (_,r1,_) -> destination r1
   | AppendStar (_,_,body) -> destination body
@@ -556,7 +594,7 @@ module Regex_tbl = struct
     if !debug_log then
       Logger.result "Regex_tbl.add @[<hov 2>%a@,%a@]%!" (Cfg_analysis.CfgRegex.pretty) key State.dump_state (Obj.magic x);
     begin try Addr_tbl.replace latest_state_table (fst @@ destination key) x
-    with Invalid_argument _ -> () end;
+    with Invalid_argument _ (* | Recursive_call *) -> () end;
     add tbl key x
 
   let latest_state address =
@@ -644,7 +682,7 @@ let rec analyze_regex state_table ctx trace r =
           Virtual_address.pp (fst src)
       in
       let exception Does_not_apply in
-      begin try match Addr_tbl.find skip_table (fst src) with
+      begin try match Settings.find_hook (fst src) with
       | (SkipTo (_,new_dst), msg) ->
           Logger.alarm "manual_stub";
           warn_skip ();
@@ -680,6 +718,15 @@ let rec analyze_regex state_table ctx trace r =
       | (ChangeState _, _) ->
           (* This is handled elsewhere *)
           raise Does_not_apply
+      | (Return _, _) ->
+          (* Don't interpret this instruction and don't add it to the regex ->
+            * state mapping. *)
+          ()
+      | (EntryCall _, _) ->
+          (* Don't interpret this instruction and don't add it to the regex ->
+            * state mapping. *)
+            ()
+
       | exception Not_found -> raise Does_not_apply
       with Does_not_apply ->
         let instr = decode_instr (fst src) in
@@ -688,7 +735,7 @@ let rec analyze_regex state_table ctx trace r =
         Logger.result "@[<v>address: %a@,instruction: %a@,dhunk: @[<hov 2>%a@]@]"
           Virtual_address.pp (fst src) Mnemonic.pp instr.Instruction.mnemonic
           Dhunk.pp dhunk;
-        let new_state = match Addr_tbl.find skip_table (fst src) with
+        let new_state = match Settings.find_hook (fst src) with
           | (ChangeState f, msg) ->
               Logger.alarm "manual_stub";
               Logger.result "@[<hov 2>Manual state modification. Reason: %s@]" msg;
@@ -708,8 +755,9 @@ let rec analyze_regex state_table ctx trace r =
       let init_state = Regex_tbl.find ctx state_table r' in
       if init_state.State.is_bottom then Regex_tbl.add state_table r init_state
       else begin
+        (* try *)
         let head = destination r' in
-        begin match find_opt (fun () -> Addr_tbl.find skip_table (fst head)) with
+        begin match find_opt (fun () -> Settings.find_hook (fst head)) with
         | Some (Unroll max_iter, msg) ->
           Logger.warning "Unrolling star... (reason: %s)" msg;
           let rec loop entry_state i =
@@ -772,11 +820,11 @@ let rec analyze_regex state_table ctx trace r =
             Logger.result "Mu iteration %d ..." i;
             let inner_table = Regex_tbl.create 100 in
             Regex_tbl.add inner_table epsilon entry_state;
-            analyze_regex inner_table entry_state.ctx trace x;
+            analyze_regex inner_table (Domain.Context.copy entry_state.ctx) trace x;
             let exit_state = Regex_tbl.find entry_state.ctx inner_table x in
             Logger.result "@[<v 2>fixpoint between:@,entry@ @[<hov 2>%a@]@,exit@ @[<hov 2>%a@]@]" State.dump_state entry_state State.dump_state exit_state;
             let Domain.Context.Result(included,in_tuple,deserialize) =
-              State.serialize entry_state exit_state (true, Domain.Context.empty_tuple) in
+              State.serialize entry_state exit_state (true, Domain.Context.empty_tuple ()) in
             Logger.result "After serialize: included = %b%!" included;
             let fp,out =
               (*
@@ -784,7 +832,11 @@ let rec analyze_regex state_table ctx trace r =
                 included, fun ~close:_ -> Domain.typed_nondet2 ctx in_tuple
               else
               *)
-                Domain.typed_fixpoint_step ~init:init_state.ctx ~arg:entry_state.ctx ~body:exit_state.ctx  (included,in_tuple)
+              Domain.typed_fixpoint_step ~iteration:i
+                ~init:init_state.ctx
+                ~arg:entry_state.ctx
+                ~body:exit_state.ctx
+                (included,in_tuple)
             in
 
             Logger.result "After fixpoint: fp = %b%!" fp;
@@ -807,6 +859,9 @@ let rec analyze_regex state_table ctx trace r =
           Logger.result "Finished analyzing star.";
           Regex_tbl.add state_table r state'
         end
+        (* with Recursive_call ->
+          Codex_log.debug "Reaching recursive call" ;
+          Regex_tbl.add state_table r init_state *)
       end
   | Join (_,r1,r2) ->
       Logger.result "JOIN";
@@ -888,7 +943,7 @@ let analyze img start init_state graph_filename expected_last_instr (html_filena
     let except_thrown = catch_exc (Format.sprintf "r-analysis %i" i)
       (fun () ->
         Logger.result "exception raised, closing and dumping state...";
-        ignore @@ Record_cfg.close trace start graph_filename html_filename results;
+        ignore @@ Record_cfg.close trace start ~graph_filename ~html_filename results;
         true)
       (fun () ->
         Hashtbl.iter (fun node regex ->
@@ -910,14 +965,14 @@ let analyze img start init_state graph_filename expected_last_instr (html_filena
     in
     if !exploration_only then begin
       Logger.result "exploration only: first iteration done";
-      ignore @@ Record_cfg.close trace start graph_filename html_filename results;
+      ignore @@ Record_cfg.close trace start ~graph_filename ~html_filename results;
       except_thrown
     end
     else if except_thrown then
       (Logger.result "Fixpoint not reached due to an exception."; true)
     else if Record_cfg.graph_changed trace then begin
       Logger.result "Fixpoint not reached.";
-      ignore @@ Record_cfg.close trace start graph_filename html_filename results;
+      ignore @@ Record_cfg.close trace start ~graph_filename ~html_filename results;
       Record_cfg.set_graph_changed trace false;
       loop (i+1) trace
     end
@@ -955,7 +1010,7 @@ let interprete_concrete img start init_state graph_filename html_filename result
   let except_thrown = catch_exc "concrete analysis"
     (fun () ->
       Logger.result "exception raised, closing and dumping state...";
-      ignore @@ Record_cfg.close trace start graph_filename html_filename results;
+      ignore @@ Record_cfg.close trace start ~graph_filename ~html_filename results;
       true)
     (fun () ->
       analyze_address init_state trace start;
@@ -971,7 +1026,7 @@ let interprete_concrete img start init_state graph_filename html_filename result
     Logger.result "Number of instructions (no call stack): %d"
       (Addr_tbl.length instr_tbl);
     Logger.result "End of concrete interpretation";
-    ignore @@ Record_cfg.close trace start graph_filename html_filename results;
+    ignore @@ Record_cfg.close trace start ~graph_filename ~html_filename results;
     (* Return state at 0x12000730 *)
     let final_state = unoption !exploration_result in
     let open Region in
@@ -991,7 +1046,7 @@ let cpu_sp =
   list_init 4 (fun i -> ref @@ Virtual_address.create @@ 0x1200e000 + 1024 * i)
 
 (** Return the same state but as if it was on a different CPU, i.e. with that
-   CPU's stack pointer and the MPIDR register set accordingly. {old} and {new}
+   CPU's stack pointer and the MPIDR register set accordingly. [old] and [new]
    must be between 0 and 3 included. *)
 let switch_cpu ctx old new_ state =
   let open Framac_ival in
@@ -1070,8 +1125,8 @@ let blur_stack img state =
 let add_stack_arg offset type_ state =
   let esp = State.get ~size:32 state "esp" in
   let value = Domain.binary_unknown_typed ~size:32 state.ctx type_ in
-  { state with State.memory = Domain.(Memory_Forward.store ~size:32 state.ctx
-      state.State.memory Binary_Forward.(biadd ~size:32 ~nsw:false
+  { state with memory = Domain.(Memory_Forward.store ~size:32 state.ctx
+      state.memory Binary_Forward.(biadd ~size:32 ~nsw:false
       ~nuw:false ~nusw:false state.ctx esp (biconst ~size:32 (Z.of_int offset) state.ctx))
       value)
   }
@@ -1082,6 +1137,14 @@ let add_stack_arg_value offset value state =
       state.State.memory Binary_Forward.(biadd ~size:32 ~nsw:false
       ~nuw:false ~nusw:false state.ctx esp (biconst ~size:32 (Z.of_int offset) state.ctx))
       value)
+  }
+
+let ret_special_address = (Z.of_string "0xfedcba98") ;;
+
+let add_stack_return state =
+  let esp = State.get ~size:32 state "esp" in
+  let const = Domain.Binary_Forward.biconst ~size:32 ret_special_address state.ctx in
+  { state with memory = Domain.Memory_Forward.store ~size:32 state.ctx state.memory esp const
   }
 
 let populate_stack_with_args types state =
@@ -1102,7 +1165,7 @@ let populate_globals_with_types spec state =
     ) state spec
 
 let populate_globals_with_symbols spec ctx =
-  Codex_log.debug "initiazing %d symbols" (List.length spec) ;
+  Log.debug (fun p -> p "initiazing %d symbols" (List.length spec));
   List.iter (fun (symb,typ) ->
       let size = 8 * Ctypes.sizeof typ in
       let value = Domain.binary_unknown_typed ~size ctx typ in
@@ -1125,32 +1188,42 @@ let populate_hook hook_directives =
           | Some next -> Settings.add_skip addr ~dest:next
         end
       | `skip_to(dest) -> Settings.add_skip addr ~dest
-        
+
       | _ -> assert false
-    )
+    ) ;
+    Settings.add_stop @@ Virtual_address.of_bigint ret_special_address
     ;;
 
-let get_args function_name =
-  match (Ctypes.function_of_name function_name).descr with
-  | Ctypes.Function(rtyp, typs) -> typs
-  | _ -> assert false
+let set_mmio mmio_ranges state =
+  List.fold_left (fun state (addr,size) ->
+      let value = bunknown ~size:size state.State.ctx in
+      { state with State.memory = Domain.Memory_Forward.store ~size state.ctx state.memory (Domain.Binary_Forward.biconst (Z.of_int addr) state.ctx ~size:size ) value }
+ ) state mmio_ranges
 
-  let explore_function name ~msg =
-    let kernel_img = Kernel_functions.get_img () in      
-    let fn_start = Loader_utils.address_of_symbol_by_name ~name kernel_img |> unoption in
-    let fn_start = Virtual_address.create fn_start in
-    let stop_pred _ = function
-    | Record_cfg.LeftFunction left -> left = name
-    | Record_cfg.(EnteredFunction _ | NoChange) -> false
-    in
-    let f trace state =
-      let hook_start = Record_cfg.current_position trace in
-      let trace, final_states = transfer_from_to ~stop_pred fn_start trace state in
-      Record_cfg.set_position trace ~keep_forks:true hook_start;
-      trace, Addr_map.bindings final_states
-    in
-    Addr_tbl.add Settings.skip_table fn_start (Settings.Hook f, msg)
+
+let fresh_int =
+  let fresh_counter = ref (0 : int) in
+  fun () ->
+    incr fresh_counter ;
+    !fresh_counter
+
+let fresh_symbol () = Format.sprintf "#f%d" (fresh_int ())
+
+let rec initial_function_args_ret_types funtyp ctx =
+  let open Types.Ctypes in
+  match funtyp.descr with
+  | Function {ret; args} -> args, ret
+  | Existential (ft, var, tvar) ->
+    let sz = 8 * sizeof tvar in
+    let res = Domain.binary_unknown_typed ~size:sz ctx tvar in
+    let symb = fresh_symbol () in
+    Domain.add_global_symbol ~size:sz ctx symb res ;
+    let newft = substitute_symbol ft var symb in
+    initial_function_args_ret_types newft ctx
+
+  | _ -> assert false
   ;;
+
 end
 
 let analyze_non_kernel() =  begin
@@ -1166,352 +1239,35 @@ let analyze_non_kernel() =  begin
   let img = Kernel_functions.get_img () in
   let ctx = Domain.root_context () in
   let init_state = State.initial_concrete img ctx in
-    (*
-    (*** list_init ***)
-    let list_star_star_nz = Ctypes.(
-        {descr=Ptr{pointed={descr=Ptr{pointed=list;index=Zero};pred=Pred.True};index=Zero};
-        pred=Pred.(neq (Const Z.zero))})
-    in
-    Logger.result "=== list_init ===";
-    let () =
-      let entry = unoption @@ Loader_utils.address_of_symbol_by_name ~name:"list_init" img in
-      let init_state = add_stack_arg ctx 4 list_star_star_nz init_state in
-      Logger.switch_to_phase "list_init";
-      let _ = analyze img entry ctx init_state "list_init.dot" None in
-      ()
-    in
-    (*** list_head ***)
-    Logger.result "=== list_head ===";
-    let () =
-      let entry = unoption @@ Loader_utils.address_of_symbol_by_name ~name:"list_head" img in
-      let init_state = add_stack_arg ctx 4 list_star_star_nz init_state in
-      Logger.switch_to_phase "list_head";
-      let _ = analyze img entry ctx init_state "list_head.dot" None in
-      ()
-    in
-    (*** list_tail ***)
-    Logger.result "=== list_tail ===";
-    let () =
-      let entry = unoption @@ Loader_utils.address_of_symbol_by_name ~name:"list_tail" img in
-      let init_state = add_stack_arg ctx 4 list_star_star_nz init_state in
-      Logger.switch_to_phase "list_tail";
-      let _ = analyze img entry ctx init_state "list_tail.dot" None in
-      ()
-    in
-    (*** list_pop ***)
-    Logger.result "=== list_pop ===";
-    let () =
-      let entry = unoption @@ Loader_utils.address_of_symbol_by_name ~name:"list_pop" img in
-      let init_state = add_stack_arg ctx 4 list_star_star_nz init_state in
-      Logger.switch_to_phase "list_pop";
-      let _ = analyze img entry ctx init_state "list_pop.dot" None in
-      ()
-    in
-    (*** list_length ***)
-    Logger.result "=== list_length ===";
-    let () =
-      let entry = unoption @@ Loader_utils.address_of_symbol_by_name ~name:"list_length" img in
-      let init_state = add_stack_arg ctx 4 list_star_star_nz init_state in
-      Logger.switch_to_phase "list_length";
-      let _ = analyze img entry ctx init_state "list_length.dot" None in
-      ()
-    in
-    (*** list_chop ***)
-    Logger.result "=== list_chop ===";
-    let () =
-      let entry = unoption @@ Loader_utils.address_of_symbol_by_name ~name:"list_chop" img in
-      let init_state = add_stack_arg ctx 4 list_star_star_nz init_state in
-      Logger.switch_to_phase "list_chop";
-      let _ = analyze img entry ctx init_state "list_chop.dot" None in
-      ()
-    in
-    (*** list_copy ***)
-    Logger.result "=== list_copy ===";
-    let () =
-      let entry = unoption @@ Loader_utils.address_of_symbol_by_name ~name:"list_copy" img in
-      let init_state = add_stack_arg ctx 4 list_star_star_nz init_state in
-      let init_state = add_stack_arg ctx 8 list_star_star_nz init_state in
-      Logger.switch_to_phase "list_copy";
-      let _ = analyze img entry ctx init_state "list_copy.dot" None in
-      ()
-    in
-    (*** list_push ***)
-    Logger.result "=== list_push ===";
-    let () =
-      let entry = unoption @@ Loader_utils.address_of_symbol_by_name ~name:"list_push" img in
-      let init_state = add_stack_arg ctx 4 list_star_star_nz init_state in
-      let init_state = add_stack_arg ctx 8 Ctypes.(
-        {descr=Ptr{pointed=list;index=Zero};
-        pred=Pred.(neq (Const Z.zero))}) init_state in
-      Logger.switch_to_phase "list_push";
-      let _ = analyze img entry ctx init_state "list_push.dot" None in
-      ()
-    in
-    (*** list_add ***)
-    Logger.result "=== list_add ===";
-    let () =
-      let entry = unoption @@ Loader_utils.address_of_symbol_by_name ~name:"list_add" img in
-      let init_state = add_stack_arg ctx 4 list_star_star_nz init_state in
-      let init_state = add_stack_arg ctx 8 Ctypes.(
-        {descr=Ptr{pointed=list;index=Zero};
-        pred=Pred.(neq (Const Z.zero))}) init_state in
-      Logger.switch_to_phase "list_add";
-      let _ = analyze img entry ctx init_state "list_add.dot" None in
-      ()
-    in
-    (*** list_remove ***)
-    Logger.result "=== list_remove ===";
-    let () =
-      let entry = unoption @@ Loader_utils.address_of_symbol_by_name ~name:"list_remove" img in
-      let init_state = add_stack_arg ctx 4 list_star_star_nz init_state in
-      let init_state = add_stack_arg ctx 8 Ctypes.(
-        {descr=Ptr{pointed=list;index=Zero};
-        pred=Pred.(neq (Const Z.zero))}) init_state in
-      Logger.switch_to_phase "list_remove";
-      let _ = analyze img entry ctx init_state "list_remove.dot" None in
-      ()
-    in
-    (*** list_insert ***)
-    Logger.result "=== list_insert ===";
-    let () =
-      let entry = unoption @@ Loader_utils.address_of_symbol_by_name ~name:"list_insert" img in
-      let init_state = add_stack_arg ctx 4 list_star_star_nz init_state in
-      let init_state = add_stack_arg ctx 8 Ctypes.(
-        {descr=Ptr{pointed=list;index=Zero};
-        pred=Pred.(neq (Const Z.zero))}) init_state in
-      let init_state = add_stack_arg ctx 0xc Ctypes.(
-        {descr=Ptr{pointed=list;index=Zero};
-        pred=Pred.(neq (Const Z.zero))}) init_state in
-      Logger.switch_to_phase "list_insert";
-      let _ = analyze img entry ctx init_state "list_insert.dot" None in
-      ()
-    in
-    (*** list_item_next ***)
-    Logger.result "=== list_item_next ===";
-    let () =
-      let entry = unoption @@ Loader_utils.address_of_symbol_by_name ~name:"list_item_next" img in
-      let init_state = add_stack_arg ctx 4 Ctypes.(
-        {descr=Ptr{pointed=list;index=Zero};
-        pred=Pred.(neq (Const Z.zero))}) init_state in
-      Logger.switch_to_phase "list_item_next";
-      let _ = analyze img entry ctx init_state "list_item_next.dot" None in
-      ()
-    in
-    *)
-    (*
-    (***** BATTLE *****)
-    let not_null = Ctypes.(Pred.(neq (Const Z.zero))) in
-    (*** addFirst ***)
-    let () =
-      let entry = unoption @@ Loader_utils.address_of_symbol_by_name ~name:"addFirst" img in
-      let init_state = add_stack_arg ctx 4 Ctypes.(
-        {descr=Ptr{pointed=list;index=Zero};pred=Pred.True}) init_state in
-      let init_state = add_stack_arg ctx 8 int init_state in
-      Logger.switch_to_phase "addFirst";
-      let _ = analyze img entry ctx init_state "addFirst.dot" None in
-      ()
-    in
-    (*** removeFirst ***)
-    let () =
-      let entry = unoption @@ Loader_utils.address_of_symbol_by_name ~name:"removeFirst" img in
-      let init_state = add_stack_arg ctx 4 Ctypes.(
-        {descr=Ptr{pointed={descr=Ptr{pointed=list;index=Zero};
-          pred=not_null};index=Zero};
-        pred=not_null}) init_state in
-      Logger.switch_to_phase "removeFirst";
-      let _ = analyze img entry ctx init_state "removeFirst.dot" None in
-      ()
-    in
-    (*** append ***)
-    let () =
-      let entry = unoption @@ Loader_utils.address_of_symbol_by_name ~name:"append" img in
-      let init_state = add_stack_arg ctx 4 Ctypes.(
-        {descr=Ptr{pointed=list;index=Zero};pred=Pred.True}) init_state in
-      let init_state = add_stack_arg ctx 8 Ctypes.(
-        {descr=Ptr{pointed=list;index=Zero};pred=Pred.True}) init_state in
-      Logger.switch_to_phase "append";
-      let _ = analyze img entry ctx init_state "append.dot" None in
-      ()
-    in
-    (*** addLast ***)
-    let () =
-      let entry = unoption @@ Loader_utils.address_of_symbol_by_name ~name:"addLast" img in
-      let init_state = add_stack_arg ctx 4 Ctypes.(
-        {descr=Ptr{pointed=list;index=Zero};pred=Pred.True}) init_state in
-      let init_state = add_stack_arg ctx 8 int init_state in
-      Logger.switch_to_phase "addLast";
-      let _ = analyze img entry ctx init_state "addLast.dot" None in
-      ()
-    in
-    (*** dealloc ***)
-    let () =
-      let entry = unoption @@ Loader_utils.address_of_symbol_by_name ~name:"dealloc" img in
-      let init_state = add_stack_arg ctx 4 Ctypes.(
-        {descr=Ptr{pointed=list;index=Zero};pred=Pred.True}) init_state in
-      Logger.switch_to_phase "dealloc";
-      let _ = analyze img entry ctx init_state "dealloc.dot" None in
-      ()
-    in
-    (*** emptyList ***)
-    let () =
-      let entry = unoption @@ Loader_utils.address_of_symbol_by_name ~name:"emptyList" img in
-      Logger.switch_to_phase "emptyList";
-      let _ = analyze img entry ctx init_state "emptyList.dot" None in
-      ()
-    in
-    (*** isEmptyList ***)
-    let () =
-      let entry = unoption @@ Loader_utils.address_of_symbol_by_name ~name:"isEmptyList" img in
-      let init_state = add_stack_arg ctx 4 Ctypes.(
-        {descr=Ptr{pointed=list;index=Zero};pred=Pred.True}) init_state in
-      Logger.switch_to_phase "isEmptyList";
-      let _ = analyze img entry ctx init_state "isEmptyList.dot" None in
-      ()
-    in
-    (* XXX missing: sizeList *)
-    (*** copyList ***)
-    let () =
-      let entry = unoption @@ Loader_utils.address_of_symbol_by_name ~name:"copyList" img in
-      let init_state = add_stack_arg ctx 4 Ctypes.(
-        {descr=Ptr{pointed=list;index=Zero};pred=Pred.True}) init_state in
-      Logger.switch_to_phase "copyList";
-      let _ = analyze img entry ctx init_state "copyList.dot" None in
-      ()
-    in
-    (*** equalList ***)
-    let () =
-      let entry = unoption @@ Loader_utils.address_of_symbol_by_name ~name:"equalList" img in
-      let init_state = add_stack_arg ctx 4 Ctypes.(
-        {descr=Ptr{pointed=list;index=Zero};pred=Pred.True}) init_state in
-      let init_state = add_stack_arg ctx 8 Ctypes.(
-        {descr=Ptr{pointed=list;index=Zero};pred=Pred.True}) init_state in
-      Logger.switch_to_phase "equalList";
-      let _ = analyze img entry ctx init_state "equalList.dot" None in
-      ()
-    in
-    (*** emptyDeck ***)
-    let () =
-      let entry = unoption @@ Loader_utils.address_of_symbol_by_name ~name:"emptyDeck" img in
-      Logger.switch_to_phase "emptyDeck";
-      let _ = analyze img entry ctx init_state "emptyDeck.dot" None in
-      ()
-    in
-    (*** initDeck ***)
-    let () =
-      let entry = unoption @@ Loader_utils.address_of_symbol_by_name ~name:"initDeck" img in
-      let init_state = add_stack_arg ctx 4 int init_state in
-      Logger.switch_to_phase "initDeck";
-      let _ = analyze img entry ctx init_state "initDeck.dot" None in
-      ()
-    in
-    (*** isDeck ***)
-    let () =
-      let entry = unoption @@ Loader_utils.address_of_symbol_by_name ~name:"isDeck" img in
-      let init_state = add_stack_arg ctx 4 Ctypes.(
-        {descr=Ptr{pointed=deck;index=Zero};pred=not_null}) init_state in
-      let init_state =
-        let value = Domain.binary_unknown ~size:32 ~level:(Domain.Context.level ctx) ctx
-          |> EvalPred.use_invariant ~size:32 ctx Ctypes.(Pred.(uleq (Const (Z.of_int 5)))) in
-        add_stack_arg_value ctx 8 value init_state in
-      Logger.switch_to_phase "isDeck";
-      let _ = analyze img entry ctx init_state "isDeck.dot" None in
-      ()
-    in
-    (*** pick ***)
-    let () =
-      let entry = unoption @@ Loader_utils.address_of_symbol_by_name ~name:"pick" img in
-      let init_state = add_stack_arg ctx 4 Ctypes.(
-        {descr=Ptr{pointed=deck;index=Zero};pred=not_null}) init_state in
-      let init_state = add_stack_arg ctx 8 Ctypes.(
-        {descr=Ptr{pointed=deck;index=Zero};pred=not_null}) init_state in
-      Logger.switch_to_phase "pick";
-      let _ = analyze img entry ctx init_state "pick.dot" None in
-      ()
-    in
-    (*** split ***)
-    let () =
-      let entry = unoption @@ Loader_utils.address_of_symbol_by_name ~name:"split" img in
-      let init_state = add_stack_arg ctx 4 Ctypes.(
-        {descr=Ptr{pointed=deck;index=Zero};pred=not_null}) init_state in
-      Logger.switch_to_phase "split";
-      let _ = analyze img entry ctx init_state "split.dot" None in
-      ()
-    in
-    (*** pickAll ***)
-    let () =
-      let entry = unoption @@ Loader_utils.address_of_symbol_by_name ~name:"pickAll" img in
-      let init_state = add_stack_arg ctx 4 Ctypes.(
-        {descr=Ptr{pointed=deck;index=Zero};pred=not_null}) init_state in
-      let init_state = add_stack_arg ctx 8 Ctypes.(
-        {descr=Ptr{pointed=deck;index=Zero};pred=not_null}) init_state in
-      Logger.switch_to_phase "pickAll";
-      let _ = analyze img entry ctx init_state "pickAll.dot" None in
-      ()
-    in
-    (*** riffleWith ***)
-    let () =
-      let entry = unoption @@ Loader_utils.address_of_symbol_by_name ~name:"riffleWith" img in
-      let init_state = add_stack_arg ctx 4 Ctypes.(
-        {descr=Ptr{pointed=deck;index=Zero};pred=not_null}) init_state in
-      let init_state = add_stack_arg ctx 8 Ctypes.(
-        {descr=Ptr{pointed=deck;index=Zero};pred=not_null}) init_state in
-      Logger.switch_to_phase "riffleWith";
-      let _ = analyze img entry ctx init_state "riffleWith.dot" None in
-      ()
-    in
-    (*** copyDeck ***)
-    let () =
-      let entry = unoption @@ Loader_utils.address_of_symbol_by_name ~name:"copyDeck" img in
-      let init_state = add_stack_arg ctx 4 Ctypes.(
-        {descr=Ptr{pointed=deck;index=Zero};pred=not_null}) init_state in
-      Logger.switch_to_phase "copyDeck";
-      let _ = analyze img entry ctx init_state "copyDeck.dot" None in
-      ()
-    in
-    (*** createBattle ***)
-    let () =
-      let entry = unoption @@ Loader_utils.address_of_symbol_by_name ~name:"createBattle" img in
-      let init_state = add_stack_arg ctx 4 int init_state in
-      Logger.switch_to_phase "createBattle";
-      let _ = analyze img entry ctx init_state "createBattle.dot" None in
-      ()
-    in
-    (*** oneRound ***)
-    let () =
-      let entry = unoption @@ Loader_utils.address_of_symbol_by_name ~name:"oneRound" img in
-      let init_state = add_stack_arg ctx 4 Ctypes.(
-        {descr=Ptr{pointed=battle;index=Zero};pred=not_null}) init_state in
-      let _ = analyze img entry ctx init_state "oneRound.dot" None in
-      ()
-    in
-    *)
-    (*
-    (*** main ***)
-    let () =
-      let entry = unoption @@ Loader_utils.address_of_symbol_by_name ~name:"main" img in
-      let _ = analyze img entry ctx init_state "main.dot" None in
-      ()
-    in
-    *)
-  (*** huisong ***)
   let () =
     (* Odvtk_Trace.log "Real deal";                     *)
     let entry_name = (Kernel_options.Entry_point.get ()) in
-    (* let entry = unoption @@ Loader_utils.address_of_symbol_by_name ~name:(Kernel_options.Entry_point.get ()) img in *)
     let entry = unoption @@ Loader_utils.address_of_symbol_by_name ~name:entry_name img in
+    (* let entry = unoption @@ Loader_utils.address_of_symbol_by_name ~name:(Kernel_options.Entry_point.get ()) img in *)
     (* let global_spec = Codex_options.GlobalSymbols.get () in
     let () = populate_globals_with_symbols global_spec ctx in *)
     (* let arg_spec = Codex_options.FnArgs.get () in *)
-    
-    let arg_spec = get_args entry_name in
+
+    let init_state = add_stack_return init_state in
+
+    let init_state = add_stack_return init_state in
+
+    let fundef = Ctypes.function_definition_of_name entry_name in
+    let arg_spec, rtyp = initial_function_args_ret_types fundef.funtyp ctx in
+
     let init_state = populate_stack_with_args arg_spec init_state in
     let globals_spec = Codex_options.GlobalsTypes.get () in
     let init_state = populate_globals_with_types globals_spec init_state in
+    let mmio_list = Codex_options.MMIOs.get () in
+    let init_state = set_mmio mmio_list init_state in
     let hook_directives = Codex_options.Hooks.get() in
 
     let tprep = Sys.time() in
 
+    (* let () = Settings.add_entrycall ~name:entry_name (Virtual_address.create entry) funtyp in *)
     let () = populate_hook hook_directives in
+    let () = Settings.add_return (Virtual_address.of_bigint ret_special_address) (if fundef.inline then None else Some rtyp) in
+
     let _ = analyze img entry init_state "cfg.dot" None (Codex_options.Output_Html.get_opt()) results_tbl in
 
 

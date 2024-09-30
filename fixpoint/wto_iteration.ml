@@ -223,7 +223,7 @@ module WTOFixpoint(L:AbstractDomain) = struct
     | `recursive -> RecursiveStrategy.fixpoint_partition
   ;;
 
-  let fixpoint_partition kf init c =
+  let fixpoint_partition init c =
     let (edgemap,clmap) = fixpoint_partition init (CLPairMap.empty,CLMap.empty) c in
     clmap
 

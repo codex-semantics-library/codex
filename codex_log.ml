@@ -29,7 +29,7 @@ module type S = sig
   val feedback:  ('a, Format.formatter, unit) format -> 'a  
   val performance_warning:  ('a, Format.formatter, unit) format -> 'a
   val imprecision_warning:  ('a, Format.formatter, unit) format -> 'a    
-  val debug: ?level:int -> ?category:string -> ('a, Format.formatter, unit) format -> 'a
+  (* val debug: ?level:int -> ?category:string -> ('a, Format.formatter, unit) format -> 'a *)
   val fatal: ('a, Format.formatter, unit, 'b) format4 -> 'a
 
   (* Used to count the number of checks that are done, used before an
@@ -101,9 +101,9 @@ module Dynamic:S = struct
   let check fmt = let module X:S = (val !r) in X.check fmt;;  
   let performance_warning fmt = let module X:S = (val !r) in X.performance_warning fmt;;
   let imprecision_warning fmt = let module X:S = (val !r) in X.imprecision_warning fmt;;
-  let debug ?level ?category fmt =
-    let _ = level and _ = category in
-    let module X:S = (val !r) in X.debug ?category fmt;;
+  (* let debug ?level ?category fmt = *)
+  (*   let _ = level and _ = category in *)
+  (*   let module X:S = (val !r) in X.debug ?category fmt;; *)
   let fatal fmt = let module X:S = (val !r) in X.fatal fmt;;
   let feedback fmt = let module X:S = (val !r) in X.feedback fmt;;  
 end
@@ -115,8 +115,8 @@ module Tracelog_Instance = Tracelog.Make(struct let category = "codex" end);;
 let alarm_count = ref 0;;
 
 module Tracelog_Log:S = struct
-  let result fmt = Format.kasprintf (fun str -> Tracelog_Instance.result (fun m -> m "%s" str)) fmt;;  
-  let feedback fmt = Format.kasprintf (fun str -> Tracelog_Instance.feedback 0 (fun m -> m "%s" str)) fmt;;
+  let result fmt = Format.kasprintf (fun str -> Tracelog_Instance.notice (fun m -> m "%s" str)) fmt;;  
+  let feedback fmt = Format.kasprintf (fun str -> Tracelog_Instance.info (fun m -> m "%s" str)) fmt;;
   let error fmt = Format.kasprintf (fun str -> Tracelog_Instance.error (fun m -> m "%s" str)) fmt;;
   let warning fmt = Format.kasprintf (fun str -> Tracelog_Instance.warning (fun m -> m "%s" str)) fmt;;
   let performance_warning = warning
@@ -142,10 +142,10 @@ module Make(P:sig
     val debug:bool              (* If true, print debug information for this category. *)
   end) = struct
   include Used
-  let debug ?category str =
-    let category = match category with
-      | Some category -> category
-      | None -> P.category
-    in
-    if P.debug then debug ~category str else Format.ifprintf Format.err_formatter str;;
+  (* let debug ?category str = *)
+  (*   let category = match category with *)
+  (*     | Some category -> category *)
+  (*     | None -> P.category *)
+  (*   in *)
+  (*   if P.debug then debug ~category str else Format.ifprintf Format.err_formatter str;; *)
 end

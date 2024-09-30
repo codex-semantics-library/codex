@@ -25,5 +25,10 @@
 
 include module type of Constraints_constraints_sig;;
 
-module MakeConstraints(Condition:Condition_map.Condition)():Constraints
-  with module Condition = Condition
+module MakeConstraints
+   (Condition: Condition_map.Condition)
+   (Relation: Union_Find.Parameters.GENERIC_GROUP)
+   () :
+  Constraints
+   with module Condition = Condition
+    and module Relation = Relation

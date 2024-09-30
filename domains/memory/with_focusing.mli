@@ -19,26 +19,26 @@
 (*                                                                        *)
 (**************************************************************************)
 
-module type Base_with_types = sig
-  include Domain_sig.Base
-  (* module Type : Type_domain.S
-    with module BR.Scalar.Context = Context *)
+module Ctypes = Types.Ctypes
 
-  val global_symbol : Context.t -> string -> int * binary
-  val add_global_symbol : size:int -> Context.t -> string -> binary -> unit
+module type Base_with_types = sig
+  include Memory_sig.Base
+
   val flush_cache : Context.t -> memory -> memory
-  val has_type : size:int -> Context.t -> Types.Ctypes.typ -> binary -> bool
 end
 
 module type S = sig
-  include Domain_sig.Base
+  include Memory_sig.Base
 end
 
 module type S_with_types = sig
   include Base_with_types
+  
+  val analyze_summary : Context.t -> Ctypes.typ -> (int * binary) list -> memory -> bool * (int * binary) option * memory
+  val serialize_memory_and_cache : 'a. Context.t -> memory -> Context.t -> memory -> (binary * binary) list -> 'a Context.in_acc -> (memory, 'a) Context.result 
 end
 
-module Make (D : Domain_sig.Base)  : S
+module Make (D : Memory_sig.Base)  : S
   with module Context = D.Context
   and type boolean = D.boolean
 

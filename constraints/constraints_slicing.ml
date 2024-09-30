@@ -70,6 +70,7 @@ module Make(C:Constraints_constraints.Constraints) = struct
         | T1 {a} -> constr a
         | T2 {a;b} -> constr a; constr b
         | Tuple_get(i,tup) -> tuple tup i
+        | Inductive_var{definition} -> constr definition
       end
 
     and tuple tup i =
@@ -78,6 +79,7 @@ module Make(C:Constraints_constraints.Constraints) = struct
           TupleHash.replace tuplehash tup IntSet.empty;
           (* Do things that are done only once per tuple. *)
           (match tup with
+          | Inductive_vars _ -> assert false
           | Nondet{conda_bool;condb_bool} ->
             constr conda_bool; constr condb_bool;
           | Mu{var;body_cond} -> begin
@@ -94,6 +96,7 @@ module Make(C:Constraints_constraints.Constraints) = struct
         else begin
           TupleHash.replace tuplehash tup (IntSet.add i indices);
           match tup with
+          | Inductive_vars _ -> assert false
           | Nondet{a;b} ->
             let C.Any a = Immutable_array.get a i in
             constr a;

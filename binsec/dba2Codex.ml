@@ -19,6 +19,9 @@
 (*                                                                        *)
 (**************************************************************************)
 
+
+module Log = Tracelog.Make(struct let category = "Dba2Codex" end)
+
 module VarMap = Codex.Extstdlib.Map.Make(String)
 
 type jump_target =
@@ -42,7 +45,7 @@ end
 
 module type RegionS = sig
   module Virtual_address : Address_sig
-  
+
   val written_data_addrs : Virtual_address.Set.t ref
   val read_data_addrs : Virtual_address.Set.t ref
   val set_untyped_load : bool -> unit
@@ -54,11 +57,9 @@ end
 
 module type StateS = sig
   module Domain : With_focusing.S_with_types
-  module EvalPred : Type_domain.EvalPred.Sig
-    with module Domain := Domain
 
   type t = {
-    ctx: Domain.Context.t;    
+    ctx: Domain.Context.t;
     vars: Domain.binary VarMap.t;
     memory: Domain.memory;
     instruction_count: int;
@@ -94,13 +95,20 @@ end
 
 module Create ()  = struct
   module Constraints = Constraints.Constraints.MakeConstraints
-    (Constraints.Condition.ConditionCudd)()
+    (Constraints.Condition.ConditionCudd)(Constraints.Relations.Additive)()
   module Propag_domain = Domains_constraints_constraint_propagation.Make
     (Constraints)(Ival_basis)
   (* module Propag_domain = Domains_constraints_nonrelational.Make
     (Constraints)(Ival_basis) *)
   module Numeric_simple = Constraint_domain2.Make(Constraints)(Propag_domain)
-  module Numeric = Bitwise_domain.Make(Numeric_simple)
+
+  module Numeric_loop =
+    (val if Codex_options.UseLoopDomain.get() then (module Loop_domain.Make(Constraints)(Numeric_simple):Domain_sig.Base)
+    else (module Numeric_simple))
+
+  module Numeric = Bitwise_domain.Make(Numeric_loop)
+  (* module Numeric_simple = Loop_domain.Make(Constraints)(Propag_domain)
+  module Numeric = Bitwise_domain.Make(Numeric_simple) *)
   (*module Numeric = Numeric_simple*)
 
   (*
@@ -112,17 +120,19 @@ module Create ()  = struct
   = Region_numeric.Address
   *)
 
-  module Region_suffix_tree = Region_suffix_tree.Make(Numeric)  
+  module Region_suffix_tree = Region_suffix_tree.Make(Numeric)
   module Region_separation = Region_separation.Make(Region_suffix_tree)
       (struct
         let ctx x = x,fun x -> x
         let serialize_binary = Numeric.serialize_binary
       end)
-  module Typed_memory_domain = Typed_memory_domain.Make(Numeric)(Region_separation)
-  module Wholified = Wholify.Make(Typed_memory_domain)(struct let ctx x = x,fun x -> x end)
+  module rec Typed_address_domain : (Memory_sig.Memory_domain with module Address.Context = Numeric.Context and module Address.Scalar = Numeric) = Typed_address.Make(Region_separation)(Value_to_region_domain.Address)
+  and Wholified : (Memory_sig.Whole_Memory_domain with module Address.Context = Numeric.Context and module Address.Scalar = Numeric) = Wholify.Make(Typed_address_domain)(struct let ctx x = x,fun x -> x end)
+  and Value_union_concatenation_domain : (Memory_sig.Whole_Memory_domain with module Address.Context = Numeric.Context and module Address.Scalar = Numeric) = Value_union_concatenation.Make(Wholified)
+  and Value_to_region_domain : (Memory_sig.Complete_domain with module Address.Context = Numeric.Context and module Address.Scalar = Numeric) = Value_to_region.MakeDomain(Value_union_concatenation_domain)
 
   (* module Numeric_OV : Codex.Memory_sig.Operable_Value_Whole = Wholified *)
-  module Numeric_OV = Wholified.Address
+  module Numeric_OV = Value_to_region_domain.Address
   (* module Wholified_memory = Wholified.Memory(Numeric_OV) *)
 
   module Stuff_for_WSD = struct
@@ -224,29 +234,7 @@ module Create ()  = struct
     module Virtual_address = Virtual_address
   end
 
-  (* module TSettingC = TSetting.Create () *)
-  (*
-  module Type = Type_domain.Make(Numeric_OV)(TSettingC)
-  module Weak_shape_domain : Weak_shape_domain.S
-    with module BR = Numeric_OV
-    and module Type = Type
-    and module Virtual_address := Virtual_address
-    = Weak_shape_domain.Make(Numeric_OV)(Type)(TSettingC)(Stuff_for_WSD)
-  *)
-  (*
-  module Region_numeric_Memory =
-    Region_numeric.Memory(Weak_shape_domain.Binary_Representation)
-  module Region_numeric_Memory_Whole = Region_numeric_Memory
-
-  module Weak_shape_domain_memory = Weak_shape_domain.Region(Region_numeric_Memory_Whole)
-  *)
-
-  module MemD = Wholified
-  module Scalar = Numeric
-  module Value = MemD.Address
-  module Memory = MemD.Memory(Value)(struct let ctx x = x, fun x -> x end)
-
-  module Region : RegionS with module Virtual_address := Virtual_address = struct 
+  module Region : RegionS with module Virtual_address := Virtual_address = struct
 
     module Virtual_address = Virtual_address
     let written_data_addrs = ref Virtual_address.Set.empty
@@ -262,30 +250,35 @@ module Create ()  = struct
       param_typing := Some typing
   end
 
+  module MemD = Value_to_region_domain
+  module Scalar = Numeric
+  module Value = MemD.Address
+  module Block = MemD.Block
+  module Memory = MemD.Memory
+
   module Without_focusing = struct
     (* include Memory_domain.Make(Numeric)(Weak_shape_domain.Binary_Representation)(Weak_shape_domain_memory) *)
-    include Memory_domain.Make(Value)(Memory)
-    (* module Type = Type *)
-    let global_symbol = Value.global_symbol
-    let add_global_symbol = Value.add_global_symbol
+    include Memory_domain.Make(Value)(Block)(Memory)
     let flush_cache _ctx mem = mem
-    let has_type = Value.has_type
   end
 
   module type DSIG = With_focusing.S_with_types
-    with module Context = Scalar.Context
 
   let m_domain = if Codex_options.Focusing.get ()
     then (module With_focusing.Make_with_types (Without_focusing) : DSIG)
-    else (module Without_focusing : DSIG)
+    else
+      let module Without_focusing = struct
+        include Without_focusing
+
+        let analyze_summary ctx funtyp args mem =
+          let res,ret = analyze_summary ctx funtyp args in res,ret,mem
+
+        let serialize_memory_and_cache ctxa mema ctxb memb entries acc =
+          serialize_memory ctxa mema ctxb memb acc
+      end in
+      (module Without_focusing : DSIG)
 
   module Domain = (val m_domain)
-
-  module EvalPred = Type_domain.EvalPred.Make(struct
-    include Domain
-    let symbol ctx name = assert false
-      (* snd @@ Domain.global_symbol ctx name *)
-  end)
 
   module Ival = Codex.Framac_ival.Ival
 
@@ -303,7 +296,6 @@ module Create ()  = struct
 
       module Wholified = Wholified
       module Domain = Domain
-      module EvalPred = EvalPred
 
       type t = {
         ctx: Domain.Context.t;
@@ -477,10 +469,10 @@ module Create ()  = struct
             (* Logger.result "creating reg %s of size %d" name size; *)
             VarMap.add name value acc
           ) VarMap.empty Reg.registers
-      
+
       let initial img ctx =
         (* initialize symbol table. *)
-        { ctx; 
+        { ctx;
           vars = initial_vars ctx;
           memory = initial_memory img ctx;
           instruction_count = 0;
@@ -517,7 +509,7 @@ module Create ()  = struct
         |> Domain.Query.binary_to_ival ~signed:true ~size
         |> fun x -> Ival.is_singleton_int x
 
-      
+
       let get ~size state reg =
         if state.is_bottom then Domain.binary_empty ~size state.ctx else
         try VarMap.find reg state.vars
@@ -554,7 +546,7 @@ module Create ()  = struct
               Format.fprintf fmt "%s" res (* (Domain.binary_pretty ~size ctx) value *)
           )
 
-      
+
       let assume cond state =
         match Domain.assume state.ctx cond with
         | None -> {state with is_bottom = true} (* We should probably replace is_bottom ith an option type *)
@@ -566,7 +558,7 @@ module Create ()  = struct
 
       let bottom ctx =
         (* assume ctx (Domain.Boolean_Forward.false_ ctx) *)
-          { ctx; 
+          { ctx;
             instruction_count = 0;
             vars = empty_vars ctx;
             memory = Domain.Memory_Forward.unknown ~level:(Domain.Context.level ctx) ctx;
@@ -575,8 +567,20 @@ module Create ()  = struct
           }
 
 
+      (*
+      let pointer_registers = [
+        "eax"; "ebx"; "ecx"; "edx"; "edi"; "esp"; "ebp"; "esi";
+        "res32"; "temp32"; "temp32_0"; "temp32_1"; "temp32_2"; "temp32_3";
+        (* "gdt";
+        ("ds_base",32); ("cs_base",32); ("ss_base",32); ("es_base",32);
+        ("fs_base",32); ("gs_base",32);
+        ("tr_base",32);
+        ("idt",32); *)
+      ] ;;
+      *)
+
       let serialize state_a state_b (included,acc) =
-        Codex_log.debug "State.serialize %a %a" dump_state state_a dump_state state_b ;
+        Log.debug (fun p -> p "State.serialize %a %a" dump_state state_a dump_state state_b);
         (* let state_a = if state_a.is_bottom then bottom state_a.ctx else state_a in
         let state_b = if state_b.is_bottom then bottom state_b.ctx else state_b in *)
         if state_a.is_bottom then Domain.Context.Result(included, acc, fun ctx out -> state_b, out)
@@ -595,12 +599,16 @@ module Create ()  = struct
                   let Domain.Context.Result(inc,acc,d) = Domain.serialize_binary ~size state_a.ctx a state_b.ctx b
                   (inc,acc) in
                   Domain.Context.Result(inc, acc, fun ctx out ->
-                      let v,out = d ctx out in                   
+                      let v,out = d ctx out in
                       let map,out = k ctx out in
                       (VarMap.add var v map, out))
                 | _,_ -> assert false (* Variables should be defined in both cases *)
             ) in
-              
+
+          (* let entries = List.map (fun var -> (VarMap.find var state_a.vars, VarMap.find var state_b.vars)) pointer_registers in *)
+
+          (* let Domain.Context.Result (included, acc, fmem) = Domain.serialize_memory_and_cache state_a.ctx state_a.memory state_b.ctx state_b.memory
+            entries (included,acc) in *)
           let Domain.Context.Result(included,acc,fmem) = Domain.serialize_memory state_a.ctx state_a.memory state_b.ctx state_b.memory
             (included,acc) in
           Domain.Context.Result(included, acc, fun ctx out ->
@@ -616,7 +624,7 @@ module Create ()  = struct
       let join a b =
         if a.is_bottom then b else if b.is_bottom then a else
           let Domain.Context.Result(_,acc,f) = serialize a b
-            (true, Domain.Context.empty_tuple) in
+            (true, Domain.Context.empty_tuple ()) in
           let ctx, out = Domain.typed_nondet2 a.ctx b.ctx acc in
           let r, _ = f ctx out in
           (* {r with ctx} *)
@@ -624,7 +632,7 @@ module Create ()  = struct
 
       let is_included a b =
         if a.is_bottom then true else if b.is_bottom then false else
-          let Domain.Context.Result(included,_,_) = serialize b a (true, Domain.Context.empty_tuple) in
+          let Domain.Context.Result(included,_,_) = serialize b a (true, Domain.Context.empty_tuple ()) in
           included
     end
 
@@ -646,7 +654,7 @@ module Create ()  = struct
     let join_binary_and_state ~size a b =
       match a,b with
       | Some (bin_a, state_a), Some (bin_b, state_b) ->
-        let Domain.Context.Result(inc, tup, fstate) = State.serialize state_a state_b (true, Domain.Context.empty_tuple) in
+        let Domain.Context.Result(inc, tup, fstate) = State.serialize state_a state_b (true, Domain.Context.empty_tuple ()) in
         let Domain.Context.Result(_, tup, fbin) = Domain.serialize_binary ~size state_a.ctx bin_a state_b.ctx bin_b (inc,tup) in
         let ctx, out = Domain.typed_nondet2 state_a.ctx state_b.ctx tup in
         let bin, out = fbin ctx out in
@@ -712,7 +720,7 @@ module Create ()  = struct
         match x with
         | None -> []
         | Some v -> (f v)
-      
+
       let (>>=) = Option.bind
     end
 
@@ -777,7 +785,7 @@ module Create ()  = struct
       in
       match bop with
       | Plus ->
-          let c = Domain.Binary_Forward.valid_ptr_arith ~size state.ctx v1 v2 in
+          let c = Domain.Binary_Forward.valid_ptr_arith ~size Transfer_functions.Plus state.ctx v1 v2 in
           Logger.check "ptr_arith";
           begin match Domain.query_boolean state.ctx c with
           | Lattices.Quadrivalent.(True | Bottom) ->
@@ -789,9 +797,10 @@ module Create ()  = struct
               res, state
           end
       | Minus ->
-          let minus_v2 = Domain.Binary_Forward.bisub ~size ~nsw:false ~nuw:false ~nusw:false state.ctx
+          (* let minus_v2 = Domain.Binary_Forward.bisub ~size ~nsw:false ~nuw:false ~nusw:false state.ctx
             (Domain.Binary_Forward.biconst ~size Z.zero state.ctx) v2 in
-          let c = Domain.Binary_Forward.valid_ptr_arith ~size state.ctx v1 minus_v2 in
+          let c = Domain.Binary_Forward.valid_ptr_arith ~size state.ctx v1 minus_v2 in *)
+          let c = Domain.Binary_Forward.valid_ptr_arith ~size Transfer_functions.Minus state.ctx v1 v2 in
           Logger.check "ptr_arith";
           begin match Domain.query_boolean state.ctx c with
           | Lattices.Quadrivalent.(True | Bottom) ->
@@ -1111,7 +1120,7 @@ module Create ()  = struct
           | False ->
             Logger.fatal "assert %a may be false" (Domain.binary_pretty ~size:1 state.ctx) cond_v;
           | Top ->
-            Codex_log.debug "assert %a may be false" (Domain.binary_pretty ~size:1 state.ctx) cond_v ;
+            Log.debug (fun p -> p "assert %a may be false" (Domain.binary_pretty ~size:1 state.ctx) cond_v);
             Codex_log.alarm "possibly_false_assertion" ;
             [Jump_Inner id, State.assume cond state]
           | Bottom -> []
@@ -1175,14 +1184,14 @@ module Create ()  = struct
                   :: acc
                 ) res (false,[])
             end
-          in 
+          in
             (* Codex_log.debug "passing in DJump instruction" ; *)
-            let ptr_size = Codex_config.ptr_size () in 
-            begin match e with 
+            let ptr_size = Codex_config.ptr_size () in
+            begin match e with
               | Load (size,_,Binary(Plus, e1, e2),_) when size = 4 ->
                 (* Possibly reading from a jump table. Do not join before going to each target,
                    and assume that the index is equal to the corresponding value in each case. *)
-              Codex_log.debug "Possibly reading from a jump table" ;
+              Log.debug (fun p -> p "Possibly reading from a jump table");
               expr e1 state ==> fun (idx, state1) ->
                 let res = Domain.Query.binary_to_ival ~signed:false ~size:32 @@ Domain.Query.binary ~size state.ctx idx in
                 if (not @@ Ival.cardinal_zero_or_one res) && Ival.cardinal_is_less_than res 8  (* 1 < cardinal < 8 *)
@@ -1198,10 +1207,10 @@ module Create ()  = struct
                     in cases
 
                 else expr e state ==> jump
-            | _ -> 
+            | _ ->
               expr e state ==> jump
             end
-          
+
         | Undef (Dba.LValue.Var{name=v;_}, id) ->
           let size = List.assoc v Reg.registers in
           let new_v = bunknown ~size state.ctx in

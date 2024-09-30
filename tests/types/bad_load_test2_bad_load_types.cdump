@@ -1,0 +1,7 @@
+bad_load.c:12.19-20: `p' -> ([1..0xFFFFFFFF] : ({self : int(4)[{0}].(0)* | (self != 0)}))
+Unproved regular alarms:
+Unproved additional alarms:
++ bad_load.c:12 : { struct pair a = *p; } -> array_offset_access ;
+Proved 1/1 regular alarms
+Unproved 0 regular alarms and 1 additional alarms.
+Solved 0/0 user assertions, proved 0

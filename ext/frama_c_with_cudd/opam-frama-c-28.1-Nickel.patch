@@ -1,0 +1,31 @@
+--- a/opam	2023-11-30 01:00:00.000000000 +0100
++++ b/opam	2024-01-12 13:03:11.817050752 +0100
+@@ -123,16 +123,12 @@
+   "dune-configurator"
+   "dune-site" { >= "3.7.0" }
+ 
+-  ( "alt-ergo-free" | "alt-ergo" )
+-  "conf-graphviz" { post }
+   "conf-time" { with-test }
+   "menhir" { >= "20181006" & build }
+   "ocaml" { >= "4.13.1" }
+   "ocamlgraph" { >= "1.8.8" }
+   "ocamlgraph" { with-test & >= "2.1.0" }
+-  "odoc" { with-doc }
+   "unionFind" { >= "20220107" }
+-  "why3" { >= "1.6.0" & ( < "1.7.0" | !with-test ) }
+   "yaml" { >= "3.0.0" }
+   "yojson" {>= "1.6.0" & (>= "2.0.1" | !with-test)}
+   "zarith" { >= "1.5" }
+@@ -143,11 +139,6 @@
+   "ppx_deriving_yaml" { >= "0.2.0" }
+   "ppx_import"
+ 
+-  # GTK3 disabled on macOS (segfaults), and made optional on Windows
+-  # (due to complex situation with Cygwin + MinGW).
+-  "lablgtk3" { >= "3.1.0" & os!="macos" & os-family!="windows" }
+-  "lablgtk3-sourceview3" { os!="macos" & os-family!="windows" }
+-  "conf-gtksourceview3" { os!="macos" & os-family!="windows" }
+ ]
+ 
+ # Note: do not put particular versions here, if some version is *incompatible*,

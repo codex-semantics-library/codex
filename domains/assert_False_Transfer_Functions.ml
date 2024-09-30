@@ -26,7 +26,7 @@ module Memory = struct
   module Memory_Forward = struct
     let assume _ = assert false
     let store ~size _ = assert false
-    let memcpy ~size _ = assert false      
+    let memcpy ~size _ = assert false
     let load ~size _ = assert false
     let malloc ~id ~malloc_size = assert false
     let free _ = assert false
@@ -88,7 +88,7 @@ module Binary = struct
     let bisle ~size _ _ = assert false
     let bitimes ~size _ _ = assert false
     let biadd ~size ~nsw ~nuw ~nusw _ _ = assert false
-    let bisub ~size ~nsw ~nuw ~nusw _ _ = assert false      
+    let bisub ~size ~nsw ~nuw ~nusw _ _ = assert false
     let bimul ~size ~nsw ~nuw _ _ = assert false
     let bxor ~size _ _ = assert false
     let band ~size _ _ = assert false
@@ -103,10 +103,10 @@ module Binary = struct
     let blshr ~size _ _ = assert false
     let bshl ~size ~nsw ~nuw _ _ = assert false
     let bisdiv ~size _ _ = assert false
-    let biudiv ~size _ _ = assert false      
+    let biudiv ~size _ _ = assert false
     let bconcat ~size1 ~size2 b1 b2 = assert false
     let bismod ~size _ _ = assert false
-    let biumod ~size _ _ = assert false      
+    let biumod ~size _ _ = assert false
     let bextract ~size ~index ~oldsize _ = assert false
     let valid ~size _ = assert false
     let valid_ptr_arith ~size _ = assert false
@@ -151,8 +151,8 @@ end
 module Domain:Domain_sig.Base
 = struct
 
-  let name = "assert false"
-  let unique_id = Domain_sig.Fresh_id.fresh name;;
+  let name() = "assert false"
+  let unique_id() = Domain_sig.Fresh_id.fresh @@ name();;
 
   module Types = struct
     type binary = unit
@@ -197,7 +197,7 @@ module Domain:Domain_sig.Base
   let context_pretty _ = assert false
 
   (**************** Fixpoint computation ****************)
-  let mu_context_fixpoint_step3 ctx ~arg_body = assert false            
+  let mu_context_fixpoint_step3 ctx ~arg_body = assert false
   let mu_context_upcast ctx = assert false
   let mu_context_open parent_ctx =
     let rec mu_ctx = { mu_ctx = ctx; mu_parent_ctx = parent_ctx}
@@ -206,7 +206,7 @@ module Domain:Domain_sig.Base
               }
     in ctx
 
-  
+
   module Serialize = struct
 
     module T = Types
@@ -215,8 +215,8 @@ module Domain:Domain_sig.Base
       | InEmpty: unit in_tuple
       | InInteger: T.integer * T.integer * 'a in_tuple -> (T.integer * 'a) in_tuple
       | InBoolean: T.boolean * T.boolean * 'a in_tuple -> (T.boolean * 'a) in_tuple
-      | InMemory: T.memory * T.memory * 'a in_tuple -> (T.memory * 'a) in_tuple        
-      | InBinary: int * T.binary * T.binary * 'a in_tuple -> (T.binary * 'a) in_tuple                
+      | InMemory: T.memory * T.memory * 'a in_tuple -> (T.memory * 'a) in_tuple
+      | InBinary: int * T.binary * T.binary * 'a in_tuple -> (T.binary * 'a) in_tuple
 
     type 'a in_acc = bool * 'a in_tuple
 
@@ -224,33 +224,34 @@ module Domain:Domain_sig.Base
       | OutEmpty: unit out_tuple
       | OutInteger: T.integer * 'a out_tuple -> (T.integer * 'a) out_tuple
       | OutBoolean: T.boolean * 'a out_tuple -> (T.boolean * 'a) out_tuple
-      | OutMemory: T.memory * 'a out_tuple -> (T.memory * 'a) out_tuple        
-      | OutBinary: int * T.binary * 'a out_tuple -> (T.binary * 'a) out_tuple                
+      | OutMemory: T.memory * 'a out_tuple -> (T.memory * 'a) out_tuple
+      | OutBinary: int * T.binary * 'a out_tuple -> (T.binary * 'a) out_tuple
 
     type empty_tuple = unit
-    let empty_tuple = InEmpty
+    let empty_tuple () = InEmpty
     let push_integers a b tup = InInteger(a,b,tup)
     let push_booleans a b tup = InBoolean(a,b,tup)
     let push_binaries ~size a b tup = InBinary(size,a,b,tup)
-    let push_memories a b tup = InMemory(a,b,tup)      
+    let push_memories a b tup = InMemory(a,b,tup)
 
     [@@@warning "-8"]
     let pop_integer (OutInteger(x,tup)) = x,tup
     let pop_boolean (OutBoolean(x,tup)) = x,tup
-    let pop_memory (OutMemory(x,tup)) = x,tup                                        
+    let pop_memory (OutMemory(x,tup)) = x,tup
     let pop_binary (OutBinary(_,x,tup)) = x,tup
-    [@@@warning "+8"]                                          
+    [@@@warning "+8"]
 
 
     module Context = struct
       type t = context
       let level x = x.level
+      let copy x = x
       type nonrec 'a in_tuple = 'a in_tuple
       type nonrec 'a out_tuple = 'a out_tuple
       type nonrec 'a in_acc = 'a in_acc
       type nonrec empty_tuple = empty_tuple
       let empty_tuple = empty_tuple
-      type ('a,'b) result = Result: bool * 'some in_tuple * (t -> 'some out_tuple -> 'a * 'b out_tuple) -> ('a,'b) result        
+      type ('a,'b) result = Result: bool * 'some in_tuple * (t -> 'some out_tuple -> 'a * 'b out_tuple) -> ('a,'b) result
     end
     open Context
 
@@ -287,25 +288,26 @@ module Domain:Domain_sig.Base
     ;;
 
     let typed_nondet2 _ = assert false
-    let nondet_same_context _ = assert false      
-    let typed_fixpoint_step _ = assert false    
+    let nondet_same_context _ = assert false
+    let typed_fixpoint_step _ = assert false
+    let widened_fixpoint_step ~widening_id ~previous ~next _ = assert false
   end
 
   include Serialize
 
   module Boolean_Forward = Boolean.Boolean_Forward
-  module Integer_Forward = Integer.Integer_Forward                                 
+  module Integer_Forward = Integer.Integer_Forward
   module Binary_Forward = Binary.Binary_Forward
   module Memory_Forward = Memory.Memory_Forward
 
   module Binary = Datatype_sig.Unit
   module Integer = Datatype_sig.Unit
-  module Boolean = Datatype_sig.Unit                                         
+  module Boolean = Datatype_sig.Unit
 
   let memory_is_bottom ctx = assert false
   let binary_is_bottom ~size ctx = assert false
   let boolean_is_bottom ctx = assert false
-  
+
  (**************** Pretty printing ****************)
 
   let memory_pretty ctx fmt = assert false
@@ -315,20 +317,22 @@ module Domain:Domain_sig.Base
 
   (**************** Tuple fonctions ****************)
 
-  
+
   let tuple_bottom _ = assert false
   let new_tuple_nondet2 _ = assert false
-  let typed_fixpoint_step ~init:_ ~arg:_ ~body:_  = assert false
+  let typed_fixpoint_step ~iteration:_ ~init:_ ~arg:_ ~body:_  = assert false
 
   let tuple_pretty _ = assert false
-    
+
 
 
   let assume ctx bool = assert false
-  let imperative_assume ctx bool = assert false    
-  
+  let imperative_assume ctx bool = assert false
+
+  let imperative_assign_context ctx1 ctx2 = assert false
+
   (**************** Queries ****************)
-  
+
   module Query = struct
     let reachable _ = assert false
     let boolean _ = assert false
@@ -337,11 +341,11 @@ module Domain:Domain_sig.Base
     let convert_to_ival _ = assert false
     let convert_to_quadrivalent _ = assert false
     let binary_to_ival ~signed ~size _ = assert false
-    let binary_to_known_bits ~size _ = assert false      
-    let binary_is_empty ~size _ = assert false      
-    let binary_fold_crop ~size bin ~inf ~sup f acc = assert false      
+    let binary_to_known_bits ~size _ = assert false
+    let binary_is_empty ~size _ = assert false
+    let binary_fold_crop ~size bin ~inf ~sup f acc = assert false
     let is_singleton_int _ = assert false
-    let binary_is_singleton ~size _ = assert false            
+    let binary_is_singleton ~size _ = assert false
     module Boolean_Lattice = Lattices.Quadrivalent
     module Integer_Lattice = Lattices.Unit
     module Binary_Lattice = struct
@@ -351,7 +355,7 @@ module Domain:Domain_sig.Base
       let includes ~size = assert false
       let top ~size = assert false
       let inter ~size = assert false
-      let join ~size = assert false      
+      let join ~size = assert false
       let pretty ~size = assert false
       let widen ~size ~previous _ = assert false
       let includes_or_widen ~size ~previous _ = assert false
@@ -365,16 +369,16 @@ module Domain:Domain_sig.Base
   let boolean_is_empty _ = assert false
   let builtin _ = assert false
 
-  
+
   let binary_empty ~size _ = assert false
   let integer_empty _ = assert false
-  let boolean_empty _ = assert false        
+  let boolean_empty _ = assert false
 
   let binary_unknown  ~size _ = assert false
   let integer_unknown _ = assert false
-  let boolean_unknown _ = assert false        
+  let boolean_unknown _ = assert false
 
-  
+
 
   (* Assume. *)
   let assume_memory _ctx _ _ = assert false
@@ -383,13 +387,13 @@ module Domain:Domain_sig.Base
   let assume_integer _ctx _ _ = assert false
 
 
-  
-  
+
+
   let reachable _ = assert false
   let satisfiable _ = assert false
 
   let unknown_condition _ ?level = assert false
-  let unknown_choice _ ?level = assert false    
+  let unknown_choice _ ?level = assert false
 
   (* type binary_set = binary *)
   type choice = unit
@@ -399,6 +403,7 @@ module Domain:Domain_sig.Base
 
   let should_focus ~size:_ _ = assert false
   let may_alias ~ptr_size:_ _ ~size1:_ ~size2:_ = assert false
+  let is_weak ~size _ _ = assert false
   let binary_unknown_typed ~size:_ _ = assert false
   let query_boolean = Query.boolean
 

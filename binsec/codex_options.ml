@@ -171,7 +171,28 @@ module Output_Html = struct
   end)
 end
 
+module UseLoopDomain = struct
+  include Builder.False (struct
+    let name = "use-loop-domain"
+    let doc = "Activate inductive loop domain"
+  end)
+end
 
+module MMIOs = struct
+  include Builder.String_list (struct
+      let name = "mmios"
+      let doc = "sets memory blocks of the form addr+size as readable but unknown content"
+    end)
+  let get() = get() |> List.map (fun s ->
+      let addr,size = match String.split_on_char '+' s with
+        | [a;b] -> String.trim a,String.trim b
+        | _ -> failwith ("Global spec should be of the form addr+size; got " ^ s)
+      in
+      let size = int_of_string size in
+      let addr = int_of_string addr in
+      (addr,size)
+    )
+end
 (*
 module GlobalSymbols = struct
   include Builder.String_list (struct

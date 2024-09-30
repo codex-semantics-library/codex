@@ -20,6 +20,7 @@
 (**************************************************************************)
 
 open Codex;;
+open Frama_c_kernel;;
 
 (* A letter is labelled as (src,edge,dst) *)
 module Letter: Fixpoint.Regex.Letter

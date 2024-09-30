@@ -20,10 +20,10 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (library
- (public_name codex.UnionFind)
- (name UnionFind)
- (modules_without_implementation parameters)
- (libraries codex.PatriciaTree codex.codex_log)
+ (public_name codex.union_find)
+ (name Union_Find)
+ (modules_without_implementation parameters signatures)
+ (libraries patricia-tree)
  (modules :standard \ union_find_test)
 )
 
@@ -33,6 +33,6 @@
   (inline_tests
    (libraries qcheck-core))
   (preprocess (pps ppx_inline_test))
-  (libraries codex.UnionFind codex.PatriciaTree zarith qcheck-core)
+  (libraries codex.union_find patricia-tree zarith qcheck-core)
   (modules union_find_test)
 )

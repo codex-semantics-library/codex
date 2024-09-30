@@ -23,34 +23,41 @@
   (alias frama-c-configure)
   (deps (universe))
   (action ( progn
-            (echo "Codex:" %{lib-available:frama-c-codex.core} "\n")
+            (echo "Codex:" %{lib-available:frama_c_codex.core} "\n")
             (echo " - Frama-C:" %{lib-available:frama-c.kernel} "\n"))))
 
 (env
- (dev 
-  (flags (:standard -warn-error -a+31 -w -16-32-26-9-27-34-20)))
+ (dev
+  (flags (:standard -warn-error -a+31 -w -16-32-26-9-27-34-20-67-70)))
  (release
-   (flags (:standard -O3))) 
-;  (flags (:standard -O3)))
+  (ocamlopt_flags (:standard -O3))
+  )
  )
 
 (library
-  (optional)
   (name core)
-  (public_name frama-c-codex.core)
+  (public_name frama_c_codex.core)
   (modules :standard \ frama_c_codex)
-  (flags -open Frama_c_kernel :standard)
-  (libraries codex frama-c.kernel))
+  (libraries codex frama-c.kernel zarith patricia-tree codex.union_find))
 
 (plugin
-  (optional)
-  (name codex) (libraries frama-c-codex.core) (site (frama-c plugins)))
+  (name frama_c_codex_plugin)
+  (package frama_c_codex)
+  (libraries frama_c_codex.core)
+  (site (frama-c plugins)))
 
-;; The frama_c_codex.exe executable can be used to avoid patching frama_c to add cudd.
-;; It is also used to produce the standalone frama-c executable.
+
+;; The standalone frama_c_codex.exe executable can be used to avoid
+;; patching frama_c to add cudd, thus easing the installation.
 (executable
- (name frama_c_codex) 
- (public_name frama-c-codex)
+ (name frama_c_codex)
+ (public_name frama_c_codex)
+ (package frama_c_codex)
  (modules frama_c_codex)
- (flags :standard -open Frama_c_kernel -linkall) 
- (libraries frama-c.kernel frama-c.init.cmdline frama-c-codex.core codex frama-c.boot))
+ (flags :standard -open Frama_c_kernel -linkall)
+ (libraries frama-c.kernel frama-c.init.cmdline frama_c_codex.core codex frama-c.boot codex.union_find))
+
+
+;; Local Variables:
+;; mode: lisp
+;; End:

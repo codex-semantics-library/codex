@@ -19,6 +19,53 @@
 (*                                                                        *)
 (**************************************************************************)
 
+module Addr_tbl : Hashtbl.S with type key = Virtual_address.t
+
 (* Analysis hooks, builtin functions etc. *)
-module Make(State : Dba2Codex.StateS)(Record_cfg : Record_cfg.S): Analysis_settings.S
-  with module Record_cfg = Record_cfg and module State = State
+module Make(State : Dba2Codex.StateS)(Record_cfg : Record_cfg.S):sig
+
+  type skip_type = NotWhenInterpreting | Always
+  
+  type hook =
+    | SkipTo of skip_type * Virtual_address.t (** skip to address *)
+    | Hook of (Record_cfg.t -> State.t ->
+               Record_cfg.t * (Virtual_address.t * State.t) list)
+    (** Manually change the transfer function of an instruction. *)
+    | ChangeState of (State.t -> State.t)
+    (** Modifies the state before executing the corresponding instruction. *)
+    | Unroll of int
+    (** Unroll every loop having this address as its head. Argument: number
+        of iterations. *)
+    | EndPath
+    (** End this trace *)
+    | Return of Types.Ctypes.typ option
+    (** End this trace and check the return type if given *)
+    | EntryCall of string * Types.Ctypes.typ
+    (** Used during interprocedural analysis to enter the entry function, but should be replaced the first time it is encountered *)
+
+  (** Finds a hook, or raise Not_found.  *)
+  val find_hook: Virtual_address.t -> (hook * string)
+
+  (** Says whether the analysis should be "merge over all paths" only. Initially false. *)
+  val exploration_only : bool ref
+
+  val kernel_exit_point : Virtual_address.t
+
+  (** Add a hook to say that we should stop at this address. *)
+  val add_stop: Virtual_address.t -> unit
+
+  (** Add a hook to a function address to say that the function should return and just 
+      return a value of some type. *)
+  val add_return_unknown: Virtual_address.t -> Types.Ctypes.typ ->  unit
+
+  (** Add a hook to a function address to say that the address does nothing, 
+      instead it directly jumps to dest. *)
+  val add_skip: Virtual_address.t -> dest:Virtual_address.t -> unit
+
+  val add_entrycall: name:string -> Virtual_address.t -> Types.Ctypes.typ -> unit
+
+  val add_function_hook : name:string -> Virtual_address.t -> Types.Ctypes.typ -> unit
+
+  val add_return: Virtual_address.t -> Types.Ctypes.typ option -> unit
+
+end

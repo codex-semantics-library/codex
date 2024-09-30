@@ -29,10 +29,10 @@ module Make
   let name = "Assert_False_Domain"
 
   module Constraints = Constraints;;
-  module TC = Transfer_functions.Term;;  
+  module TC = Transfer_functions.Term;;
 
 
-  type binary = TC.binary Constraints.t  
+  type binary = TC.binary Constraints.t
   type integer = TC.integer Constraints.t
   type boolean = TC.boolean Constraints.t
 
@@ -58,26 +58,26 @@ module Make
     let convert_to_ival _ = assert false
     let convert_to_quadrivalent _ = assert false
     let binary_to_ival ~signed ~size _ = assert false
-    let binary_to_known_bits ~size _ = assert false      
-    let binary_is_empty ~size _ = assert false      
-    let binary_fold_crop ~size bin ~inf ~sup f acc = assert false      
+    let binary_to_known_bits ~size _ = assert false
+    let binary_is_empty ~size _ = assert false
+    let binary_fold_crop ~size bin ~inf ~sup f acc = assert false
     let is_singleton_int _ = assert false
-    let binary_is_singleton ~size _ = assert false            
+    let binary_is_singleton ~size _ = assert false
     module Boolean_Lattice = Lattices.Quadrivalent
     module Integer_Lattice = Lattices.Unit
     module Binary_Lattice = struct
       include Lattices.Unit
-      let includes ~size = assert false                
+      let includes ~size = assert false
       let is_bottom ~size = assert false
       let bottom ~size = assert false
       let top ~size = assert false
       let inter ~size = assert false
-      let join ~size = assert false      
+      let join ~size = assert false
       let pretty ~size = assert false
       let widen ~size ~previous _ = assert false
       let includes_or_widen ~size ~previous _ = assert false
       let singleton ~size _ = assert false
-    end    
+    end
   end
 
 
@@ -89,6 +89,8 @@ module Make
 
   let nondet ~doma ~tupa ~domb ~tupb ~tupres = assert false;;
 
+  let widened_fixpoint_step ~previous ~previous_tup ~next ~next_tup _bool ~res_tup = assert false
+
   let fixpoint_open() = ()
 
   module Sum = struct
@@ -98,7 +100,7 @@ module Make
   end;;
 
 
-  let fixpoint_step ~lvl actual_dom  ~actuals arg_dom ~args final_dom ~finals = assert false
+  let fixpoint_step ~lvl ~iteration actual_dom ~actuals arg_dom ~args final_dom ~finals = assert false
   ;;
 
 
@@ -115,7 +117,7 @@ module Make
 
   module Boolean_Forward = struct
     include Assert_False_Transfer_Functions.Boolean.Boolean_Forward;;
-    
+
     (* let (||) = ar2_boolean_boolean_boolean B.Boolean_Forward.(||)
      * let (&&) = ar2_boolean_boolean_boolean B.Boolean_Forward.(&&)
      * let (not) = ar1_boolean_boolean B.Boolean_Forward.not
@@ -127,16 +129,16 @@ module Make
 
   module Integer_Forward = struct
     include Assert_False_Transfer_Functions.Integer.Integer_Forward
-    (* let ile = ar2_integer_integer_boolean B.Integer_Forward.ile      
+    (* let ile = ar2_integer_integer_boolean B.Integer_Forward.ile
      * let ieq = ar2_integer_integer_boolean B.Integer_Forward.ieq
      * let iconst k = ar0_integer (B.Integer_Forward.iconst k)
      * let one  = iconst Z.one
      * let zero = iconst Z.zero
-     * 
+     *
      * let assume _ = assert false
      * let iunknown () = ar0_integer (B.Integer_Forward.iunknown ())
      * let ixor = ar2_integer_integer_integer B.Integer_Forward.ixor
-     * let ior  = ar2_integer_integer_integer B.Integer_Forward.ior 
+     * let ior  = ar2_integer_integer_integer B.Integer_Forward.ior
      * let iand = ar2_integer_integer_integer B.Integer_Forward.iand
      * let ishr = ar2_integer_integer_integer B.Integer_Forward.ishr
      * let ishl = ar2_integer_integer_integer B.Integer_Forward.ishl
@@ -151,26 +153,22 @@ module Make
   module Binary_Forward = struct
     include Assert_False_Transfer_Functions.Binary.Binary_Forward
   end
-  
-  
 
-  
+
+
+
   (* let integer_empty = ar0_integer B.Integer_Lattice.bottom
-   * let boolean_empty = ar0_boolean B.Boolean_Lattice.bottom *)        
+   * let boolean_empty = ar0_boolean B.Boolean_Lattice.bottom *)
 
-  let binary_empty ~size _ = assert false;;  
+  let binary_empty ~size _ = assert false;;
   let integer_empty _ = assert false;;
   let boolean_empty _ = assert false;;
 
-  let binary_unknown ~size _ = assert false;;  
+  let binary_unknown ~size _ = assert false;;
   let integer_unknown _ = assert false;;
   let boolean_unknown _ = assert false;;
 
-  
+
   let assume dom cond = assert false;;
 
 end
-
-
-
-

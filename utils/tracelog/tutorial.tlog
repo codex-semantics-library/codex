@@ -1,0 +1,34 @@
+-*- mode:tracelog -*-
+[Hello] This is a tutorial for using tracelog-mode, and documenting the
+│       tracelog-mode format.
+├─[Tracelog-mode] is a tool to navigate into tracelogs, implemented as
+│ │               an Emacs major mode.
+├─[Tracelogs] are detailed outputs representing the behaviour of a program.
+│ │           In addition to usual log levels and categories, it allows to
+│ │           present the information hierarchically as a tree, usually
+│ │           corresponding to the dynamic calltree of the program. It thus 
+│ │           allows both tracing and logging the information coming from the
+│ │           program, hence its name, tracelog. You can view it as a tool 
+│ │           for printf debugging, but on steroids.
+├─[Format] Each line of tracelog files follow a simple structure. 
+│ ├─[Guide lines] visually show the set of parent nodes to which a node belong.
+│ │ │             They are build using the graphic characters '├','└','│',
+│ │ │             and '─' at the beginning of every line.
+│ │ ├─[For instance] this line belongs to the nodes categorized by
+│ │ │ │              [For instance], [Guide lines], [Format] and [Hello]. And
+│ │ │ │              so is this line. This can be seen by following vertical
+│ │ │ │              lines at the start of this line.
+│ │ [Categories] are in square bracket and immediately follow the guide
+│ │ │            lines. They also correspond to a node in the tree.  
+│ │ │            You can collapse a node in the tree by clicking on the 
+│ │ │            category button, or typing <RET> anywhere on a category line.
+│ │ │            more clicks or presses to <RET> will cycle the subtree between
+│ │ │            being fully expanded, fully collapses, or expanding only the 
+│ │ │            immediate children.
+    [Tree navigation] Type 'u' to go up in the tree, to the parent.
+│ │ [Log levels] are visually distinguished.
+│ │ [Buttons] are visually distinguished.  
+
+corresponds both to the crea
+
+[Tracelogs] are detailed outputs representing the behaviour of a program. In addition to usual

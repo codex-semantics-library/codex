@@ -1,0 +1,7 @@
+fun_ptr.c:62.11-17: `funptr' -> ([--..--] -> &fun}
+Unproved regular alarms:
+Unproved additional alarms:
++ fun_ptr.c:62 : { test2(funptr); } -> typing_store ;
+Proved 0/0 regular alarms
+Unproved 0 regular alarms and 1 additional alarms.
+Solved 0/0 user assertions, proved 0

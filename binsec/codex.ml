@@ -19,22 +19,27 @@
 (*                                                                        *)
 (**************************************************************************)
 
+open! Cuddfix
+
 (* include Libase *)
 module Domain_sig = Domains.Domain_sig
 module With_focusing = Domains.With_focusing
 module Domains_constraints_constraint_propagation = Domains.Domains_constraints_constraint_propagation
-module Type_domain = Domains.Type_domain
 module Region_numeric_offset = Domains.Region_numeric_offset
 module Constraint_domain2 = Domains.Constraint_domain2
+module Loop_domain = Domains.Loop_domain
 module Bitwise_domain = Domains.Bitwise_domain
 module Memory_domain = Domains.Memory_domain
 module Wholify = Domains.Wholify
-module Typed_memory_domain = Domains.Typed_memory_domain
+module Typed_address = Domains.Typed_address
+module Value_union_concatenation = Domains.Value_union_concatenation
 module Region_separation = Domains.Region_separation
 module Region_suffix_tree = Domains.Region_suffix_tree
 module Fully_expanded_finite_region = Domains.Fully_expanded_finite_region
 
-module Codex_log = Codex_log  
+module Value_to_region = Domains.Value_to_region
+
+module Codex_log = Codex_log
 module Datatype_sig = Datatype_sig
 
 module Transfer_functions = Transfer_functions

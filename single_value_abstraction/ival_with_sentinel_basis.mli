@@ -19,4 +19,4 @@
 (*                                                                        *)
 (**************************************************************************)
 
-include Basis_sig.Binary_Integer_Basis
+include Basis_sig.Numeric_Basis

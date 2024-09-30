@@ -1,0 +1,16 @@
+reduce12.c:16.25-38: `root->rb_node' -> Union {{ ([5..0xFFFFFFFF] :
+                                                   ({self : Name(struct test_node)[{0}].(4)* | (self != 0)})) with BVal {true} };
+                                        { {0} with BVal {true} };}
+reduce12.c:16.25-29: `root' -> ([1..0xFFFFFFFF] : ({self : Name(struct rb_root)[{0}].(0)* | (self != 0)}))
+reduce12.c:17.9-13: `node' -> Union {{ ([5..0xFFFFFFFF] :
+                                         ({self : Name(struct test_node)[{0}].(4)* | (self != 0)})) with BVal {true} };
+                              { {0} with BVal {true} };}
+reduce12.c:18.11-24: `node->rb_left' -> Union {{ ([5..0xFFFFFFFF] :
+                                                   ({self : Name(struct test_node)[{0}].(4)* | (self != 0)})) with BVal {true} };
+                                        { {0} with BVal {true} };}
+reduce12.c:18.11-15: `node' -> ([5..0xFFFFFFFF] : ({self : Name(struct test_node)[{0}].(4)* | (self != 0)}))
+Unproved regular alarms:
+Unproved additional alarms:
+Proved 2/2 regular alarms
+Unproved 0 regular alarms and 0 additional alarms.
+Solved 0/0 user assertions, proved 0

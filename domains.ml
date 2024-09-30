@@ -19,6 +19,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
+module Sig = Domain_sig
 module With_Bottom = With_Bottom
 module With_Noop = With_Noop
 module Evaluating = Evaluating
@@ -26,6 +27,5 @@ module Prod = Prod_domain.Make
 module Region_separation = Region_separation
 module Lift_integer_domain_to_binary_domain = Lift_integer_domain_to_binary_domain
 module Constraints = Constraint_domain
-module Domain_sig = Domain_sig
 module Bitwise_domain = Bitwise_domain
 module Assert_False = Assert_False_Transfer_Functions

@@ -1,0 +1,25 @@
+string.c:17.14-26: `str->content' -> ([1..0xFFFFFFFF] :
+                                       ({self : char(1)[[2..0x7FFFFFFF]][{0}].(0)* | (self != 0)}))
+string.c:17.14-17: `str' -> ([1..0xFFFFFFFF] : ({self : Name(string)[{0}].(0)* | (self != 0)}))
+string.c:18.8-40: `ptr < str->content + str->length' -> {0; 1}
+string.c:18.8-11: `ptr' -> ([1..0xFFFFFFFF] :
+                             ({self : char(1)[[2..0x7FFFFFFF]][[0..0x7FFFFFFF]].(0)* | (self != 0)}))
+string.c:18.14-40: `str->content + str->length' -> ([3..0xFFFFFFFF] :
+                                                     ({self : char(1)[[2..0x7FFFFFFF]][[2..0x7FFFFFFF]].(0)* | (self != 0)}))
+string.c:18.14-26: `str->content' -> ([1..0xFFFFFFFF] :
+                                       ({self : char(1)[[2..0x7FFFFFFF]][{0}].(0)* | (self != 0)}))
+string.c:18.14-17: `str' -> ([1..0xFFFFFFFB] : ({self : Name(string)[{0}].(0)* | (self != 0)}))
+string.c:18.29-40: `str->length' -> [2..0x7FFFFFFF]
+string.c:18.29-32: `str' -> ([1..0xFFFFFFFB] : ({self : Name(string)[{0}].(0)* | (self != 0)}))
+string.c:19.3-6: `ptr' -> ([1..0xFFFFFFFE] :
+                            ({self : char(1)[[2..0x7FFFFFFF]][[0..0x7FFFFFFF]].(0)* | (self != 0)}))
+string.c:20.8-15: `ptr + 1' -> ([1..0xFFFFFFFE] :
+                                 ({self : char(1)[[2..0x7FFFFFFF]][[0..0x7FFFFFFF]].(0)* | (self != 0)})) + 0x1
+string.c:20.8-11: `ptr' -> ([1..0xFFFFFFFE] :
+                             ({self : char(1)[[2..0x7FFFFFFF]][[0..0x7FFFFFFF]].(0)* | (self != 0)}))
+Unproved regular alarms:
+Unproved additional alarms:
++ string.c:19 : { *ptr = (char)'0'; } -> array_offset_access ;
+Proved 4/4 regular alarms
+Unproved 0 regular alarms and 1 additional alarms.
+Solved 0/0 user assertions, proved 0

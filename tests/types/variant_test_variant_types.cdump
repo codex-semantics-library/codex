@@ -1,0 +1,35 @@
+variant.c:12.5-16: `e->tag == 0' -> {0; 1}
+variant.c:12.5-11: `e->tag' -> {0; 1}
+variant.c:12.5-6: `e' -> ([1..0xFFFFFFFF] : ({self : expr_t("#1")[{0}].(0)* | (self != 0)}))
+variant.c:13.21-32: `e->tag == 0' -> {0x1}
+variant.c:13.21-27: `e->tag' -> {0}
+variant.c:13.21-22: `e' -> ([1..0xFFFFFFFF] : ({self : expr_t("#1")[{0}].(0)* | (self != 0)}))
+variant.c:14.21-44: `e->data.constant < 1000' -> {0; 1}
+variant.c:14.21-37: `e->data.constant' -> Union {{ [-0x80000000..999] with BVal {true} };
+                                          { ([1..0xFFFFFFFF] : ({self : expr_t("#2")[{0}].(0)* | (self != 0)})) with BVal {true} };}
+variant.c:14.21-22: `e' -> ([1..0xFFFFFFFF] : ({self : expr_t("#1")[{0}].(0)* | (self != 0)}))
+variant.c:17.21-32: `e->tag != 0' -> {0x1}
+variant.c:17.21-27: `e->tag' -> {1}
+variant.c:17.21-22: `e' -> ([1..0xFFFFFFFF] : ({self : expr_t("#1")[{0}].(0)* | (self != 0)}))
+variant.c:18.14-27: `e->data.sum.a' -> Union {{ [-0x80000000..999] with BVal {true} };
+                                       { ([1..0xFFFFFFFF] : ({self : expr_t("#4")[{0}].(0)* | (self != 0)})) with BVal {true} };}
+variant.c:18.14-15: `e' -> ([1..0xFFFFFFFF] : ({self : expr_t("#1")[{0}].(0)* | (self != 0)}))
+variant.c:19.14-27: `e->data.sum.b' -> Union {{ {0} with BVal {true} };
+                                       { ([1..0xFFFFFFFF] : ({self : expr_t("#5")[{0}].(0)* | (self != 0)})) with BVal {true} };}
+variant.c:19.14-15: `e' -> ([1..0xFFFFFFFB] : ({self : expr_t("#1")[{0}].(0)* | (self != 0)}))
+variant.c:22.22-27: `(expr *)0 < a' -> {0; 1}
+variant.c:22.26-27: `a' -> Union {{ [-0x80000000..999] with BVal {true} };
+                           { ([1..0xFFFFFFFF] : ({self : expr_t("#4")[{0}].(0)* | (self != 0)})) with BVal {true} };}
+variant.c:23.22-27: `(expr *)0 < b' -> {0; 1}
+variant.c:23.26-27: `b' -> Union {{ {0} with BVal {true} };
+                           { ([1..0xFFFFFFFF] : ({self : expr_t("#5")[{0}].(0)* | (self != 0)})) with BVal {true} };}
+Unproved regular alarms:
+Unproved additional alarms:
+Proved 6/6 regular alarms
+Unproved 0 regular alarms and 0 additional alarms.
+variant.c:13: assertion is TRUE (valid) (proved with abstract interpretation)
+variant.c:14: assertion is FALSE (counter-example exists) (proved with smt solving)
+variant.c:17: assertion is TRUE (valid) (proved with abstract interpretation)
+variant.c:22: assertion is FALSE (counter-example exists) (proved with smt solving)
+variant.c:23: assertion is FALSE (counter-example exists) (proved with smt solving)
+Solved 5/5 user assertions, proved 2

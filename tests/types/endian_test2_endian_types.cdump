@@ -1,0 +1,12 @@
+endian.c:27.44-45: `(unsigned long *)p' -> {0} or ([1..0xFFFFFFFF] : (Name(struct pair))[{0}].0*)
+endian.c:27.44-45: `p' -> {0} or ([1..0xFFFFFFFF] : (Name(struct pair))[{0}].0*)
+endian.c:28.23-26: `ptr' -> {0} or ([1..0xFFFFFFFF] : (Name(struct pair))[{0}].0*)
+endian.c:28.22-26: `tmp' -> {3}
+endian.c:28.22-47: `tmp' -> {3}
+Unproved regular alarms:
+endian.c:28: Memory_access(*ptr, write) {true;false}
+Unproved additional alarms:
+Proved 0/1 regular alarms
+Unproved 1 regular alarms and 0 additional alarms.
+endian.c:28: assertion is TRUE (valid) (proved with abstract interpretation)
+Solved 1/1 user assertions, proved 1

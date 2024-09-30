@@ -91,7 +91,7 @@
  (public_name "codex.interval_map")
  (name interval_map)
  (modules Interval_map)
- (libraries codex.codex_log)
+ (libraries tracelog)
 )
 
 (library
@@ -100,6 +100,16 @@
  (modules int_builtins)
  (foreign_stubs (language c) (names int_builtins_c))
 )
+
+(library
+  (name int_builtins_tests)
+  (inline_tests
+   (libraries qcheck-core))
+  (preprocess (pps ppx_inline_test))
+  (libraries codex.int_builtins zarith qcheck-core)
+  (modules int_builtins_tests)
+)
+
 
 (library
  (public_name "codex.record_time")
@@ -124,22 +134,16 @@
  (libraries codex.codex_log codex.smallmap)
  (modules Condition_map)
 )
+
 (library
-  (name PatriciaTree)
-  (public_name codex.PatriciaTree)
-  (inline_tests
-   (libraries qcheck-core))
-  (preprocess (pps ppx_inline_test))
-  (libraries zarith qcheck-core)
-  (modules PatriciaTree)
+  (public_name codex.cuddfix)
+  (name cuddfix)
+  (modules)
+  (foreign_stubs (language c) (names cuddfix_c))
 )
 
-;; For test purposes only.
 (library
-  (name PatriciaTreeTest)
-  (inline_tests
-   (libraries qcheck-core))
-  (preprocess (pps ppx_inline_test))
-  (libraries PatriciaTree zarith qcheck-core)
-  (modules PatriciaTreeTest)
-)
+ (name HetHashtbl)
+ (public_name codex.het-hashtbl)
+ (modules HetHashtbl)
+ (libraries patricia-tree))

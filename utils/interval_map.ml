@@ -19,6 +19,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
+module Log = Tracelog.Make(struct let category = "Utils.Interval_map" end);;
 
 (* A mask is an integer with a single bit set (i.e. a power of 2). *)
 type mask = int
@@ -170,7 +171,7 @@ end = struct
     let tentative = Branch{id;prefix;branching_bit;tree0;tree1} in
     let v = WeakH.merge weakh (Obj.magic tentative) in
     let v = Obj.magic v in
-    if v == tentative then (Codex_log.debug "HASHCONS WORKS"; incr id_count);
+    if v == tentative then (Log.debug (fun p -> p "HASHCONS WORKS"); incr id_count);
     v
   ;;
     
@@ -830,7 +831,7 @@ let _old_fold_on_diff a b acc f =
       if idxa == idxb then
         let acc =
           if va == vb
-          then (Codex_log.performance_warning "fold_on_diff is inefficient: should skip entire trees"; acc)
+          then (Log.warning (fun p -> p "fold_on_diff is inefficient: should skip entire trees"); acc)
           else f ~size:(idxb - prev) prev va vb acc
         in
         let res = 
@@ -868,7 +869,7 @@ let fold_on_diff3 a b c acc f =
         (* if idxa == idxb && idxa == idxc then *)
         let acc =
           if va == vb && va == vc
-          then (Codex_log.performance_warning "fold_on_diff3 is inefficient: should skip entire trees"; acc)
+          then (Log.notice (fun p -> p "fold_on_diff3 is inefficient: should skip entire trees"); acc)
           else f ~size:(idxb - prev) prev va vb vc acc
         in
         let res = 

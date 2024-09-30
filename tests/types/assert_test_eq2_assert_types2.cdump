@@ -1,0 +1,12 @@
+assert.c:8.9-11: `*a' -> {1}
+assert.c:8.10-11: `a' -> ([1..0xFFFFFFFF] : ({self : Name(int1)[{0}].(0)* | (self != 0)}))
+assert.c:9.9-10: `c' -> {1}
+assert.c:10.19-25: `c == d' -> {0x1}
+assert.c:10.19-20: `c' -> {1}
+assert.c:10.24-25: `d' -> {1}
+Unproved regular alarms:
+Unproved additional alarms:
+Proved 1/1 regular alarms
+Unproved 0 regular alarms and 0 additional alarms.
+assert.c:10: assertion is TRUE (valid) (proved with abstract interpretation)
+Solved 1/1 user assertions, proved 1

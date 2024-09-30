@@ -24,29 +24,18 @@
 (library
   (public_name "binsec_codex.lib")
   (name binsec_codex_lib)
-  (flags :standard -warn-error -a+31 -w -27-26-32 -open Binsec)
+  (flags :standard -warn-error -a+31 -w -27-26-32-67-70 -open Binsec)
   (modules (:standard \ binsec_codex codex_main))
   (modules_without_implementation arch_settings)
-  (libraries binsec
-  codex
-  codex.transfer_functions codex.datatype_sig codex.lattices codex.domains
-              codex.single_value_abstraction codex.constraints codex.codex_log codex.smtbackend
-              codex.types zarith  codex.codex_config codex.extstdlib codex.interval_map
-              codex.framac_ival codex.utils.immutable_array
-              codex.utils.okasakimap cudd
-              codex.condition_map codex.fixpoint
-                                 
-
-))
+  (libraries codex.cuddfix ocamlgraph binsec codex zarith codex.union_find))
 
 
 
 (executable
   (package binsec_codex)
   (public_name binsec_codex)
+  (name binsec_codex)
   (flags (:standard -open Binsec -open Binsec_codex_lib))
   (modules binsec_codex codex_main)
-  (libraries binsec_codex.lib binsec codex.codex_config)
- (foreign_stubs (language c) (names binsec_cudd))
+  (libraries codex.cuddfix binsec_codex.lib binsec codex)
 )
-

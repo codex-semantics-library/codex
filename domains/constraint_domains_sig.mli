@@ -26,17 +26,17 @@ module type Domain_S = sig
     module Constraints:Constraints.Constraints_sig.Constraints
 
     val name: string
-    
+
     (* Type for elements of the abstract domain. The interface is
        persistent but the implementation can be imperative. *)
     type t
 
     (* Represent binary, integer and boolean dimensions in the abstract
        domain. *)
-    type binary = Transfer_functions.Term.binary Constraints.t      
+    type binary = Transfer_functions.Term.binary Constraints.t
     type integer = Transfer_functions.Term.integer Constraints.t
     type boolean = Transfer_functions.Term.boolean Constraints.t
-  
+
     val equal : t -> t -> bool
     val top : t
 
@@ -52,25 +52,46 @@ module type Domain_S = sig
       val integer: t -> integer ->  Integer_Lattice.t
       val binary: size:int -> t -> binary ->  Binary_Lattice.t
     end
-    
+
     (* Note: it would be simpler if we splitted into several arrays of types. *)
     (* TODO: Replace tuples of any by a type "any_tuple". *)
     val nondet:
       doma:t -> tupa:Constraints.any Immutable_array.t ->
       domb:t -> tupb:Constraints.any Immutable_array.t ->
       tupres: Constraints.any Immutable_array.t -> t
-    
-    val integer_empty: t -> integer -> t                   
+
+    (** [widened_fixpoint_step ~previous ~previous_tup ~next ~next_tup bool ~res_tup] where:
+        - [previous] is the previous domain state
+          and [previous_tup] the tuple of phi arguments;
+        - [next] is the next domain state obtained by joining
+          execution of the function body and initial state and
+          [next_tup] the phi arguments;
+        - [bool] is false if we know that the fixpoint is not reached yet,
+          and true otherwise;
+        - [res_tup] is the terms corresponding to the phi function;
+
+        returns a triple [(context,bool)] where:
+        - [context] is the new domain state;
+        - [bool] is true if the fixpoint is reached,
+          and false if not reached or we don't know. *)
+    val widened_fixpoint_step:
+      previous:t -> previous_tup:Constraints.any Immutable_array.t ->
+      next:t -> next_tup:Constraints.any Immutable_array.t ->
+      bool -> res_tup: Constraints.any Immutable_array.t -> t * bool
+
+
+
+    val integer_empty: t -> integer -> t
     val boolean_empty: t -> boolean -> t
     val binary_empty: size:int -> t -> binary -> t
 
-    val integer_unknown: t -> integer -> t                   
+    val integer_unknown: t -> integer -> t
     val boolean_unknown: t -> boolean -> t
     val binary_unknown: size:int -> t -> binary -> t
 
     (* Returns None if the result is bottom. *)
     val assume: t -> boolean -> t option
-  
+
     module Domain_Arity:sig
       type 'r ar0 = t -> 'r -> t
       type ('a,'r) ar1 = t -> 'a -> 'r -> t
@@ -78,10 +99,10 @@ module type Domain_S = sig
       type ('a,'b,'c,'r) ar3 = t -> 'a -> 'b -> 'c -> 'r -> t
       type ('a,'r) variadic = t -> 'a list -> t
     end
-  
+
     module Boolean_Forward:Transfer_functions.Boolean_Forward
     with module Arity := Domain_Arity and type boolean := boolean
-  
+
     module Integer_Forward:Transfer_functions.Integer_Forward
       with module Arity := Domain_Arity
        and type boolean := boolean
@@ -92,15 +113,15 @@ module type Domain_S = sig
        and type boolean := boolean
        and type binary := binary
 
-    
+
     val boolean_pretty: t -> Format.formatter -> boolean -> unit
     val integer_pretty: t -> Format.formatter -> integer -> unit
-    val binary_pretty: size:int -> t -> Format.formatter -> binary -> unit      
+    val binary_pretty: size:int -> t -> Format.formatter -> binary -> unit
 
     val pretty: Format.formatter -> t -> unit
 
     val fixpoint_open: unit -> unit
-    
+
     (* Tells if fixpoint is reached, and prepare to write the new
        values. The returned pair (bool,function) allows to decide
        whether we should end the fixpoint computation; the function
@@ -108,7 +129,8 @@ module type Domain_S = sig
        fixpoint is reached (if yes, we can close, but we don't have
        to). *)
     val fixpoint_step:
-      lvl:int -> 
+      lvl:int ->
+      iteration:int ->
       t -> actuals:Constraints.any Immutable_array.t ->
       t -> args:Constraints.any Immutable_array.t ->
       t -> finals:Constraints.any Immutable_array.t ->

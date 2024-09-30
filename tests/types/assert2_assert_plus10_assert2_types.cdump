@@ -1,0 +1,12 @@
+assert2.c:2.9-11: `*a' -> [--..--]
+assert2.c:2.10-11: `a' -> {0} or ([1..0xFFFFFFFF] : (int(4))[{0}].0*)
+assert2.c:3.11-17: `i + 10' -> [-0x7FFFFFF6..0x7FFFFFFF]
+assert2.c:3.11-12: `i' -> [--..--]
+assert2.c:4.20-23: `res' -> [-0x7FFFFFF6..0x7FFFFFFF]
+Unproved regular alarms:
+assert2.c:2: Memory_access(*a, read) {true;false}
+Unproved additional alarms:
+Proved 0/1 regular alarms
+Unproved 1 regular alarms and 0 additional alarms.
+assert2.c:4: assertion is FALSE (counter-example exists) (proved with smt solving)
+Solved 1/1 user assertions, proved 0

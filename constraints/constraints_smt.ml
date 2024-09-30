@@ -19,6 +19,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
+module Log = Tracelog.Make(struct let category = "Constraints.SMT" end);;
+
 (* This is sound only if we check that binaries cannot overflow. *)
 let option_translate_binary_to_integer = Codex_config.translation_to_smt_use_integer();;
 
@@ -226,6 +228,8 @@ module MakeFirstOrder
       | Integer{term=T1{tag;a}} -> ar1 ~constr tag a
       | Integer{term=T0{tag}} -> ar0 ~constr tag
       | Binary{term = _ } -> assert false
+      | Bool{term = _} -> assert false 
+      | Integer{term = _} -> assert false 
 
     and translate: type a. a C.t -> S.value = fun x ->
       let any = Any x in
@@ -306,13 +310,13 @@ module MakeHorn
 
     let [@warning "-11"] rec translate_: type a. a C.t -> S.value = fun constr ->
       match constr with
-      | Bool{term=(Mu_formal _) | Unknown _} ->
+      | Bool{term=(Mu_formal _) | Unknown _ | Inductive_var _} ->
         AnyHash.replace tr_memo_rel (Any constr) None;
         S.declare_muz_var ~name:(M.varname @@ Any constr) S.bool
-      | Integer{term=(Mu_formal _) | Unknown _} ->
+      | Integer{term=(Mu_formal _) | Unknown _ | Inductive_var _} ->
         AnyHash.replace tr_memo_rel (Any constr) None;
         S.declare_muz_var ~name:(M.varname @@ Any constr) S.int
-      | Binary{size;term=(Mu_formal _) | Unknown _} ->
+      | Binary{size;term=(Mu_formal _) | Unknown _ | Inductive_var _} ->
          let tr_typ =
            if option_translate_binary_to_integer then S.int
            else S.bitvec size
@@ -424,6 +428,7 @@ module MakeHorn
       in
       
       match tup with
+      | C.Inductive_vars _ -> assert false
       | C.Nondet {a;conda_bool;b;condb_bool} as tup ->
         let trconda = (translate conda_bool) in
         let trcondb = (translate condb_bool) in
@@ -536,7 +541,7 @@ module MakeHorn
                   let acc = loop acc (C.Any b) in
                   acc
                 | C.T1{a} -> loop acc (C.Any a)
-                | C.T0 _ | C.Mu_formal _ | C.Unknown _ | C.Empty -> acc
+                | C.T0 _ | C.Mu_formal _ | C.Unknown _ | C.Empty | C.Inductive_var _ -> acc
                 | C.Tuple_get(i,tup)  -> loop_tuple acc tup
               end in
               match AnyHash.find tr_memo_rel node with
@@ -549,6 +554,7 @@ module MakeHorn
             TupleHash.add visited_tuple tup ();
             (* Get the dependencies of the tuple. *)
             let acc = match tup with
+            | Inductive_vars _ -> assert false
             | Nondet{conda_bool;condb_bool;a;b} ->
               let acc = loop acc @@ C.Any conda_bool in
               let acc = loop acc @@ C.Any condb_bool in
@@ -627,6 +633,7 @@ module MakeHorn
     let module Dummy_Slicing() = struct
       let slicing t =
         let length = match t with
+          | C.Inductive_vars _ -> assert false
           | C.Mu{init} -> Immutable_array.length init
           | C.Nondet{a} -> Immutable_array.length a
         in let rec loop acc = function
@@ -661,10 +668,10 @@ module MakeHorn
     in
     (match res with
      | S.Sat ->
-       Codex_log.debug "Result is sat";
+       Log.debug (fun p -> p "Result is sat");
      Smtbackend.Smtlib_sig.Sat ()
      | S.Unsat ->
-       Codex_log.debug "Result is unsat";
+       Log.debug (fun p -> p "Result is unsat");
        Smtbackend.Smtlib_sig.Unsat
      | S.Unknown -> Smtbackend.Smtlib_sig.Unknown)
   ;;

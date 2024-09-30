@@ -1,0 +1,10 @@
+endian.c:52.44-46: `(unsigned long *)(& p)' -> {{ &p }}
+endian.c:53.23-26: `ptr' -> {{ &p }}
+endian.c:53.22-26: `tmp' -> {3}
+endian.c:53.22-47: `tmp' -> {3}
+Unproved regular alarms:
+Unproved additional alarms:
+Proved 3/3 regular alarms
+Unproved 0 regular alarms and 0 additional alarms.
+endian.c:53: assertion is TRUE (valid) (proved with abstract interpretation)
+Solved 1/1 user assertions, proved 1

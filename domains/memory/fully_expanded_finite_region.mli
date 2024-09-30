@@ -34,15 +34,15 @@ module type Enumerable_offset = sig
     size:int -> Context.t ->
     offset -> inf:Z.t -> sup:Z.t -> (Z.t -> 'a -> 'a) -> 'a -> 'a
   val is_precise:
-    size:int -> Context.t -> offset -> Z.t Memory_sig.precision       
+    size:int -> Context.t -> offset -> Z.t Memory_sig.precision
   val in_bounds:
-    size:int -> Context.t -> offset -> inf:Z.t -> sup:Z.t -> bool      
+    size:int -> Context.t -> offset -> inf:Z.t -> sup:Z.t -> bool
 end
 
 module Memory
     (Offset:Enumerable_offset)
     (Value:Value)
-    (Lift:sig
+    (_:sig
        (** Value is higher than offset on the domain stack, so we
           decompose a Value stack in an Offset stack and a context:
           [Lift.ctx value_ctx] = (offset_ctx,f) means that f
@@ -50,7 +50,7 @@ module Memory
        val ctx: Value.Context.t -> Offset.Context.t * (Offset.Context.t -> Value.Context.t)
      end)
   :sig
-  include Region
+  include Block
     with module Offset = Offset
      and module Value = Value
      and module Context = Value.Context

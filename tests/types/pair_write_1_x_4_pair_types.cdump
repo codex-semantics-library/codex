@@ -1,0 +1,8 @@
+pair.c:44.1-2: `a' -> ([1..0xFFFFFFFF] : ({self : Name(pair_eq)[{0}].(0)* | (self != 0)}))
+pair.c:45.1-2: `a' -> ([1..0xFFFFFFFF] : ({self : Name(pair_eq)[{0}].(0)* | (self != 0)}))
+Unproved regular alarms:
+Unproved additional alarms:
++ Return -> typing_store ;
+Proved 2/2 regular alarms
+Unproved 0 regular alarms and 1 additional alarms.
+Solved 0/0 user assertions, proved 0

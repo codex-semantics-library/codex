@@ -21,7 +21,6 @@
 
 (* List of types used in tests. *)
 
-open Codex
 module Ctypes = Codex.Types.Ctypes;;
 open Ctypes;;
 

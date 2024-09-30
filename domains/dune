@@ -26,16 +26,15 @@
 (library
   (public_name "codex.domains")
   (name domains)
-  (flags -w +a-3-4-6-9-40-41-42-44-45-48-34-27-32-60-37-20)
+  (flags -w +a-3-4-6-9-40-41-42-44-45-48-34-27-32-60-37-20-67-70)
   (libraries codex.transfer_functions codex.datatype_sig codex.lattices
              codex.single_value_abstraction codex.constraints codex.codex_log codex.smtbackend
              codex.types zarith  codex.codex_config codex.extstdlib codex.interval_map
              codex.framac_ival codex.utils.immutable_array
-             codex.utils.okasakimap cudd
-             codex.condition_map bheap
-             )
+             codex.utils.okasakimap cudd patricia-tree
+             codex.condition_map bheap tracelog
+             codex.union_find)
 
-  (modules :standard \ evaluating)  
+  (modules :standard \ evaluating)
   (modules_without_implementation constraint_domains_sig)
   )
-

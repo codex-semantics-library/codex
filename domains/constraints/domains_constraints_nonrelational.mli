@@ -20,10 +20,14 @@
 (**************************************************************************)
 
 module Make
-    (Constraints:Constraints.Constraints_sig.Constraints)
-    (B:Single_value_abstraction.Sig.Binary_Integer_Basis):
+    (C: Constraints.Constraints_sig.Constraints)
+    (B: Single_value_abstraction.Sig.Numeric_Basis)
+    (_: Constraints.Relations.GROUP_ACTION
+         with type binary = B.binary
+          and type integer = B.integer
+          and type boolean = B.boolean
+          and type ('a, 'b) relation = ('a, 'b) C.Relation.t) :
   Constraint_domains_sig.Domain_S
-  with module Query.Boolean_Lattice = B.Boolean_Lattice
-   and module Query.Integer_Lattice = B.Integer_Lattice
-   and module Constraints = Constraints
-;;
+    with module Query.Boolean_Lattice = B.Boolean_Lattice
+     and module Query.Integer_Lattice = B.Integer_Lattice
+     and module Constraints = C

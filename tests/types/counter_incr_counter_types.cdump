@@ -1,0 +1,19 @@
+counter.c:4.14-16: `*a' -> [0..0x7FFFFFFF]
+counter.c:4.15-16: `a' -> {0} or ([1..0xFFFFFFFF] : (Name(nat))[{0}].0*)
+counter.c:6.17-27: `i < length' -> {0; 1}
+counter.c:6.17-18: `i' -> [0..0x7FFFFFFF]
+counter.c:6.21-27: `length' -> [0..0x7FFFFFFF]
+counter.c:7.21-27: `n == i' -> {0x1}
+counter.c:7.21-22: `n' -> [0..0x7FFFFFFE]
+counter.c:7.26-27: `i' -> [0..0x7FFFFFFE]
+counter.c:8.3-6: `n + 1' -> [1..0x7FFFFFFF]
+counter.c:8.3-4: `n' -> [0..0x7FFFFFFE]
+counter.c:6.29-32: `i + 1' -> [1..0x7FFFFFFF]
+counter.c:6.29-30: `i' -> [0..0x7FFFFFFE]
+Unproved regular alarms:
+counter.c:4: Memory_access(*a, read) {true;false}
+Unproved additional alarms:
+Proved 0/1 regular alarms
+Unproved 1 regular alarms and 0 additional alarms.
+counter.c:7: assertion is TRUE (valid) (proved with abstract interpretation)
+Solved 1/1 user assertions, proved 1

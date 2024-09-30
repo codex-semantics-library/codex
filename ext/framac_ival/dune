@@ -22,8 +22,8 @@
 (library
  (public_name "codex.framac_ival")
  (name Framac_ival)
- (flags -w +a-3-4-6-9-40-41-42-44-45-48-34-27-32-50-60-26-33)  
+ (flags -w +a-3-4-6-9-40-41-42-44-45-48-34-27-32-50-60-26-33-67-70)
  (foreign_stubs (language c) (names "c_bindings"))
- (libraries zarith codex.datatype_sig codex.codex_log)
- (modules_without_implementation float_interval_sig float_sig) 
+ (libraries str zarith codex.datatype_sig codex.codex_log)
+ (modules_without_implementation float_interval_sig float_sig)
  )

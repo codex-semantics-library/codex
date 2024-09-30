@@ -22,14 +22,35 @@
 ; -*- mode:lisp -*-
 
 (library
- (public_name "codex.constraints")
- (name Constraints)
- (libraries codex.codex_log codex.bdd cudd
-            codex.condition_map codex.datatype_sig
-            codex.immutable_dynamic_array codex.utils.immutable_array
-            codex.transfer_functions zarith codex.codex_config
-            codex.smtbackend codex.treemap
-            )
-; (libraries codex.root codex.root2 codex.term codex.smtbackend); codex.lattices_ext)
-; (modules_without_implementation constraint_domains_sig)
- )
+  (public_name "codex.constraints")
+  (name Constraints)
+  (modules :standard \ relations_test)
+  (libraries
+    (re_export codex.codex_log)
+    (re_export codex.bdd)
+    (re_export cudd)
+    (re_export codex.condition_map)
+    codex.datatype_sig
+    codex.immutable_dynamic_array
+    codex.utils.immutable_array
+    codex.transfer_functions
+    zarith
+    codex.tracelog
+    codex.codex_config
+    codex.smtbackend
+    codex.treemap
+    codex.union_find
+    patricia-tree
+    codex.framac_ival
+    codex.single_value_abstraction))
+
+;; For test purposes only.
+(library
+  (name RelationsTest)
+  (inline_tests)
+  (preprocess (pps ppx_inline_test))
+  (libraries codex.cuddfix
+    codex.constraints codex.transfer_functions codex.union_find
+    zarith qcheck-core )
+  (modules relations_test)
+)

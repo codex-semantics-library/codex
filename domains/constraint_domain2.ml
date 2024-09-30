@@ -19,6 +19,12 @@
 (*                                                                        *)
 (**************************************************************************)
 
+
+(** This file corresponds to the symbolic expression domain described
+    in [POPL'23] and [PLDI'24]. *)
+
+module Log = Tracelog.Make(struct let category = "Domains.Constraint_domain2" end);;
+
 [@@@warning "-33"]              (* Constraints.() gives spurious warning in 4.04.2 *)
 
 (* Should we use first-order formula (over-approximation) or horn
@@ -53,16 +59,19 @@ module Constraints_smt = Constraints.Smt
 module Make
     (Constraints:Constraints.Constraints_sig.Constraints)
     (Domain:Constraint_domains_sig.Domain_S with module Constraints = Constraints)
-  :Domain_sig.Base = struct
+  :Domain_sig.Base
+    with type binary = TC.binary Constraints.t
+    and type boolean = TC.boolean Constraints.t
+= struct
 
-  let name = "Constraint_Domain2(" ^ Domain.name ^ ")";;
-  let unique_id = Domain_sig.Fresh_id.fresh name;;
-  
+
+  let name() = "Constraint_Domain2(" ^ (Domain.name) ^ ")";;
+  let unique_id() = Domain_sig.Fresh_id.fresh @@ name();;
+
   type 'a identifier = 'a Constraints.t
 
   module Types = struct
     type binary = TC.binary identifier
-    type memory = unit identifier
     type integer = TC.integer identifier
     type boolean = TC.boolean identifier
   end
@@ -93,7 +102,9 @@ module Make
        implement focusing. *)
     let compare = Constraints.compare
 
-    let hash _ = assert false
+    let hash = Constraints.hash
+
+    let to_int = Constraints.hash
   end
 
   module Binary = struct
@@ -119,48 +130,178 @@ module Make
       unique_id: int;
 
       (* Used for SMT queries. Could be computed form context_. *)
-      mutable path_condition: Boolean.t; 
+      mutable path_condition: Boolean.t;
       level:int;
-      (* The signature of operations like biadd does not return a new context, 
-         so we change it inplace for these operations. This imperative signature may be useful 
+      (* The signature of operations like biadd does not return a new context,
+         so we change it inplace for these operations. This imperative signature may be useful
          e.g. to use the optimisations in Apron.  *)
-      mutable domain:Domain.t;
+      mutable domain:Domain.t
     }
   ;;
+
+  (* Pair of constraints *)
+  module TC_Binary = struct
+    type t = TC.binary identifier
+    include Identifier
+  end
+
+  module TC_Integer = struct
+    type t = TC.integer identifier
+    include Identifier
+  end
+
+  module TC_Boolean = struct
+    type t = TC.boolean identifier
+    include Identifier
+  end
+
+  module Pair(Key : Datatype_sig.S) = struct
+    type t = Key.t * Key.t
+
+    let compare (a1,b1) (a2,b2) =
+      let c = Key.compare a1 a2 in
+      if c <> 0 then c
+      else Key.compare b1 b2
+
+    let equal (a1,b1) (a2,b2) = Key.equal a1 a2 && Key.equal b1 b2
+
+    let sdbm x y = y + (x lsl 16) + (x lsl 6) - x;;
+
+    let hash (a,b) =
+      sdbm (Key.hash a) (Key.hash b)
+  end
+
+  module MapPair = struct
+    module Key = struct
+      type 'key t = 'key identifier
+      let to_int = Constraints.hash
+
+      (* This implementation is correct, as here physical equality
+         implies type equality. *)
+      let polyeq: 'a t -> 'b t -> ('a, 'b) PatriciaTree.cmp = fun a b ->
+        let open PatriciaTree in
+        if (Obj.magic a == Obj.magic b)
+        then (Obj.magic Eq)
+        else Diff
+      ;;
+
+    end
+    module Value2 = struct
+      type ('key,'value) t = 'key Constraints.t
+    end
+    module Map2 = PatriciaTree.MakeHeterogeneousMap(Key)(Value2)
+    module Value1 = struct
+      type ('key,'value) t = 'key Constraints.t Map2.t
+    end
+    module Map1 = PatriciaTree.MakeHeterogeneousMap(Key)(Value1)
+    type t = unit Map2.t Map1.t
+    let find: 'a Key.t -> 'a Key.t -> t -> 'a Key.t =
+      fun key1 key2 map1 ->
+      let map2 = Map1.find key1 map1 in
+      Map2.find key2 map2
+    let mem: 'a Key.t -> 'a Key.t -> t -> bool =
+      fun key1 key2 map1 ->
+      match Map1.find key1 map1 with
+      | exception Not_found -> false
+      | map2 -> Map2.mem key2 map2
+    ;;
+
+    let add: 'a Key.t -> 'a Key.t -> 'a Key.t -> t -> t =
+      fun key1 key2 value map1 ->
+      let map2 = match Map1.find key1 map1 with
+        | exception Not_found -> Map2.singleton key2 value
+        | map2 -> Map2.add key2 value map2
+      in Map1.add key1 map2 map1
+    ;;
+    let empty = Map1.empty
+  end
+
+
+  module Common = struct
+    module Key = struct
+      include Constraints.Any
+      let to_int = get_id_int
+    end
+    module Map = PatriciaTree.MakeMap(Key)
+    module Set = PatriciaTree.MakeSet(Key)
+  end
+
+
+  (* Set of pairs of constraints. *)
+  module SetPair = struct
+    open Common
+    type t = Set.t Map.t
+
+    let mem key1 key2 map1 =
+      match Map.find key1 map1 with
+      | exception Not_found -> false
+      | map2 -> Set.mem key2 map2
+    ;;
+
+    let add key1 key2 value map1 =
+      let set2 = match Map.find key1 map1 with
+        | exception Not_found -> Set.singleton key2
+        | set2 -> Set.add key2 set2
+      in Map.add key1 set2 map1
+    ;;
+    let empty = Map.empty
+
+  end
+
+
+  (**************** Context ****************)
+
 
   module Context = struct
     type t = context
     let level ctx = ctx.level
-    
+
+    let copy x = { x with path_condition = x.path_condition; domain = x.domain }
+
+    (* Having a ConsLeftEmpty/ConsRightEmpty here could maybe allow
+        getting rid of the empty constructor (that would become a
+        special case of phi instead).  But we would still have to
+        create new name for the new phi variable, and not reuse the
+        left or the right term.
+
+        TODO: Think how this could allow the implementation of sum
+        and option types in the base language with a "normal"
+        (without option types, but with phi that can have empty
+        arguments) SSA for the integer language. If that works, it
+        would be very nice. *)
+
     type 'a mapping =
       | EmptyMapping: unit mapping
       | ConsSame: 'a Constraints.t * 'b mapping -> ('a identifier * 'b) mapping
       | ConsDifferent: 'a Constraints.t * 'a Constraints.t * 'b mapping -> ('a identifier * 'b) mapping
     ;;
 
-    type 'a in_tuple = { mapping: 'a mapping; } [@@unboxed]
-    type 'a in_acc = bool * 'a in_tuple
 
-    (* We reconstruct the identifiers on-demand. MAYBE: have the bottom case. *)
-    type 'a out_tuple = {
-      index: int;
-      odomain: Domain.t;
-      mapping: 'a mapping;
-      constraints: Constraints.any Immutable_array.t
-    }
+    (* MAYBE: it could be further simplified into a set of pairs, but
+       then tuple order might change between fixpoint iterations (but
+       possibly not, if we create fresh variables with ids always in
+       the same order.
+
+       However, the handling differs between nondet and fixpoint step,
+       so possibly not a good idea.
+
+       One easy simplification would be to get rid of ConsSame. *)
+    type 'a in_tuple = { mapping: 'a mapping;  } [@@unboxed]
+    type 'a in_acc = bool * 'a in_tuple
+    type 'a out_tuple = { phi: MapPair.t }
 
     type ('a,'b) result =
         Result: bool * 'some in_tuple * (t -> 'some out_tuple -> 'a * 'b out_tuple) -> ('a,'b) result
 
     type empty_tuple = unit
-    let empty_tuple = { mapping = EmptyMapping; }
+    let empty_tuple () = { mapping = EmptyMapping; }
 
   end
   open Context
 
   (* Initialize all the constants so that we know they are in, and we do not need to change
      the context for them (we can just return the identifier). *)
-  let root_domain() = 
+  let root_domain() =
     let domain = Domain.top in
     let domain = Domain.Boolean_Forward.true_ domain Constraints.Build.Boolean.true_ in
     let domain = Domain.Boolean_Forward.false_ domain Constraints.Build.Boolean.false_ in
@@ -173,7 +314,7 @@ module Make
 
   let unique_id_ref = ref 0;;
   let get_unique_id() = incr unique_id_ref; !unique_id_ref;;
-  
+
   let root_context() =
 
     let ctx = {
@@ -194,7 +335,7 @@ module Make
   type 'a m = Domain.t -> 'a * Domain.t
   let return x = fun domain -> x,domain
   let (>>=) m f = fun dom1 -> let (res,dom2) = m dom1 in (f res) dom2
-  
+
   (* Special version of the run function of the State monad. *)
   let run ctx f =
     let dom = ctx.domain in
@@ -204,8 +345,8 @@ module Make
       ctx.domain <- dom;
       res
   ;;
-  
-  include Transfer_functions.Builtin.Make(Types)(Context)
+
+  (* include Transfer_functions.Builtin.Make(Types)(Context) *)
 
   (* This optimization is very important, else in particular we build
      complex formula that are actually empty. *)
@@ -225,14 +366,14 @@ module Make
 
   let ar0_boolean = ar0
   let ar0_integer ctx = ar0
-  let ar0_binary = ar0        
+  let ar0_binary = ar0
 
   let iconst k = ar0 (Constraints.Build.Integer.iconst k) (Domain.Integer_Forward.iconst k);;
-  let biconst ~size k = ar0 (Constraints.Build.Binary.biconst ~size k) (Domain.Binary_Forward.biconst ~size k);;  
+  let biconst ~size k = ar0 (Constraints.Build.Binary.biconst ~size k) (Domain.Binary_Forward.biconst ~size k);;
 
   let opt_integer x domain =
     if option_semantic_simplification_constraints
-    then 
+    then
         let value = Domain.Query.integer domain x in
         match Domain.Query.is_singleton_int value with
         | None -> x, domain
@@ -240,7 +381,7 @@ module Make
     else x, domain
   ;;
 
-  let opt_binary ~size x domain = 
+  let opt_binary ~size x domain =
     if option_semantic_simplification_constraints
     then
         let value = Domain.Query.binary ~size domain x in
@@ -250,7 +391,7 @@ module Make
     else x,domain
   ;;
 
-  
+
   let ar1 fconstrain fdomain a domain =
       let res = fconstrain a in
       let dom = fdomain domain a res in
@@ -271,8 +412,8 @@ module Make
     run ctx @@ (ar1 fconstrain fdomain a >>= opt_binary ~size)
   ;;
 
-  
-  
+
+
 
   let ar1_boolean_boolean ctx fconstrain fdomain a  =
     run ctx @@ (ar1 fconstrain fdomain a >>= opt_boolean)
@@ -298,7 +439,7 @@ module Make
   let ar2_binary_binary_binary ~size ctx fconstrain fdomain a b =
     run ctx @@ (ar2 ctx fconstrain fdomain a b >>= opt_binary ~size)
 
-  
+
   let ar2_integer_integer_integer ctx fconstrain fdomain a b =
     run ctx @@ (ar2 ctx fconstrain fdomain a b >>= opt_integer)
 
@@ -306,7 +447,7 @@ module Make
     (ar2 ctx fconstrain fdomain a b >>= opt_boolean)
   ;;
 
-  let ar2_integer_integer_boolean = 
+  let ar2_integer_integer_boolean =
     (if option_semantic_simplification_constraints
     then ar2_boolean_boolean_boolean
     else ar2 )
@@ -325,7 +466,7 @@ module Make
   let ar2_binary_binary_boolean ~size ctx fconstrain fdomain a b =
     run ctx @@ ar2_binary_binary_boolean ~size ctx fconstrain fdomain a b
   ;;
-  
+
   let ar2_boolean_boolean_boolean ctx fconstrain fdomain a b =
     run ctx @@ ar2_boolean_boolean_boolean ctx fconstrain fdomain a b
   ;;
@@ -383,15 +524,15 @@ module Make
       begin
         (* Test in case the condition became bottom after the propagation *)
         match Domain.Query.convert_to_quadrivalent @@ Domain.Query.boolean domain cond with
-        | Lattices.Quadrivalent.(False | Bottom) -> None        
-        | Lattices.Quadrivalent.(True | Top) -> 
+        | Lattices.Quadrivalent.(False | Bottom) -> None
+        | Lattices.Quadrivalent.(True | Top) ->
           Some { domain;
                  unique_id = get_unique_id();
                  path_condition = Constraints.Build.Boolean.(&&) cond ctx.path_condition ;
-                 level = ctx.level;  }
+                 level = ctx.level }
       end
 
-  ;;    
+  ;;
 
   (* Eventually, we did not assume simple constraints individually, and it performs better. *)
   let assume ctx cond =
@@ -406,22 +547,22 @@ module Make
           | None -> None
           | Some domain -> begin
               match Domain.Query.convert_to_quadrivalent @@ Domain.Query.boolean domain cond with
-              | Lattices.Quadrivalent.(False | Bottom) -> None              
+              | Lattices.Quadrivalent.(False | Bottom) -> None
               | Lattices.Quadrivalent.(True | Top) ->
                 Some { domain;
                        unique_id = get_unique_id();
                        path_condition = Constraints.Build.Boolean.(&&) cond ctx.path_condition ;
-                       level = ctx.level;  }
+                       level = ctx.level }
             end
         end
-  ;;    
+  ;;
 
 
 
-  
+
   let imperative_assume ctx cond =
     match assume ctx cond with
-    | None -> assert false       (* Should not happen, the condition
+    | None -> raise Domain_sig.Bottom (* Should not happen, the condition
                                    should only limit fresh values, not
                                     create a bottom. *)
     | Some newctx -> begin
@@ -429,9 +570,12 @@ module Make
         ctx.path_condition <- Constraints.Build.Boolean.(&&) cond ctx.path_condition
       end
   ;;
-      
-      
-  
+
+  let imperative_assign_context ctx newctx =
+    ctx.domain <- newctx.domain;
+    ctx.path_condition <- newctx.path_condition
+  ;;
+
   module Boolean_Forward = struct
     let (||) ctx = ar2_boolean_boolean_boolean ctx Constraints.Build.Boolean.(||) Domain.Boolean_Forward.(||)
     let (&&) ctx = ar2_boolean_boolean_boolean ctx Constraints.Build.Boolean.(&&) Domain.Boolean_Forward.(&&)
@@ -440,11 +584,11 @@ module Make
     let true_ ctx = run ctx @@ ar0_boolean Constraints.Build.Boolean.true_ Domain.Boolean_Forward.true_
     let true_ = let res = Constraints.Build.Boolean.true_ in fun ctx -> res
     let false_ ctx = run ctx @@ ar0_boolean Constraints.Build.Boolean.false_ Domain.Boolean_Forward.false_
-    let false_ = let res = Constraints.Build.Boolean.false_ in fun ctx -> res        
+    let false_ = let res = Constraints.Build.Boolean.false_ in fun ctx -> res
   end
 
   module Integer_Forward' = struct
-    let ile ctx = ar2_integer_integer_boolean ctx Constraints.Build.Integer.ile Domain.Integer_Forward.ile      
+    let ile ctx = ar2_integer_integer_boolean ctx Constraints.Build.Integer.ile Domain.Integer_Forward.ile
     let ieq ctx = ar2_integer_integer_boolean ctx Constraints.Build.Integer.ieq Domain.Integer_Forward.ieq
 
     let iconst k ctx = run ctx @@ ar0_integer ctx (Constraints.Build.Integer.iconst k) (Domain.Integer_Forward.iconst k)
@@ -454,7 +598,7 @@ module Make
     let zero = let res = Constraints.Build.Integer.zero in fun ctx -> res
 
     let ixor ctx = ar2_integer_integer_integer ctx Constraints.Build.Integer.ixor Domain.Integer_Forward.ixor
-    let ior  ctx = ar2_integer_integer_integer ctx Constraints.Build.Integer.ior  Domain.Integer_Forward.ior 
+    let ior  ctx = ar2_integer_integer_integer ctx Constraints.Build.Integer.ior  Domain.Integer_Forward.ior
     let iand ctx = ar2_integer_integer_integer ctx Constraints.Build.Integer.iand Domain.Integer_Forward.iand
     let ishr ctx = ar2_integer_integer_integer ctx Constraints.Build.Integer.ishr Domain.Integer_Forward.ishr
     let ishl ctx = ar2_integer_integer_integer ctx Constraints.Build.Integer.ishl Domain.Integer_Forward.ishl
@@ -493,7 +637,7 @@ module Make
         constrain,domain
 
       let biadd ~size ~nsw ~nuw ~nusw = default (Constraints.Build.Binary.biadd ~size ~nsw ~nuw ~nusw) (Domain.Binary_Forward.biadd ~size ~nsw ~nuw ~nusw)
-      let bisub ~size ~nsw ~nuw ~nusw = default (Constraints.Build.Binary.bisub ~size ~nsw ~nuw ~nusw) (Domain.Binary_Forward.bisub ~size ~nsw ~nuw ~nusw)        
+      let bisub ~size ~nsw ~nuw ~nusw = default (Constraints.Build.Binary.bisub ~size ~nsw ~nuw ~nusw) (Domain.Binary_Forward.bisub ~size ~nsw ~nuw ~nusw)
       let bimul ~size ~nsw ~nuw = default (Constraints.Build.Binary.bimul ~size ~nsw ~nuw) (Domain.Binary_Forward.bimul ~size ~nsw ~nuw)
 
       let bxor ~size = default (Constraints.Build.Binary.bxor ~size) (Domain.Binary_Forward.bxor ~size)
@@ -501,14 +645,14 @@ module Make
       let band ~size = default (Constraints.Build.Binary.band ~size) (Domain.Binary_Forward.band ~size)
 
       let bashr ~size = default (Constraints.Build.Binary.bashr ~size) (Domain.Binary_Forward.bashr ~size)
-      let blshr ~size = default (Constraints.Build.Binary.blshr ~size) (Domain.Binary_Forward.blshr ~size)                                        
+      let blshr ~size = default (Constraints.Build.Binary.blshr ~size) (Domain.Binary_Forward.blshr ~size)
       let bshl ~size ~nsw ~nuw = default (Constraints.Build.Binary.bshl ~size ~nsw ~nuw) (Domain.Binary_Forward.bshl ~size ~nsw ~nuw)
 
       let bisdiv ~size = default (Constraints.Build.Binary.bisdiv ~size) (Domain.Binary_Forward.bisdiv ~size)
-      let biudiv ~size = default (Constraints.Build.Binary.biudiv ~size) (Domain.Binary_Forward.biudiv ~size)        
+      let biudiv ~size = default (Constraints.Build.Binary.biudiv ~size) (Domain.Binary_Forward.biudiv ~size)
       let bismod ~size = default (Constraints.Build.Binary.bismod ~size) (Domain.Binary_Forward.bismod ~size)
       let biumod ~size = default (Constraints.Build.Binary.biumod ~size) (Domain.Binary_Forward.biumod ~size)
-      
+
       let bextract ~size ~index ~oldsize dom a =
         let constrain = Constraints.Build.Binary.bextract ~size ~index ~oldsize a in
         let domain = Domain.Binary_Forward.bextract ~size ~index ~oldsize dom a constrain in
@@ -653,10 +797,18 @@ module Make
                        Binary{term=T2{tag=TC.Biadd _size;
                                       a=Binary{term=T0{tag=TC.Biconst(_size1,k1)}};
                                       b=Binary _ as x}})
+        | Constraints.(Binary{term=T2{tag=TC.Biadd _size;
+                                      a=Binary _ as x;
+                                      b=Binary{term=T0{tag=TC.Biconst(_size1,k1)}}}},
+                       Binary{term=T0{tag=TC.Biconst (_size2, k2)}})
+        | Constraints.(Binary{term=T0{tag=TC.Biconst (_size2, k2)}},
+                       Binary{term=T2{tag=TC.Biadd _size;
+                                      a=Binary _ as x;
+                                      b=Binary{term=T0{tag=TC.Biconst(_size1,k1)}}}})
               ->
             let k = Z.add k2 k1 in
             let c = Constraints.Build.Binary.biconst ~size k in
-            let domain = Domain.Binary_Forward.biconst ~size k domain c in 
+            let domain = Domain.Binary_Forward.biconst ~size k domain c in
             let res = Constraints.Build.Binary.biadd ~size ~nsw ~nuw ~nusw x c in
             let domain = Domain.Binary_Forward.biadd ~size ~nsw ~nuw ~nusw domain x c res in
             res, domain
@@ -713,7 +865,7 @@ module Make
         if (size = oldsize) && (index = 0) then c, domain
         else
         begin match c with
-          | Constraints.(Binary{term=T2{tag=Bconcat(size1,size2);a;b}}) -> 
+          | Constraints.(Binary{term=T2{tag=Bconcat(size1,size2);a;b}}) ->
               if (index < size2) && (size <= size2) then (bextract ~size ~index ~oldsize:size2 domain b)
               else
                 if (index >= size2) && (size <= size1) then (bextract ~size ~index:(index - size2) ~oldsize:size1 domain a)
@@ -724,7 +876,7 @@ module Make
     end
 
     module R = Rewrite
-    
+
     let biadd ~size ~nsw ~nuw ~nusw ctx = ar2_binary_binary_binary' ~size ctx @@ R.biadd ~size ~nsw ~nuw ~nusw
     let bisub ~size ~nsw ~nuw ~nusw ctx = ar2_binary_binary_binary' ~size ctx @@ R.bisub ~size ~nsw ~nuw ~nusw
     let bimul ~size ~nsw ~nuw ctx = ar2_binary_binary_binary' ~size ctx @@ R.bimul ~size ~nsw ~nuw
@@ -763,8 +915,8 @@ module Make
 
     let biule ~size ctx = ar2_binary_binary_boolean ~size ctx (Constraints.Build.Binary.biule ~size) (Domain.Binary_Forward.biule ~size)
     let bisle ~size ctx = ar2_binary_binary_boolean ~size ctx (Constraints.Build.Binary.bisle ~size) (Domain.Binary_Forward.bisle ~size)
-    
-    let bisle ~size ctx a b = 
+
+    (* let bisle ~size ctx a b =
       let diff = bisub ~size ~nsw:false ~nuw:false ~nusw:false ctx b a in
       let zero = biconst ~size Z.zero ctx in
       let leq_zero = bisle ~size ctx diff zero in
@@ -772,15 +924,15 @@ module Make
       let geq_zero = Boolean_Forward.((||) ctx (not ctx leq_zero) eq_zero) in
       match Domain.Query.convert_to_quadrivalent @@ Domain.Query.boolean ctx.domain geq_zero with
       | Lattices.Quadrivalent.(True | False | Bottom) -> geq_zero
-      | Lattices.Quadrivalent.Top -> bisle ~size ctx a b
+      | Lattices.Quadrivalent.Top -> bisle ~size ctx a b *)
 
     let biule ~size ctx a b =
       biule ~size ctx a b
 
-    let bsext ~size ~oldsize ctx = ar1_binary_binary ~size ctx (Constraints.Build.Binary.bsext ~size ~oldsize) (Domain.Binary_Forward.bsext ~size ~oldsize)      
+    let bsext ~size ~oldsize ctx = ar1_binary_binary ~size ctx (Constraints.Build.Binary.bsext ~size ~oldsize) (Domain.Binary_Forward.bsext ~size ~oldsize)
     let buext ~size ~oldsize ctx = ar1_binary_binary ~size ctx (Constraints.Build.Binary.buext ~size ~oldsize) (Domain.Binary_Forward.buext ~size ~oldsize)
     let bchoose ~size cond ctx = ar1_binary_binary ~size ctx (Constraints.Build.Binary.bchoose ~size cond) (Domain.Binary_Forward.bchoose ~size cond)
-    let bofbool ~size ctx = ar1_boolean_binary ~size ctx (Constraints.Build.Binary.bofbool ~size) (Domain.Binary_Forward.bofbool ~size)                                 
+    let bofbool ~size ctx = ar1_boolean_binary ~size ctx (Constraints.Build.Binary.bofbool ~size) (Domain.Binary_Forward.bofbool ~size)
     let bconcat ~size1 ~size2 ctx = ar2_binary_binary_binary ~size:(size1 + size2) ctx (Constraints.Build.Binary.bconcat ~size1 ~size2) (Domain.Binary_Forward.bconcat ~size1 ~size2)
     (* let bextract ~size ~index ~oldsize ctx = ar1_binary_binary ~size ctx  (Constraints.Build.Binary.bextract ~size ~index ~oldsize) (Domain.Binary_Forward.bextract ~size ~index ~oldsize) *)
 
@@ -800,7 +952,7 @@ module Make
 
     (** --------------------------- Bit-stealing operations --------------------------- **)
 
-    
+
     (* Simplication 1 : ((p + t) + k) & m = 0 ==> (t - k) = 0 if m = 2^{n}-1 /\ k \in [-m;m] /\ (p & m) = 0 /\ (t & ~m) = 0 *)
     (* example : ((p + tag) - 3) & 7 = 0 ==> (tag - 3) = 0 if (p & 7) = 0 /\ (tag & ~7) = 0 *)
 
@@ -811,17 +963,17 @@ module Make
       match a,b with
       | Constraints.(Binary{term=T0{tag=TC.Biconst(_size4,r)}}),
         Constraints.(Binary{term=T2{tag=TC.Band _size1;
-                                    a=(Binary{term=T0{tag=TC.Biconst(_size3,l)}} as mask);
+                                    a=(Binary{term=T0{tag=TC.Biconst(_size3,l)}});
                                     b=(Binary{term=T2{tag=TC.Biadd _size2;
                                           a=(Binary{term=T2{tag=TC.Biadd _size6;
-                                                a=Binary _ as g;
-                                                b=Binary _ as h
+                                                a=Binary _ ;
+                                                b=Binary _
                                             }});
-                                          b=(Binary{term=T0{tag=TC.Biconst(_size7,k)}} as ofs)
+                                          b=(Binary{term=T0{tag=TC.Biconst(_size7,k)}})
                                       }})
                                   }})
             when Z.equal Z.zero r
-          -> 
+          ->
             assert false
 
       | Constraints.(Binary{term=T0{tag=TC.Biconst(_size4,r)}}),
@@ -841,48 +993,42 @@ module Make
             when Z.equal Z.zero r
           ->
             (* if m = 2^{n}-1 /\ k \in [-m;m] /\ (p & m) = 0 /\ (t & ~m) = 0 & (i = 0 && msb <= j)  *)
-            Codex_log.debug "l : %a" Z.pp_print l ;
+            Log.debug (fun p -> p "l : %a" Z.pp_print l);
             let lsb = Z.trailing_zeros l in (* position of the least significant bit *)
-            Codex_log.debug "lsb : %d" lsb ;
+            Log.debug (fun p -> p "lsb : %d" lsb);
             let m = Z.shift_right l lsb in
-            Codex_log.debug "m : %a" Z.pp_print m ;
-            let msucc = Z.succ m in 
+            Log.debug (fun p -> p "m : %a" Z.pp_print m);
+            let msucc = Z.succ m in
             let msb = Z.log2 msucc in
-            Codex_log.debug "msb : %d" msb ;
+            Log.debug (fun p -> p "msb : %d" msb);
             let c1 = Z.equal msucc (Z.shift_left Z.one msb) in  (* m = 2^{n}-1 *)
-            Codex_log.debug "is_mask : %b" c1 ;
+            Log.debug (fun p -> p "is_mask : %b" c1);
             let k = Z.signed_extract k lsb msb in
-            Codex_log.debug "offset : %a" Z.pp_print k ;
+            Log.debug (fun p -> p "offset : %a" Z.pp_print k);
             let c2 = Z.leq (Z.neg m) k && Z.leq k m in          (* k in [-m;m] *)
-            Codex_log.debug "is offset in [-mask;mask] : %b" c2 ;
-            let zero = biconst ~size:oldsize Z.zero ctx in 
+            Log.debug (fun p -> p "is offset in [-mask;mask] : %b" c2);
+            let zero = biconst ~size:oldsize Z.zero ctx in
             let c3 = beq ~size:oldsize ctx (band ~size:oldsize ctx ptr mask) zero in
-            Codex_log.debug "c3 : %a" (Domain.boolean_pretty ctx.domain) c3 ;
-            let neg_mask = biconst ~size:oldsize (Z.lognot l) ctx in  
-            Codex_log.debug "neg_mask : %a" (Domain.binary_pretty ~size:oldsize ctx.domain) neg_mask ;
+            Log.debug (fun p -> p "c3 : %a" (Domain.boolean_pretty ctx.domain) c3);
+            let neg_mask = biconst ~size:oldsize (Z.lognot l) ctx in
+            Log.debug (fun p -> p "neg_mask : %a" (Domain.binary_pretty ~size:oldsize ctx.domain) neg_mask);
             let c4 = beq ~size:oldsize ctx (band ~size:oldsize ctx tag neg_mask) zero in
-            Codex_log.debug "c4 : %a" (Domain.boolean_pretty ctx.domain) c4 ;
+            Log.debug (fun p -> p "c4 : %a" (Domain.boolean_pretty ctx.domain) c4);
             let c5 =
               match Domain.Query.(convert_to_quadrivalent @@ boolean ctx.domain @@ Boolean_Forward.(&&) ctx c3 c4) with
               | Lattices.Quadrivalent.True -> true
               | _ -> false
             in
-            Codex_log.debug "c5 : %b" c5 ;
+            Log.debug (fun p -> p "c5 : %b" c5);
             let c6 = index = 0 && msb <= size in                (* *)
-            Codex_log.debug "c6 : %b" c6 ;
-            Codex_log.debug "c1 /\ c2 /\ c5 /\ c6 : %b" (c1 && c2 && c5 && c6) ;  
+            Log.debug (fun p -> p "c6 : %b" c6);
+            Log.debug (fun p -> p "c1 /\ c2 /\ c5 /\ c6 : %b" (c1 && c2 && c5 && c6));
             if c1 && c2 && c5 && c6 then
               beq ~size:oldsize ctx (biadd ~size ~nsw ~nuw ~nusw ctx tag ofs) zero    (* (tag + offset) = 0 *)
 
             else assert false
-          
-      | _ -> beq ~size ctx a b
 
-    let beq ~size ctx a b =
-      Codex_log.debug "Constraint_domain2.beq %a %a" Constraints.pretty a Constraints.pretty b ;
-      let res = beq ~size ctx a b in
-      Codex_log.debug "Constraint_domain2.beq returning %a" Constraints.pretty res ;
-      res
+      | _ -> beq ~size ctx a b
 
     (* let rec beq_aux ~size ctx a b =
       Codex_log.debug "Constraint_domain2.beq (aux) %a %a" Identifier.pretty a Identifier.pretty b ;
@@ -929,7 +1075,7 @@ module Make
             end
           | _ -> beq ~size ctx a b
         end
-      
+
       | _ -> beq ~size ctx a b ;; *)
 
     (*
@@ -944,15 +1090,15 @@ module Make
       (* let res = beq ~size ctx a b in *)
       res
     *)
-    
+
   end
   module Memory_Forward = Assert_False_Transfer_Functions.Memory.Memory_Forward
-  
+
   (* Note: we do not create them every time *)
   (* let integer_empty ctx = let res = ar0_integer ctx Constraints.Build.Integer.empty Domain.integer_empty in run ctx res *)
-  let integer_empty = let res = Constraints.Build.Integer.empty in fun ctx -> res                              
+  let integer_empty = let res = Constraints.Build.Integer.empty in fun ctx -> res
   (* let boolean_empty = let res = ar0_boolean Constraints.Build.Boolean.empty Domain.boolean_empty in fun ctx -> run ctx res *)
-  let boolean_empty = let res = Constraints.Build.Boolean.empty in fun ctx -> res                        
+  let boolean_empty = let res = Constraints.Build.Boolean.empty in fun ctx -> res
 
   (* MAYBE: Avoid re-creation in most common cases *)
   let binary_empty ~size ctx =
@@ -960,23 +1106,21 @@ module Make
     run ctx res
   ;;
 
-  let boolean_unknown ctx = run ctx @@ ar0_boolean (Constraints.Build.Boolean.unknown ~level:ctx.level) (Domain.boolean_unknown)  
+  let boolean_unknown ctx = run ctx @@ ar0_boolean (Constraints.Build.Boolean.unknown ~level:ctx.level) (Domain.boolean_unknown)
   let binary_unknown ~size ctx = run ctx @@ ar0_binary (Constraints.Build.Binary.unknown ~level:ctx.level ~size) (Domain.binary_unknown ~size)
   let integer_unknown ctx = run ctx @@ ar0_integer ctx (Constraints.Build.Integer.unknown ~level:ctx.level) (Domain.integer_unknown);;
   ;;
 
-  
-  
-  (**************** Pretty printing ****************)
 
-  let memory_pretty ctx fmt = assert false
+
+  (**************** Pretty printing ****************)
 
   module type Pretty_Constraints = sig
     val boolean_pretty: Context.t -> Format.formatter -> boolean -> unit
     val integer_pretty: Context.t -> Format.formatter -> integer -> unit
-    val binary_pretty: size:int -> Context.t -> Format.formatter -> binary -> unit      
+    val binary_pretty: size:int -> Context.t -> Format.formatter -> binary -> unit
   end
-  
+
   module Pretty_Both:Pretty_Constraints = struct
 
     let boolean_pretty ctx fmt x =
@@ -999,7 +1143,7 @@ module Make
             Constraints.pretty x
           (Domain.binary_pretty ~size ctx.domain) x
     ;;
-    
+
   end
 
   module Pretty_Value:Pretty_Constraints = struct
@@ -1011,20 +1155,20 @@ module Make
         Domain.boolean_pretty ctx.domain fmt x
     ;;
 
-    let integer_pretty ctx fmt x = 
-      Domain.integer_pretty ctx.domain fmt x      
+    let integer_pretty ctx fmt x =
+      Domain.integer_pretty ctx.domain fmt x
         (* Format.fprintf fmt "value %a domain %a"
          *   (Domain.integer_pretty x.domain) x.constrain
          *   Domain.pretty x.domain *)
     ;;
 
     let binary_pretty ~size ctx fmt x =
-        Domain.binary_pretty ~size ctx.domain fmt x      
+        Domain.binary_pretty ~size ctx.domain fmt x
         (* Format.fprintf fmt "value %a domain %a"
          *   (Domain.integer_pretty x.domain) x.constrain
          *   Domain.pretty x.domain *)
     ;;
-    
+
   end
 
   module Pretty_Symbolic:Pretty_Constraints = struct
@@ -1043,84 +1187,74 @@ module Make
 
   (**************** Tuple construction and fixpoint/nondet. ****************)
 
-
   (* Note that this operation is purely syntactic. Normally, the use
      of semantic information to transform identifiers is already done. *)
-  let serialize (type a)
-      (type_check:Constraints.any -> a Constraints.t)
-      (_ctxa:Context.t) (a:a identifier) (_ctxb:Context.t) (b:a identifier) ((included, acc):'b in_acc) =
+
+  let binary_is_empty ~size ctx (b:binary) = Constraints.equal b (Constraints.Build.Binary.empty ~size)
+  let integer_is_empty ctx (i:integer) = Constraints.equal i Constraints.Build.Integer.empty
+  let boolean_is_empty ctx (b:boolean) = Constraints.equal b Constraints.Build.Boolean.empty
+
+  let serialize: 'hd 'tail . t -> 'hd identifier -> t -> 'hd identifier -> 'tail in_acc -> ('hd identifier, 'tail) Context.result =
+    fun  ctxa a ctxb b (included, acc) ->
       let mapping =
-        if Constraints.equal a b
-        then ConsSame(a,acc.mapping)
+        if Constraints.equal a b then ConsSame(a,acc.mapping)
         else ConsDifferent(a,b,acc.mapping)
       in
-      let deserialize ctx {index;odomain=domain;mapping;constraints} =
-        let constrain,mapping,index =
-          match mapping with
-          | ConsSame(x,mapping) ->
-            (* let _ = type_check @@ Immutable_array.get constraints index  in *)
-            x,mapping,index
-          | ConsDifferent(_,_,mapping) ->
-            let index = index - 1 in
-            (* Cannot avoid this type check due to the use of an array. *)
-            let constrain = type_check @@ Immutable_array.get constraints index in
-            constrain,mapping,index
+      let deserialize ctx ({phi} as out_tup) =
+        (* Note: if I used different serializes, I would not have to re-test here. *)
+        let constrain =
+          if Constraints.equal a b then a
+          else begin
+            match MapPair.find a b phi  with
+            | exception Not_found -> assert false
+            | x -> x
+          end
         in
-        constrain,{index;odomain=domain;mapping;constraints}
+        constrain, out_tup
       in
       Result(included, { mapping}, deserialize)
   ;;
-  
-  (* let counter = ref 0 ;;
 
-  let serialize_binary ~size (ctxa : Context.t) (a : binary) (ctxb : Context.t) (b : binary) ((inc, tup) as acc : 'a in_acc) : (binary, 'a) result =
-    incr counter ;
-    let num = !counter in
-    Codex_log.debug "Constraint_domain2.serialize no.%d ctxa:%a of level %d ctxb:%a of level %d" num context_pretty ctxa ctxa.level context_pretty ctxb ctxb.level ;
-    Codex_log.debug "Constraint_domain2.serialize size %d %a %a with constraints of level %d and %d" size Identifier.pretty a Identifier.pretty b (Constraints.level a) (Constraints.level b);
-    let c1 = Query.binary_is_empty ~size @@ Query.binary ~size ctxa a in
-    let c2 = Query.binary_is_empty ~size @@ Query.binary ~size ctxb b in
-    let levela = Constraints.level a in
-    let levelb = Constraints.level b in
-    if c1 && levelb < ctxa.level && levelb < ctxb.level then (Codex_log.debug "joining without join(1)" ; Result(inc, tup, fun ctx out -> b, out) )
-    else
-      if c2 && levela < ctxa.level && levela < ctxb.level then (Codex_log.debug "joining without join(1)" ; Result(inc, tup, fun ctx out -> a, out))
-      else
-        serialize (function (Constraints.(Any(Binary {size=s} as x))) when s == size ->
-          Codex_log.debug "Constraint_domain2.serialize no.%d" num ;
-          (* Codex_log.debug "Constraint_domain2.returning %a" Identifier.pretty x ; x | _ -> assert false) *)
-          Codex_log.debug "Constraint_domain2.returning %a" Identifier.pretty x ; x
-          | (Constraints.(Any(Binary {size=s} as x))) -> Codex_log.debug "size %d and s %d should be equal" size s ; assert false
-          | _ -> Codex_log.debug "a and b should be binary values" ;  assert false) 
-          ctxa a ctxb b acc
-  *)
-
-  let serialize_memory _ = assert false
-
-  let serialize_binary ~size ctxa a ctxb b acc =
-    serialize (function (Constraints.(Any(Binary {size=s} as x))) when s == size -> x | _ -> assert false)
-      ctxa a ctxb b acc
-  let serialize_integer ctxa a ctxb b acc =
-    serialize (function (Constraints.(Any(Integer _ as x))) -> x | _ -> assert false)
-      ctxa a ctxb b acc
-  let serialize_boolean ctxa a ctxb b acc =
-    serialize (function (Constraints.(Any(Bool _ as x))) -> x | _ -> assert false)
-      ctxa a ctxb b acc
+  let serialize_binary ~size = serialize
+  let serialize_integer = serialize
+  let serialize_boolean = serialize
 
   (**************** Nondet and union. ****************)
 
+  (* Traverse the phi arguments and make it a tuple. *)
+  let build_phi_arguments in_tup =
+    let filtereda,filteredb, map =
+      let rec loop: type a. _ -> _ -> _ -> a mapping -> _ = fun la lb map -> function
+        | EmptyMapping -> la,lb,map
+        (* TODO: We could get rid of ConsSame, and maybe this filtering, by changing serialize. *)
+        | ConsSame(_,mapping) -> loop la lb map mapping
+        (* Global value numbering: remove redundant pairs.  *)
+        | ConsDifferent(a,b,mapping) when MapPair.mem a b map -> loop la lb map mapping
+        | ConsDifferent(a,b,mapping) ->
+          let map = MapPair.add a b a map in
+          loop ((Constraints.Any a)::la) ((Constraints.Any b)::lb) map mapping
+      in loop [] [] MapPair.empty in_tup.mapping
+    in filtereda,filteredb, map
+  ;;
+
+  (* Build the phi that will go in out_tup. *)
+  let build_phi tupa tupb tupres =
+    Immutable_array.fold_left3 (fun map a b c ->
+        match a,b,c with
+        | Constraints.(Any(Binary _ as a), Any(Binary _ as b), Any(Binary _ as c)) -> MapPair.add a b c map
+        | Constraints.(Any(Integer _ as a), Any(Integer _ as b), Any(Integer _ as c)) -> MapPair.add a b c map
+        | Constraints.(Any(Bool _ as a), Any(Bool _ as b), Any(Bool _ as c)) -> MapPair.add a b c map
+        | _ -> Log.fatal (fun p -> p "Wrong type assertion")) MapPair.empty tupa tupb tupres
+  ;;
+
+
+
   let nondet_same_context (ctx:context) (in_tup: _ in_tuple) =
 
-    let filtereda,filteredb,total =
-      let rec loop: type a. _ -> _ -> _ -> a mapping -> _ = fun la lb count -> function
-        | EmptyMapping -> la,lb,count
-        | ConsSame(_,mapping) -> loop la lb count mapping
-        | ConsDifferent(a,b,mapping) -> loop ((Constraints.Any a)::la) ((Constraints.Any b)::lb) (count + 1) mapping
-      in loop [] [] 0 in_tup.mapping
-    in
+    let filtereda,filteredb, map = build_phi_arguments in_tup in
 
     let tupa = Immutable_array.of_list filtereda in
-    let tupb = Immutable_array.of_list filteredb in      
+    let tupb = Immutable_array.of_list filteredb in
 
     let dom = ctx.domain in
     let doma = dom in
@@ -1138,18 +1272,13 @@ module Make
 
     ctx.domain <- domain;
 
-    { mapping = in_tup.mapping; odomain=domain; index = total; constraints = tupres}
+    let phi = build_phi tupa tupb tupres in
+    {phi}
   ;;
 
   let union cond (ctx:context) (in_tup: _ in_tuple) =
 
-    let filtereda,filteredb,total =
-      let rec loop: type a. _ -> _ -> _ -> a mapping -> _ = fun la lb count -> function
-        | EmptyMapping -> la,lb,count
-        | ConsSame(_,mapping) -> loop la lb count mapping
-        | ConsDifferent(a,b,mapping) -> loop ((Constraints.Any a)::la) ((Constraints.Any b)::lb) (count + 1) mapping
-      in loop [] [] 0 in_tup.mapping
-    in
+    let filtereda,filteredb, map = build_phi_arguments in_tup in
 
     let tupa = Immutable_array.of_list filtereda in
     let tupb = Immutable_array.of_list filteredb in
@@ -1166,22 +1295,23 @@ module Make
     (* We reuse nondet for now. *)
     let domain =  Domain.nondet ~doma:domres ~tupa ~domb:domres ~tupb ~tupres in
     ctx.domain <- domain;
-
-    { mapping = in_tup.mapping; odomain=domain; index = total; constraints = tupres}
+    let phi = build_phi tupa tupb tupres in
+    {phi}
   ;;
 
   let typed_nondet2 (ctxa:context) (ctxb:context) (in_tup: _ in_tuple) =
 
-    let filtereda,filteredb,total =
-      let rec loop: type a. _ -> _ -> _ -> a mapping -> _ = fun la lb count -> function
-        | EmptyMapping -> la,lb,count
-        | ConsSame(_,mapping) -> loop la lb count mapping
-        | ConsDifferent(a,b,mapping) -> loop ((Constraints.Any a)::la) ((Constraints.Any b)::lb) (count + 1) mapping
-      in loop [] [] 0 in_tup.mapping
-    in
+    (* We filter etc. but we try to preserve the serialization order
+       (the code could be simplified otherwise, in particular in_tup
+       could consist in the mapping.
+
+       We reuse MapPair as a set here; we reuse the first element as a
+       value for typing purposes. Possibly we could implement SetPair
+       instead. *)
+    let filtereda,filteredb, map = build_phi_arguments in_tup in
 
     let tupa = Immutable_array.of_list filtereda in
-    let tupb = Immutable_array.of_list filteredb in      
+    let tupb = Immutable_array.of_list filteredb in
 
     let doma = ctxa.domain in
     let domb = ctxb.domain in
@@ -1190,7 +1320,8 @@ module Make
     let condb_bool = ctxb.path_condition in
 
     assert(ctxa.level = ctxb.level);
-    
+
+    (* Note: we could build the tuple by a map operation of the MapPair instead. *)
     let tupres =
       Constraints.Build.Tuple.nondet ~level:ctxa.level
         ~conda_bool ~a:tupa
@@ -1199,17 +1330,177 @@ module Make
     let domain =  Domain.nondet ~doma ~tupa ~domb ~tupb ~tupres in
 
     let ctx = { domain = domain; level = ctxa.level; unique_id = get_unique_id();
-                path_condition = Constraints.Build.Boolean.(||) ctxa.path_condition ctxb.path_condition } in
+                path_condition = Constraints.Build.Boolean.(||) ctxa.path_condition ctxb.path_condition; } in
 
-    ctx, { mapping = in_tup.mapping; odomain=domain; index = total; constraints = tupres}
+
+    (* Build the final map. *)
+    let phi = build_phi tupa tupb tupres in
+    ctx,{phi}
   ;;
 
 
-  
-  (**************** Fixpoint computation. ****************)
-  
+  (**************** New fixpoint computation. ****************)
 
-  let typed_fixpoint_step ~init ~arg:(arg:Context.t) ~body ((included, in_tup):'a in_acc) =
+  let widened_fixpoint_step ~widening_id ~previous ~next (includes,(in_tup:_ in_tuple)) =
+
+
+    let widening_id: Domain_sig.Widening_Id.t = widening_id in
+    let widening_id: int = (widening_id :> int) in
+
+    Log.debug (fun p -> p "widened_fixpoint_step: arg is %b %a %a" includes context_pretty previous context_pretty next);
+
+    (* Fixpoint step: generates fresh variables until we reach a
+       fixpoint (we don't need to generate new variable
+       anymores). Furthermore this domain is used as a functor to
+       provide terms for the numerical domains.
+
+       A simple detection of fixpoint would consist in waiting for
+       next to be the same twice in a row. We can have fewer
+       iterations by detecting when we do no longer need to introduce
+       a variable, and when all previously introduced variables are
+       mapped to a different expression. We use a unique widening_id
+       to avoid confusing the variables that we created with others.
+
+       This could could possibly be simplified by having [in_tup]
+       being just a set of pairs. It seems better to preserve the
+       ordering of the tuple (e.g. for debugging reasons), so we
+       maintain the list of pairs variant instead.
+
+       MAYBE: Also check that the variables are in order (they should
+       be whent the fixpoint is reached; currently they are not,
+       probably because we dont assign numbers in the tuple in the
+       right order. *)
+
+
+
+    (* Check if the parameter x is an inductive variable for the current widening point.  *)
+    let is_inductive_variable (type u) (x:u Constraints.t) i :bool =
+      match x with
+      | Constraints.Bool{term = Constraints.Inductive_var {widening_id=w}} -> (w = widening_id)
+      | Constraints.Binary{term = Constraints.Inductive_var {widening_id=w}} -> (w = widening_id)
+      | Constraints.Integer{term = Constraints.Inductive_var {widening_id=w}} -> (w = widening_id)
+      | Constraints.(Binary{term= Tuple_get(j,Inductive_vars{widening_id=w})}) -> (w = widening_id) (* && i = j *)
+      | Constraints.(Bool{term= Tuple_get(j,Inductive_vars{widening_id=w})}) -> (w = widening_id)   (* && i = j *)
+      | Constraints.(Integer{term= Tuple_get(j,Inductive_vars{widening_id=w})}) -> (w = widening_id)(* && i = j *)
+      | _ -> false
+    in
+
+    (* In the [in_tup] pair of phi arguments, those coming from
+       [previous] may already be inductive variables, and those from
+       [next] are not (but may be the definition of these inductive
+       variables).
+
+       There are several cases:
+       - [ConsSame] is the case phi(e,e) = e, we don't need to introduce any variable.
+         TODO: Actually, we may even not register them in in_tup.
+       - [ConsDifferent] phi(e1,e2): we create a new variable.
+       - [ConsDifferent] phi(x,e) when every x is attached to the same
+         definition e: we can reuse the variable x.
+
+       If both phi(x,e1) and phi(x,e2) exist, then we need to create
+       different variables x1 and x2 in the next iteration.
+
+       To simplify, we create fresh variable on each iteration, unless
+       it is the last iteration (every [ConsDifferent] case is of the
+       form phi(x,e) where every x is attached to a single e.
+    *)
+
+    (* TODO: If the inductive_vars are part of a tuple, we may want to
+       build a mapping (or an array) from indices in the tuple to
+       their definition, that we may use to build the definition. Or
+       we can just check that the induction variables are in the right
+       order. *)
+    let filtereda,filteredb,map,includes,i =
+      let rec loop: type a. _ -> _ -> _ -> bool -> int -> a mapping -> _ = fun la lb map includes i -> function
+        | EmptyMapping -> la,lb,map,includes,i
+        (* We skip it when we have both arguments. *)
+        | ConsSame(_,mapping) -> loop la lb map includes i mapping
+        (* Global value numbering: if in the map, this cas was already handled. *)
+        | ConsDifferent(a,b,mapping) when MapPair.mem a b map -> loop la lb map includes i mapping
+        | ConsDifferent(a,b,mapping) ->
+          let la' = ((Constraints.Any a)::la) and lb' = ((Constraints.Any b)::lb) in
+          let oldmap = map in
+          let map = MapPair.add a b a map in
+          (* We have not reached a fixpoint, and need to introduce new
+             induction variables:
+             - if we still have some phi(a,b) where a is not an
+               induction variable
+             - if we have phi(a,b1) and phi(a,b2) where a is an
+               induction variable: in this case we need to split the
+               induction variable in two, i.e. the fixpoint is not
+               finished. *)
+          let includes =
+            if is_inductive_variable a i
+            then begin
+              let two_definitions_for_a =  MapPair.Map1.mem a oldmap in
+              not two_definitions_for_a && includes
+            end else false
+          in
+          loop la' lb' map includes (i + 1) mapping
+      in loop [] [] MapPair.empty includes 0 in_tup.mapping
+    in
+
+    let previous_tup = Immutable_array.of_list filtereda in
+    let next_tup = Immutable_array.of_list filteredb in
+
+    let ctxa = previous and ctxb = next in
+    assert(ctxa.level = ctxb.level);
+
+    let res_tup =
+      if includes then begin
+        (* Fixpoint reached on the symbolic expression domain reuse
+           the variables., and update the inductive definition (by
+           assignment). *)
+        if Codex_config.term_group_inductive_variable_by_tuple then
+          Log.error(fun p -> p "TODO: Change the definition of the Inductive_var here.")
+        else
+        Immutable_array.iter2 (fun phi def ->
+            let open Constraints in
+            let Any phi = phi in let Any def = def in
+            let f: type a b. a t * b t -> unit = fun (phi,def) -> match (phi,def) with
+            | Binary({term=Inductive_var x}),Binary _ -> x.definition <- def
+            | Integer({term=Inductive_var x}),Integer _ -> x.definition <- def
+            | Bool({term=Inductive_var x}),Bool _ -> x.definition <- def
+            | _ -> Log.fatal (fun p -> p "Type mismatch in phi arguments");
+            in f (phi,def)
+            ) previous_tup next_tup;
+        previous_tup
+      end
+      else
+        (* Don't bother about the old variables, just create fresh ones. *)
+        (* Note: we could have an induction step number in the name,
+           to ensure that we don't confuse variables coming from
+           different steps. *)
+        Constraints.Build.Tuple.inductive_vars ~widening_id:(widening_id :> int) ~level:ctxa.level  ~def:next_tup
+    in
+
+    let domain,bool =
+      Domain.widened_fixpoint_step
+        ~previous:previous.domain ~previous_tup
+        ~next:next.domain ~next_tup
+        includes ~res_tup
+    in
+    Log.debug (fun p -> p "includes %b bool %b" includes bool);
+
+    let ctx = { domain = domain; level = ctxa.level; unique_id = get_unique_id();
+                path_condition = Constraints.Build.Boolean.(||) ctxa.path_condition ctxb.path_condition; } in
+
+    (* Build the final map. *)
+    let phi =
+      Immutable_array.fold_left3 (fun map a b c ->
+          match a,b,c with
+          | Constraints.(Any(Binary _ as a), Any(Binary _ as b), Any(Binary _ as c)) -> MapPair.add a b c map
+          | Constraints.(Any(Integer _ as a), Any(Integer _ as b), Any(Integer _ as c)) -> MapPair.add a b c map
+          | Constraints.(Any(Bool _ as a), Any(Bool _ as b), Any(Bool _ as c)) -> MapPair.add a b c map
+          | _ -> Log.fatal (fun p -> p "Wrong type assertion")) MapPair.empty previous_tup next_tup res_tup
+    in
+    ctx,bool,{phi}
+  ;;
+
+  (**************** Fixpoint computation. ****************)
+
+
+  let typed_fixpoint_step ~iteration ~init ~arg:(arg:Context.t) ~body ((included, in_tup):'a in_acc) =
 
     (* Codex_log.debug "typed_fixpoint_step init:%a arg:%a body:%a" context_pretty init context_pretty arg context_pretty body ;  *)
     let init:context = init in
@@ -1225,25 +1516,32 @@ module Make
     assert(Constraints.level @@ init.path_condition < cur_level);
 
     let fixpoint_reached = ref included in
-    
-    let actuals,old_args,finals,total,init_dom =
-      let rec loop: type a. _ -> _ -> _ -> _ -> _ -> a mapping -> _ = fun actuals old_args finals count init_dom -> function
-        | EmptyMapping -> actuals,old_args,finals,count,init_dom
+
+    let actuals,old_args,finals,map,init_dom =
+      let rec loop: type a. _ -> _ -> _ -> _ -> _ -> a mapping -> _ = fun actuals old_args finals map init_dom -> function
+        | EmptyMapping -> actuals,old_args,finals,map,init_dom
         | ConsSame(x,mapping) ->
           (* Codex_log.debug "constraint x = %a" Constraints.pretty x ; *)
           (* Codex_log.debug "constraint level of x = %d" (Constraints.level x) ; *)
           (* Codex_log.debug "current level is %d" cur_level ;           *)
           assert(Constraints.level x < cur_level);
-          loop actuals old_args finals count init_dom mapping
+          loop actuals old_args finals map init_dom mapping
+
+        (* Global value numbering. *)
+        | ConsDifferent(input,final,mapping) when MapPair.mem input final map ->
+          loop actuals old_args finals map init_dom mapping
+
         | ConsDifferent(input,final,mapping) ->
           assert(Constraints.level input <= cur_level);
-          assert(Constraints.level final <= cur_level);            
+          (* assert(Constraints.level final <= cur_level); *)
+          if Constraints.level final > cur_level then
+            raise (Failure "Trying to join two SSA constraints of the same level during widening") ; (* TODO : use the domain of array to try and solve this *)
           let init_dom,old_arg,actual =
             input |> fun (type a) (input:a Constraints.t) -> match input with
 
             (* If already a variable. *)
             | Constraints.Bool{term = Constraints.Mu_formal {level;actual=(actual_constrain,_)}}
-              when level == cur_level -> 
+              when level == cur_level ->
               init_dom,Constraints.Any input,Constraints.Any actual_constrain
             | Constraints.Integer{term = Constraints.Mu_formal {level;actual=(actual_constrain,_)}}
               when level == cur_level ->
@@ -1252,7 +1550,7 @@ module Make
               when level == cur_level ->
               init_dom,Constraints.Any input,Constraints.Any actual_constrain
 
-  
+
             (* Normal introduction of a variable. *)
             | _ when Constraints.level input < cur_level -> begin
                 fixpoint_reached := false;
@@ -1262,7 +1560,7 @@ module Make
                happen at the same memory location), the memory
                domain makes small modifications to an argument
                already introduced. We make some simple substitutions
-               to support this. *)              
+               to support this. *)
             | _ when Constraints.level input == cur_level ->
               fixpoint_reached := false;
               (* Note that this is not just substitution, but also
@@ -1276,7 +1574,23 @@ module Make
                   | Integer{term=Mu_formal{actual=(v,_)}} -> v
                   | Binary{term=T1{tag=TC.Bextract{size;index;oldsize};a}} ->
                     Binary_Forward.bextract init ~size ~index ~oldsize (subst a)
+                  (* | Binary{term=T1{tag=TC.Bofbool(size);a}} -> Binary_Forward.bofbool ~size init (subst a) *)
+                  | Binary{term=Unknown level} as v -> v
                   | Binary{term=Mu_formal{actual=(v,_)}} -> v
+
+                  | Binary{term=T2{tag=TC.Biadd{size;nsw;nuw;nusw};a;b=Binary{term=T0{tag=TC.Biconst (size1,k)}}}} ->
+                    Binary_Forward.biadd ~size ~nsw ~nuw ~nusw init (subst a) (Binary_Forward.biconst ~size:size1 k init)
+                  | Binary{term=T2{tag=TC.Biadd{size;nsw;nuw;nusw};a=Binary{term=T0{tag=TC.Biconst (size1,k)}};b}} ->
+                    Binary_Forward.biadd ~size ~nsw ~nuw ~nusw init (Binary_Forward.biconst ~size:size1 k init) (subst b)
+                  | Binary{term=T2{tag=TC.Bisub{size;nsw;nuw;nusw};a;b=Binary{term=T0{tag=TC.Biconst (size1,k)}}}} ->
+                    Binary_Forward.bisub ~size ~nsw ~nuw ~nusw init (subst a) (Binary_Forward.biconst ~size:size1 k init)
+                  | Binary{term=T2{tag=TC.Bisub{size;nsw;nuw;nusw};a=Binary{term=T0{tag=TC.Biconst (size1,k)}};b}} ->
+                    Binary_Forward.bisub ~size ~nsw ~nuw ~nusw init (Binary_Forward.biconst ~size:size1 k init) (subst b)
+                  | Binary{term=T2{tag=TC.Bimul{size;nsw;nuw};a;b=Binary{term=T0{tag=TC.Biconst (size1,k)}}}} ->
+                    Binary_Forward.bimul ~size ~nsw ~nuw init (subst a) (Binary_Forward.biconst ~size:size1 k init)
+                  | Binary{term=T2{tag=TC.Bimul{size;nsw;nuw};a=Binary{term=T0{tag=TC.Biconst (size1,k)}};b}} ->
+                    Binary_Forward.bimul ~size ~nsw ~nuw init (Binary_Forward.biconst ~size:size1 k init) (subst b)
+
                   | constr -> Codex_log.fatal "in typed_fixpoint_step, invalid constr = %a"
                                 Constraints.pretty constr
               in
@@ -1284,40 +1598,39 @@ module Make
                 | substed ->
                    assert(Constraints.level @@ init.path_condition < cur_level);
                   let substed = Constraints.Any substed in
-                   
+
                   (* Save the result of evaluation in init_dom. *)
                   (* For now we do nothing but we would have if functions like bextract
                      return a new domain instead of updating it imperatively. *)
-                  init_dom,substed, substed
+                  init_dom,(Constraints.Any input), substed
               end
             | _ ->
               assert(Constraints.level input > cur_level);
               assert false (* This case should not happen. *)
-          in loop (actual::actuals) (old_arg::old_args) 
-            ((Constraints.Any final)::finals) (count + 1) init_dom mapping
-      in loop [] [] [] 0 init_dom in_tup.mapping
+          in loop (actual::actuals) (old_arg::old_args)
+            ((Constraints.Any final)::finals) (MapPair.add input final input map) init_dom mapping
+      in loop [] [] [] MapPair.empty init_dom in_tup.mapping
     in
 
     (* This assertion is not always true, as we can call subst,
        which imperatively changes the context.  *)
     (* assert(init_dom == init.domain); *)
-    
     let actuals = Immutable_array.of_list actuals in
     let old_args = Immutable_array.of_list old_args in
-    let finals = Immutable_array.of_list finals in            
+    let finals = Immutable_array.of_list finals in
 
     let cond_init = init.path_condition in
     (* Codex_log.feedback "Cond arg is %a" Constraints.pretty cond_arg; *)
 
     (* It is important that the domain corresponding to the argument
        is suitable for use outside of the mu, when we leave the mu. *)
-    assert(Constraints.level cond_init < cur_level);    
+    assert(Constraints.level cond_init < cur_level);
 
-    let bool,domainf = Domain.fixpoint_step ~lvl:cur_level init_dom ~actuals arg.domain ~args:old_args final_dom ~finals in
+    let bool,domainf = Domain.fixpoint_step ~iteration ~lvl:cur_level init_dom ~actuals arg.domain ~args:old_args final_dom ~finals in
     let res = !fixpoint_reached && bool in
 
     let continuef ~close =
-      let constraints = 
+      let constraints =
         if close then begin
           let body_cond = body.path_condition in
           Constraints.Build.Tuple.mu
@@ -1345,9 +1658,11 @@ module Make
       in
       let domain = domainf ~close constraints in
       (* assert(Constraints.level @@ Domain.to_constraint domain < cur_level); *)
-      let restup = { mapping = in_tup.mapping; odomain=domain; index = total; constraints} in
+
+      let phi = build_phi old_args finals constraints in
+      let restup = {phi} in
       let resctx:Context.t = if close then init else arg in
-      restup, {resctx with domain = domain}
+      restup, {resctx with domain = domain }
 
     in
     res,continuef
@@ -1357,7 +1672,7 @@ module Make
     let ctx = { unique_id = get_unique_id();
                 level = parent_ctx.level + 1;
                 domain = parent_ctx.domain;
-                path_condition = parent_ctx.path_condition
+                path_condition = parent_ctx.path_condition;
               }
     in ctx
 
@@ -1367,10 +1682,10 @@ module Make
   module Query = struct
     include Domain.Query
     let boolean (ctx:context) x =
-        let domain = ctx.domain in        
+        let domain = ctx.domain in
         Domain.Query.boolean domain x
     ;;
-    
+
     (* This version is more precise as propagating constraints using assume may discover
        additional contradictions. *)
     let boolean ctx x =
@@ -1383,23 +1698,23 @@ module Make
         | None, Some _ -> Lattices.Quadrivalent.False
         | Some _, None -> Lattices.Quadrivalent.True
     ;;
-    
+
     let binary ~size (ctx:context) x =
-        let domain = ctx.domain in        
+        let domain = ctx.domain in
         Domain.Query.binary ~size domain x
     let integer (ctx:context) x =
-        let domain = ctx.domain in        
+        let domain = ctx.domain in
         Domain.Query.integer domain x
-                         
+
     let reachable _ = assert false
   end
 
   let assume_binary ~size = assert false
 
-  let memory_is_empty _ = assert false
-  let binary_is_empty ~size ctx (b:binary) = Constraints.equal b (Constraints.Build.Binary.empty ~size)
-  let integer_is_empty _ = assert false
-  let boolean_is_empty _ = assert false
+  let binary_is_empty = binary_is_empty
+  let integer_is_empty = integer_is_empty
+  let boolean_is_empty = boolean_is_empty
+
 
   module Satisfiable = struct
 
@@ -1415,17 +1730,26 @@ module Make
                | `Horn -> let module Inst = To_SMT_Horn(SMT) in Inst.translate
                | `First_order -> let module Inst = To_SMT_FirstOrder(SMT) in Inst.translate
              in
-             translate @@ Constraints.Build.Boolean.(&&) bool condition)       
+             translate @@ Constraints.Build.Boolean.(&&) bool condition)
     ;;
 
-    
+  let boolean_unknown ctx =
+    let res = boolean_unknown ctx in
+    Log.debug (fun p -> p "Constraint_domain2.boolean_unknown %a" (boolean_pretty ctx) res);
+    res
+
+  module Binary_Forward = struct
+    include Binary_Forward
+
+    let bofbool ~size ctx b =
+      let res = bofbool ~size ctx b in
+      Log.debug (fun p -> p "Constraint_domain2.bofbool %a" (binary_pretty ~size ctx) res);
+      res
   end
 
-  let reachable _ _ = assert false
-  let satisfiable = Satisfiable.satisfiable
+  end
 
-  let should_focus ~size:_ _ = assert false
-  let may_alias ~ptr_size:_ _ = assert false
+  let satisfiable = Satisfiable.satisfiable
   (* MAYBE: take pred into account. *)
   let binary_unknown_typed ~size ctx typ = binary_unknown ~size ctx
   let query_boolean = Query.boolean

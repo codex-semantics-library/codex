@@ -30,7 +30,7 @@ module Make
      with type Condition.t = Cudd.Man.d Cudd.Bdd.t
      (* with type Condition.t = Constraints_condition.ConditionDom.t *)
     )
-    (B:Single_value_abstraction.Sig.Binary_Integer_Basis):sig
+    (B:Single_value_abstraction.Sig.Numeric_Basis):sig
   include Constraint_domains_sig.Domain_S
     with module Constraints = Constraints
      and module Query.Boolean_Lattice = B.Boolean_Lattice

@@ -40,7 +40,7 @@ module Make(Scalar:Domain_sig.Base):sig
 
   module Memory
       (Value:Value)
-      (Lift:Value_to_offset with module Value := Value and module Offset := Offset) :Region
+      (_:Value_to_offset with module Value := Value and module Offset := Offset) :Block
     with module Value = Value
      and module Offset = Offset
      and module Context = Value.Context

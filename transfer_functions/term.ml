@@ -164,6 +164,7 @@ let type_of: type a b. (a,b) term -> b typ = function
   | Ieq ->  Boolean
   | Ile ->  Boolean
   | Itimes _ -> Integer
+  | BoolUnion -> Boolean
 ;;
 
 (* Used to identify a problem when we do not have a pretty printer. *)
@@ -211,6 +212,7 @@ let _identify: type a b. (a,b) term -> int = function
   | Ieq -> assert false
   | Ile -> assert false
   | Itimes _ -> assert false
+  | BoolUnion -> assert false
 ;;
 
 
@@ -569,7 +571,7 @@ module Unused_Eval(T:sig
     | Bofbool _ -> assert false
     | Bchoose _ -> assert false
     | Bunion _ -> assert false
-    | BoolUnion _ -> assert false            
+    | BoolUnion -> assert false            
     | Iconst k -> T.iconst k
     | Itimes k -> T.itimes k
     | Iadd -> T.iadd
@@ -691,6 +693,7 @@ module Unused_Eval_Forward(T:sig
     | Isub -> fun arg -> let (i1,i2) = T.extract2 arg in T.isub i1 i2
     | Ieq  -> fun arg -> let (i1,i2) = T.extract2 arg in T.ieq  i1 i2
     | Ile  -> fun arg -> let (i1,i2) = T.extract2 arg in T.ile  i1 i2
+    | BoolUnion -> assert false
 end
 
   

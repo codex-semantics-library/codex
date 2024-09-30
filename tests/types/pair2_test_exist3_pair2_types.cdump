@@ -1,0 +1,13 @@
+pair2.c:33.2-3: `p' -> ([1..0xFFFFFFFF] : ({self : Name(struct pair)[{0}].(0)* | (self != 0)}))
+pair2.c:33.9-11: `*a' -> [--..--]
+pair2.c:33.10-11: `a' -> ([1..0xFFFFFFFF] : ({self : int(4)[{0}].(0)* | (self != 0)}))
+pair2.c:34.2-3: `p' -> ([1..0xFFFFFFFF] : ({self : Name(struct pair)[{0}].(0)* | (self != 0)}))
+pair2.c:34.9-11: `*b' -> [--..--]
+pair2.c:34.10-11: `b' -> ([1..0xFFFFFFFF] : ({self : int(4)[{0}].(0)* | (self != 0)}))
+Unproved regular alarms:
+Unproved additional alarms:
++ pair2.c:34 : { p->y = *b; } -> typing_store ;
++ Return -> typing_store ;
+Proved 4/4 regular alarms
+Unproved 0 regular alarms and 2 additional alarms.
+Solved 0/0 user assertions, proved 0

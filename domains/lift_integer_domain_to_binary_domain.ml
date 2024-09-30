@@ -35,8 +35,8 @@ module Make
    (* and module Query.Binary_Lattice = I.Query.Integer_Lattice *)
 = struct
 
-  let name = "Lift_integer_domain_to_binary_domain(" ^ I.name ^ ")";;
-  let unique_id = Domain_sig.Fresh_id.fresh name;;
+  let name() = "Lift_integer_domain_to_binary_domain(" ^ (I.name()) ^ ")";;
+  let unique_id() = Domain_sig.Fresh_id.fresh @@ name();;
 
   (* open Term_types *)
 
@@ -47,14 +47,13 @@ module Make
        arguments, and is thus not be required. It is useful only
        because it sometimes allows to catch bugs. *)
     type boolean = I.boolean
-    type memory = I.memory
   end
 
   include Types
 
   module Context = I.Context
   open Context
-  include Transfer_functions.Builtin.Make(Types)(Context)
+  (* include Transfer_functions.Builtin.Make(Types)(Context) *)
 
   let mu_context_open = I.mu_context_open
 
@@ -64,7 +63,6 @@ module Make
   let root_context = I.root_context
   let context_pretty = I.context_pretty
 
-  let serialize_memory = I.serialize_memory
   let serialize_integer = I.serialize_integer
   let serialize_boolean = I.serialize_boolean
   let serialize_binary ~size ctxa (a,sa) ctxb (b,sb) acc =
@@ -74,9 +72,11 @@ module Make
   ;;
     
   let typed_fixpoint_step = I.typed_fixpoint_step
+  let widened_fixpoint_step = I.widened_fixpoint_step
 
   let assume = I.assume
-  let imperative_assume = I.imperative_assume                 
+  let imperative_assume = I.imperative_assume
+  let imperative_assign_context = I.imperative_assign_context                 
   
   
   module Boolean_Forward = I.Boolean_Forward
@@ -196,9 +196,6 @@ module Make
     let bindex ~size _ = assert false
   end
 
-  let memory_pretty _ = assert false
-  let memory_is_empty _ = assert false
-
   let binary_pretty ~size ctx fmt (i,_size) =
     I.integer_pretty ctx fmt i
   let binary_is_empty ~size ctx (i,_size) = I.integer_is_empty ctx i
@@ -252,15 +249,13 @@ module Make
        != &b[0] does not imply that 0 != 0. When correct, it is still
        possible to call directly I.Query.inject_boolean. *)
     let binary ~size ctx (id,_) = I.query_integer ctx id
-    let reachable ctx x = I.Query.reachable ctx x
   end
   module Integer_Lattice = I.Integer_Lattice
   let query_integer = I.query_integer
   let convert_to_ival = I.convert_to_ival
   let is_singleton_int = I.is_singleton_int
 
-  let satisfiable ctx boolean = I.satisfiable ctx boolean
-  let reachable ctx mem = I.reachable ctx mem      
+  let satisfiable ctx boolean = I.satisfiable ctx boolean    
 
   let binary_empty ~size ctx = (I.integer_empty ctx,size)
   let integer_empty = I.integer_empty
@@ -272,9 +267,6 @@ module Make
 
   
   let union _ = assert false
-
-  let should_focus ~size:_ _ = assert false
-  let may_alias ~ptr_size:_ _ = assert false
   let binary_unknown_typed ~size:_ _ = assert false
   let query_boolean = I.query_boolean
 end

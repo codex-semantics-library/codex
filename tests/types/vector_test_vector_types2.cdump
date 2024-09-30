@@ -1,0 +1,28 @@
+vector.c:4.15-20: `*vect' -> ([1..0xFFFFFFFF] :
+                               ({self :
+                                 struct {st_byte_size = None; st_members =
+                                   [
+                                     (0, "length", int(4) with (self = "#1"));
+                                     (4, "content", (int(4) with (self = 47))["#1"]);
+                                     ]; }[{0}].(0)* | (self != 0)}))
+vector.c:4.16-20: `vect' -> ([1..0xFFFFFFFF] : ({self : Name(vector)[{0}].(0)* | (self != 0)}))
+vector.c:5.1-7: `vect + 1' -> ([1..0xFFFFFFFF] : ({self : Name(vector)[{0}].(0)* | (self != 0)})) + 0x4
+vector.c:5.1-5: `vect' -> ([1..0xFFFFFFFF] : ({self : Name(vector)[{0}].(0)* | (self != 0)}))
+vector.c:6.17-27: `i < length' -> {0; 1}
+vector.c:6.17-18: `i' -> {0}
+vector.c:6.21-27: `length' -> ([1..0xFFFFFFFF] :
+                                ({self :
+                                  struct {st_byte_size = None; st_members =
+                                    [
+                                      (0, "length", int(4) with (self = "#1"));
+                                      (4, "content", (int(4) with (self = 47))["#1"]);
+                                      ]; }[{0}].(0)* | (self != 0)}))
+vector.c:8.4-12: `vect + i' -> ([5..0xFFFFFFFF] : ({self : Name(vector)[{0}].(4)* | (self != 0)}))
+vector.c:8.4-8: `vect' -> ([5..0xFFFFFFFF] : ({self : Name(vector)[{0}].(4)* | (self != 0)}))
+vector.c:8.11-12: `i' -> {0}
+Unproved regular alarms:
+Unproved additional alarms:
++ vector.c:8 : { *(vect + i) = 47; } -> array_offset_access ;
+Proved 2/2 regular alarms
+Unproved 0 regular alarms and 1 additional alarms.
+Solved 0/0 user assertions, proved 0

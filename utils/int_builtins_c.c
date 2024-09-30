@@ -29,15 +29,15 @@
 #endif
 
 __attribute__((__always_inline__))
-static unsigned int clz(unsigned int v){
+static inline uintnat clz(uintnat v){
   /* Note: on a 64 bit platform, GCC's _builtin_clz will perform a 32
      bit operation (even if the argument has type int). We have to use
      _builtin_clzll instead. */
 #if __GNUC__
-  #ifdef ARCH_SIXTYFOUR  
+  #ifdef ARCH_SIXTYFOUR
     return __builtin_clzll(v);
   #else
-    return __builtin_clz(v)
+    return __builtin_clz(v);
   #endif
 #endif
 #ifdef _MSC_VER
@@ -53,9 +53,9 @@ static unsigned int clz(unsigned int v){
 
 /**************** Log2 (with rounding to the floor). ****************/
 __attribute__((__always_inline__))
-static uintnat inline_caml_int_builtin_log2 (value i){
-  /* log2(v) is normally 32-1-clz(v), but because of the tag we
-     must substract one more. */
+static inline uintnat inline_caml_int_builtin_log2 (value i){
+  /* log2(v) is normally 32-1-clz(v), but because of the tag we must
+     substract one more. A nice thing here is that i will never be 0. */
   return (8*sizeof(value) - 2 - clz(i));
 }
 
@@ -63,7 +63,7 @@ CAMLprim uintnat caml_int_builtin_log2 (value i){
   return inline_caml_int_builtin_log2(i);
 }
 
-CAMLprim uintnat caml_int_builtin_log2_untagged (uintnat i){
+CAMLprim uintnat caml_int_builtin_log2_untagged_unsafe (uintnat i){
   return (8*sizeof(value) - 1 - clz(i));    
 }
 
@@ -73,23 +73,30 @@ CAMLprim value caml_int_builtin_log2_byte (value i){
 
 
 /**************** Highest bit ****************/
+
 CAMLprim uintnat caml_int_builtin_highest_bit (value i){
-  return (1 << inline_caml_int_builtin_log2(i));
+  /* printf("Highest bit In C: %x %x %x %x\n", */
+  /* 	 i, i >> 1, 62-clz(i), 1 << (62 - clz(i))); */
+  /* fflush(stdout); */
+  return ((uintnat) 1 << (8*sizeof(value) - 2 - clz(i)));
 }
 
-CAMLprim uintnat caml_int_builtin_highest_bit_untagged (uintnat i){
-  return (1 << caml_int_builtin_log2_untagged(i));
+CAMLprim uintnat caml_int_builtin_highest_bit_untagged_unsafe (uintnat i){
+  /* printf("Highest bit unsafe In C: %x %x %x %x\n", */
+  /* 	 i, i >> 1, 62-clz(i), 1 << (62 - clz(i))); */
+  /* fflush(stdout);   */
+  return ((uintnat) 1 << (8*sizeof(value) - 1 - clz(i)));
 }
 
 CAMLprim value caml_int_builtin_highest_bit_byte (value i){
-  return Val_int(1 << inline_caml_int_builtin_log2(i));
+  return Val_int(caml_int_builtin_highest_bit(i));
 }
 
 
 /**************** Find first set ****************/
 
 __attribute__((__always_inline__))
-static unsigned int ffs(unsigned int v){
+static inline uintnat ffs(uintnat v){
   /* Note: on a 64 bit platform, GCC's _builtin_ffs will perform a 32
      bit operation (even if the argument has type int). We have to use
      _builtin_ffsll instead. */
@@ -106,7 +113,16 @@ static unsigned int ffs(unsigned int v){
 }
 
 
+CAMLprim uintnat caml_int_builtin_ffs (uintnat i){
+  /* printf("FFS in C: %lx %lx %d\n", i, i >> 1, ffs(i >> 1)); */
+  /* fflush(stdout);   */
+  return ffs(i >> 1);
+}
+
+
 CAMLprim uintnat caml_int_builtin_ffs_untagged (uintnat i){
+  /* printf("FFS_UNTAGGUED in C: %lx %d\n", i, ffs(i)); */
+  /* fflush(stdout);   */
   return ffs(i);
 }
 
@@ -117,7 +133,7 @@ CAMLprim value caml_int_builtin_ffs_byte (value i){
 
 /**************** Count trailing zeroes.  ****************/
 __attribute__((__always_inline__))
-static unsigned int ctz(unsigned int v){
+static inline uintnat ctz(uintnat v){
 #if __GNUC__
   #ifdef ARCH_SIXTYFOUR  
     return __builtin_ctzll(v);
@@ -136,6 +152,9 @@ static unsigned int ctz(unsigned int v){
 #endif    
 }
 
+CAMLprim uintnat caml_int_builtin_ctz (value i){
+  return ctz(i >> 1);
+}
 
 CAMLprim uintnat caml_int_builtin_ctz_untagged (uintnat i){
   return ctz(i);
@@ -146,9 +165,8 @@ CAMLprim value caml_int_builtin_ctz_byte (value i){
 }
 
 /**************** Popcount. ****************/
-/**************** Count trailing zeroes.  ****************/
 __attribute__((__always_inline__))
-static unsigned int popcount(unsigned int v){
+static inline uintnat popcount(uintnat v){
 #if __GNUC__
   #ifdef ARCH_SIXTYFOUR  
     return __builtin_popcountll(v);
@@ -161,10 +179,20 @@ static unsigned int popcount(unsigned int v){
 #endif    
 }
 
-
 CAMLprim uintnat caml_int_builtin_popcount_untagged (uintnat i){
-  return popcount(i);
+  /* printf("Popcount in C: %x %b %d\n", i, i, popcount(i)); */
+  /* fflush(stdout); */
+  /* On negative value, the highest bit in OCaml is duplicated when
+     passed as a C value, and thus the popcount is too large by one.
+     We avoid a test by removing the value. */  
+  return popcount(i << 1);
 }
+
+CAMLprim uintnat caml_int_builtin_popcount (uintnat i){
+  /* We remove 1 from the result because of the tag bit. */
+  return popcount(i)-1;
+}
+
 
 CAMLprim value caml_int_builtin_popcount_byte (value i){
   return Val_int(popcount(Int_val(i)));

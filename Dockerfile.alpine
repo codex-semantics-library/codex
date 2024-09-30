@@ -19,23 +19,24 @@
 #                                                                        #
 ##########################################################################
 
-# Build with docker build -f release/Dockerfile -t codexmin .
-# Debug with docker run -ti num sh
-# Finish with docker cp codexmin:/home/ocaml/codex/_build/default/binsec/binsec_codex.exe .
+# Build with docker build -f Dockerfile.alpine -t codexalpine .
+# Debug with docker run -ti codexalpine sh
+# Finish with docker cp codexalpine:/home/ocaml/codex/_build/default/binsec/binsec_codex.exe .
 
 # Start with an alpine linux image with opam in it, for musl
 FROM ocamlpro/ocaml:4.14 as first
+RUN opam update
 RUN opam switch create optstatic --packages=ocaml-variants.4.14.1+options,ocaml-option-static,ocaml-option-flambda,ocaml-option-no-flat-float-array
 RUN opam switch optstatic
 RUN eval $(opam env)
-RUN opam install binsec bheap
+RUN opam install binsec bheap 
 # C++ is needed for cudd.
 RUN sudo apk add g++
 RUN opam install mlcuddidl 
 RUN opam install camlp-streams
 # bash needed for core, needed for ppx_inline_test.
 RUN sudo apk add bash
-RUN opam install qcheck-core ppx_inline_test unionFind
+RUN opam install qcheck-core ppx_inline_test unionFind pacomb patricia-tree
 
 
 # Install the patched Frama-C. This is cached if ext/frama_c_with_cudd does not change.

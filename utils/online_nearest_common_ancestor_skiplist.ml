@@ -49,7 +49,7 @@
    A nice property of this algorithm is that it reuses memory as much
    as possible (no new lists are created), which makes it practical
    for on-disk storage or when many lists are used simultanously. *)
-let log2 = Int_builtins.log2_untagged;;
+let log2 = Int_builtins.log2_untagged_unsafe;;
 let count_trailing_zeroes = Int_builtins.count_trailing_zeroes;;
 
 
@@ -178,6 +178,8 @@ module Make(Elt:sig
        right is smallest known index such that a.(right) != b.(right).
 
        Note that it is possible that all are equal, then we have found the nearest_common_ancestor. *)
+    (* XXX: This algorithm seems weird. We should try first with the highest parent: if not an ancestor,
+       continue climbing rightaway. Binary search is only if this does not work. *)
     let rec binary_search left right =
       assert(left != right);
       if right == left + 1

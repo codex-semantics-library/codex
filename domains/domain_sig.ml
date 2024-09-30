@@ -20,21 +20,29 @@
 (**************************************************************************)
 
 
+exception Bottom
+(** The {!Bottom} exception can be raised by any transfer function that realises
+    the state is empty. This should mainly be {!WithAssume.assume}, but it can
+    also forward transfer function (for instance, division by zero). *)
 
+module Log = Tracelog.Make(struct let category = "Domains.Sig" end);;
 module Quadrivalent = Lattices.Quadrivalent
 
 (* A Context represent a set of paths leading to the current state (it
    corresponds to a path condition in symbolic execution)
 
    Note: we use a module for Context, instead of a type, so that it
-   can be used as a functor argument and replace the Arity. 
-   
+   can be used as a functor argument and replace the Arity.
+
    TODO: Rename Context to AbsState: the context is now a representation
    of the state at a program point. *)
 
 module type Context = sig
   type t
   val level:t -> int
+
+  val copy: t -> t
+  (** Create an independent copy of the context, only needed for mutable contexts *)
 
 
   (** Types for serialization. *)
@@ -43,8 +51,8 @@ module type Context = sig
   (** The type of the tuples of argument to nondet (i.e., arguments of a phi function). *)
   type 'a in_tuple
   type empty_tuple
-  val empty_tuple: empty_tuple in_tuple    
-  
+  val empty_tuple: unit -> empty_tuple in_tuple
+
   (** An accumulator is a set of arguments to nondet, and an accumulated inclusion check.  *)
   type 'a in_acc = bool * 'a in_tuple
 
@@ -53,7 +61,7 @@ module type Context = sig
 
   (* We use a GADT because 'some is existentially quantified: we don't want
      the type of in_tuple to appear in serialization function, as, for instance,
-     what we put in in in_tuple can depend on some condition. 
+     what we put in in in_tuple can depend on some condition.
 
      The boolean
    * expresses whether the **second** operand of the serialization was included
@@ -61,7 +69,7 @@ module type Context = sig
   type ('a,'b) result =
       Result: bool * 'some in_tuple * (t -> 'some out_tuple -> 'a * 'b out_tuple) -> ('a,'b) result
 
-  
+
 end
 
 (* TODO: This should return the context, and have the form of a state
@@ -74,8 +82,8 @@ end
    functions that create alarms (and reduce their state using the
    alarm).
 
-   Note: having a state and option monad (state -> '(a * state) option) works 
-   but it makes the transfer functions heavier to write. Maybe we should 
+   Note: having a state and option monad (state -> '(a * state) option) works
+   but it makes the transfer functions heavier to write. Maybe we should
    raise an exception instead. *)
 module Context_Arity_Forward(Context:Context) = struct
   type 'r ar0 = Context.t -> 'r
@@ -95,7 +103,7 @@ module Monadic_Context(Context:Context) = struct
   type ('a,'r) ar1 = 'a -> Context.t -> ('r * Context.t)
   type ('a,'b,'r) ar2 = 'a -> 'b -> Context.t -> ('r * Context.t)
   type ('a,'b,'c,'r) ar3 = 'a -> 'b -> 'c -> Context.t -> ('r * Context.t)
-  type ('a,'r) variadic = 'a list -> Context.t -> ('r * Context.t) 
+  type ('a,'r) variadic = 'a list -> Context.t -> ('r * Context.t)
 end
 
 (* General design notes:
@@ -104,7 +112,7 @@ end
    features. But optional features of a functor, depending on an
    optional feature of an argument, should be done using "additional
    features functor". This sometimes make their use impractical, as is
-   the multiplication of possible configurations. 
+   the multiplication of possible configurations.
 
    For this reason, we tend to have the "base case" require more
    features than strictly necessary, when these extra features can be
@@ -118,14 +126,14 @@ end
    equality/substitution in module constraints. Modules are only used
    for things that are not supposed to be changed, because it is
    difficult to "insert" additional values inside a submodule. That is
-   why we do not use recursive submodules. 
+   why we do not use recursive submodules.
 
    - There is a hierarchy of types: boolean is standalone, binary
-   depends on boolean, and memory depends on both. 
+   depends on boolean, and memory depends on both.
 
    - When including modules with additional components (e.g. size_int
    for Ref_Addr), always put the component with largest fields at the
-   beginning, else destructive substitution of modules does not work. 
+   beginning, else destructive substitution of modules does not work.
 
    - The main purpose of this file is to provide a "standard" way to
    name the operations on domains. *)
@@ -163,18 +171,6 @@ module type With_Binary_Forward = sig
     and type binary := binary
 end
 
-module type With_Memory_Forward = sig
-  type boolean
-  type binary
-  type memory
-  module Context:Context
-  module Memory_Forward:Transfer_functions.Memory_Forward
-    with module Arity := Context_Arity_Forward(Context)
-    and type boolean := boolean
-    and type binary := binary
-    and type memory := memory
-end
-
 (****************************************************************)
 (* Queries. *)
 
@@ -194,11 +190,10 @@ end
 module type Boolean_Lattice = Single_value_abstraction.Sig.Boolean_Lattice with type t = Lattices.Quadrivalent.t
 module type Integer_Lattice = Single_value_abstraction.Sig.Integer_Lattice
 module type Binary_Lattice = Single_value_abstraction.Sig.Binary_Lattice
-module type Memory_Lattice = Single_value_abstraction.Sig.Memory_Lattice                                                               
 
 
 module type With_Integer_Queries = sig
-  module Context:Context  
+  module Context:Context
   module Integer_Lattice:Integer_Lattice
   type integer
   val query_integer: Context.t -> integer -> Integer_Lattice.t
@@ -208,41 +203,16 @@ end
 module type With_Queries = sig
   module Context:Context
   type binary
-  type memory
 
   (* Note: I am trying to phase out these intermediate lattices. *)
   module Query:sig
     module Binary_Lattice:Binary_Lattice
 
     include Single_value_abstraction.Sig.Binary_Conversions with type binary := Binary_Lattice.t
-  (* TODO: This supersedes "truth_value" *)
+    (* TODO: This supersedes "truth_value" *)
 
-  val binary: size:int -> Context.t ->  binary -> Binary_Lattice.t
-
-  (* Reachable means that the set of memory states is not empty. 
-     - If we return {True,False}, then the memory may be reachable;
-     - If we return {True}, then the memory is reachable;
-     - If we return {False} or {}, the memory is not reachable. *)
-  val reachable: Context.t -> memory -> Quadrivalent.t
+    val binary: size:int -> Context.t ->  binary -> Binary_Lattice.t
   end
-
-  (** [should_focus ~size ctx mem addr] asks the domain whether it is useful to
-     "focus" (or "unfold", i.e. try to represent precisely the memory region
-     pointed to by [addr], as long as aliasing info ensures that it is sound) a
-     loaded value. [size] should be the size of [addr]. If the answer is yes,
-     then the returned value should contain three things about the region to
-     focus: its base, its size (in bits) and the offset of [addr] in it (in
-     bits). *)
-  val should_focus : size:int -> Context.t -> memory -> binary ->
-    (binary * int * int) option
-
-  (** [may_alias ~ptr_size ~size1 ~size2 ctx addr1 addr2] should return whether
-      the region starting at [addr1] of size [size1] bytes and the region
-      starting at [addr2] of size [size2] bytes may have a non-empty
-      intersection. This function is used by focusing abstractions to discard a
-      focused region when writing in a possibly aliased address. [ptr_size] is
-      the size in bits of both [addr1] and [addr2]. *)
-  val may_alias : ptr_size:int -> Context.t -> size1:int -> size2:int -> binary -> binary -> bool
 end
 
 module type With_Types = sig
@@ -253,7 +223,7 @@ module type With_Types = sig
   val binary_unknown_typed : size:int -> Context.t -> Types.Ctypes.typ -> binary
 end
 
-(****************************************************************)  
+(****************************************************************)
 (* Other extensions. *)
 
 module type With_Partitionning = sig
@@ -285,8 +255,10 @@ module type With_Assume = sig
   type boolean
   module Context:Context
 
-  (** Corresponds to the creation of a new basic block, accessible only 
-      if the condition is met. None means bottom. *)
+  (** Corresponds to the creation of a new basic block, accessible only
+      if the condition is met.
+
+      @raises Bottom *)
   val assume: Context.t -> boolean -> Context.t option
 
   (** Because the transfer functions imperatively change the context,
@@ -299,7 +271,9 @@ module type With_Assume = sig
      function return a new Context.t option, viewing the context as
      some state monad. *)
   val imperative_assume: Context.t -> boolean -> unit
-  
+
+  val imperative_assign_context: Context.t -> Context.t -> unit
+
 end
 
 
@@ -318,15 +292,29 @@ module type With_Nondet = sig
   (* Additionally, one may compute a non-deterministic choice between
      two values in the same basic block
 
-     It can be seen as equivalent as calling typed_nondet2 by passing the same context twice, 
+     It can be seen as equivalent as calling typed_nondet2 by passing the same context twice,
      which would return the same context. *)
   (* Note: this function imperatively modifies the context.
      It should return a new context; this should be done when
      load and store will return a new context. *)
   val nondet_same_context: Context.t -> 'a Context.in_tuple -> 'a Context.out_tuple
-  
+
 end
 
+
+(* An integer uniquely identifying a widening point.
+
+   See "Compiling with Abstract Interpretation", Lesbre&Lemerre, PLDI 2024. *)
+module Widening_Id:sig
+  type t = private int
+  val fresh: unit -> t
+end = struct
+  type t = int
+  let count = ref 0
+  let fresh() =
+    let v = incr count; !count in
+    v
+end
 (* Note: all domains could have thee same interface; but some would
    have assert false and unit for the types they do not handle. We
    could even list the types that are handled by a domain, and check
@@ -363,8 +351,29 @@ module type With_Fixpoint_Computation = sig
   (* Init is the context leading to the loop entry,
      Arg is the context at the loop entry (obtained by mu_context_open or by the last fixpoint_step operation)
      and body the one at the end of the loop.  *)
-  val typed_fixpoint_step: init:Context.t -> arg:Context.t -> body:Context.t -> (bool * 'a Context.in_tuple) ->
+  val typed_fixpoint_step:
+    iteration:int ->
+    init:Context.t ->
+    arg:Context.t ->
+    body:Context.t ->
+    (bool * 'a Context.in_tuple) ->
     bool * (close:bool -> 'a Context.out_tuple * Context.t)
+
+
+  (** [widened_fixpoint_step ~previous ~next (bool,in_tuple)] where:
+      - [widening_id] is a unique representation of the widening point;
+      - [previous] is the previous domain state;
+      - [next] is the next domain state obtained after execution of the function body;
+      - [bool] is false if we know that the fixpoint is not reached yet, and true otherwise;
+      - [in_tuple] is the argument of the SSA phi function;
+
+      returns a triple [(context,bool,out_tuple)] where:
+      - [context] is the new domain state;
+      - [bool] is true if the fixpoint is reached, and false if not reached or we don't know;
+      - [out_tuple] is the result of the SSA phi function. *)
+  val widened_fixpoint_step: widening_id:Widening_Id.t -> previous:Context.t -> next:Context.t -> (bool * 'a Context.in_tuple) ->
+    (Context.t * bool * 'a Context.out_tuple)
+
 end
 
 module Fresh_id:sig
@@ -375,15 +384,15 @@ end = struct
   let count = ref 0
   let fresh name =
     let v = incr count; !count in
-    Codex_log.debug "Registering domain %s with id %d" name v;
+    Log.debug (fun p -> p "Registering domain %s with id %d" name v);
     v
 end
 
 
 (* Identifying domains. *)
 module type With_Id = sig
-  val unique_id: Fresh_id.t
-  val name: string
+  val unique_id: unit -> Fresh_id.t
+  val name: unit -> string
 end
 
 (**************** Optional types that can be used in the domain. ****************)
@@ -412,7 +421,7 @@ end
    undefined whether different abstract values with same
    concretization represent different binding in the table (if by
    chance the hash is the same, they will share a binding; else they
-   may have different bindings). 
+   may have different bindings).
 
    - compare and hash do not need to be implemented if the
    datastructures are not used.
@@ -428,7 +437,7 @@ module type With_Boolean = sig
 
   module Boolean:Datatype_sig.S with type t = boolean
   val boolean_pretty: Context.t -> Format.formatter -> boolean -> unit
-  
+
   val serialize_boolean: Context.t -> boolean -> Context.t -> boolean -> 'a Context.in_acc -> (boolean,'a) Context.result
 
   (* Empty denotes that the concretization has no value (or it is
@@ -462,7 +471,7 @@ module type With_Integer = sig
   (* Can return true if provably empty; false is always safe.  *)
   val integer_is_empty: Context.t -> integer -> bool
   val integer_pretty: Context.t -> Format.formatter -> integer -> unit
-  
+
   val serialize_integer: Context.t -> integer -> Context.t -> integer -> 'a Context.in_acc -> (integer,'a) Context.result
   val integer_empty: Context.t -> integer
   val integer_unknown: Context.t -> integer
@@ -489,25 +498,6 @@ module type With_Binary = sig
                                 and type boolean := boolean
 end
 
-
-module type With_Memory = sig
-  module Context:Context
-  type boolean    
-  type binary
-  type memory
-  
-  val serialize_memory: Context.t -> memory -> Context.t -> memory -> 'a Context.in_acc -> (memory,'a) Context.result
-  val memory_pretty: Context.t -> Format.formatter -> memory -> unit
-
-  
-  (* val memory_empty: Context.t -> memory *)
-  (* val memory_unknown: level:int -> Context.t -> memory *)
-  include With_Memory_Forward with module Context := Context
-                               and type memory := memory
-                               and type binary := binary
-                               and type boolean := boolean
-end
-
 (**************** Complete instantiations. ****************)
 
 
@@ -525,7 +515,7 @@ module type Minimal_No_Boolean = sig
 
   (* Joining variables together. *)
   include With_Nondet with module Context := Context
-  
+
   (* Fixpoint computation. *)
   include With_Fixpoint_Computation with module Context := Context
 
@@ -548,11 +538,9 @@ module type Base = sig
   include Minimal
 
   type binary
-  type memory
 
   include With_Queries with module Context := Context
                              and type binary := binary
-                             and type memory := memory
 
   include With_Types with module Context := Context
                      and type binary := binary
@@ -561,17 +549,6 @@ module type Base = sig
                         and type binary := binary
                         and type boolean := boolean
 
-  include With_Memory with module Context := Context
-                        and type memory := memory
-                        and type binary := binary
-                        and type boolean := boolean
-
-  (* Builtin functions. *)
-  include Transfer_functions.Builtin.With_Builtin with type binary := binary
-                                                   and type boolean := boolean
-                                                   and type memory := memory
-                                                   and module Context := Context
-
   (* Set operations. Note that we do not distinguish binary from binary sets. *)
   (* Note that union reuses the serialize machinery. *)
   val union: Transfer_functions.Condition.t -> Context.t -> 'a Context.in_tuple -> 'a Context.out_tuple
@@ -579,9 +556,6 @@ module type Base = sig
   (* Check if an assertion is satisfiable (i.e. a trace exists that makes it true). *)
   val satisfiable: Context.t -> boolean -> Smtbackend.Smtlib_sig.sat
 
-  (* Check if the memory is reachable. sat means reachable. *)
-  val reachable: Context.t -> memory -> Smtbackend.Smtlib_sig.sat
-  
 end
 
 module type Base_with_integer = sig
@@ -590,7 +564,7 @@ module type Base_with_integer = sig
                         and type boolean := boolean
   include With_Integer_Queries with module Context := Context
                                 and type integer := integer
-      
+
 end
 
 (****************************************************************)
@@ -642,15 +616,6 @@ struct
   include Transfer_functions.Conversions.Convert_Binary_Forward(C)(F)
 end
 
-module Convert_Memory_Forward
-  (C:Convert_Contexts)
-  (D:With_Memory_Forward with module Context = C.To) =
-struct
-  module C = Make_Convert(C)
-  module F = struct include D;; include D.Memory_Forward end
-  include Transfer_functions.Conversions.Convert_Memory_Forward(C)(F)
-end
-
 
 (* This will help to the transition in a top-down manner, starting
    from the translation and top-level domain to the lower-level
@@ -667,17 +632,15 @@ module Convert_to_monadic(D:Base) = struct
     let ar0 f = (fun ctx -> f ctx, ctx)
     let ar1 f = (fun a ctx -> f ctx a,ctx)
     let ar2 f = (fun a b ctx -> f ctx a b,ctx)
-    let ar3 f = (fun a b c ctx -> f ctx a b c,ctx)                                
+    let ar3 f = (fun a b c ctx -> f ctx a b c,ctx)
   end
 
   module Types = struct
     type boolean = D.boolean
     type binary = D.binary
-    type memory = D.memory
   end
-  
+
   module Boolean_Forward = Transfer_functions.Conversions.Convert_Boolean_Forward(Conversion)(struct include Types include D.Boolean_Forward end)
   module Binary_Forward = Transfer_functions.Conversions.Convert_Binary_Forward(Conversion)(struct include Types include D.Binary_Forward end)
-  module Memory_Forward = Transfer_functions.Conversions.Convert_Memory_Forward(Conversion)(struct include Types include D.Memory_Forward end)
-  
+
 end

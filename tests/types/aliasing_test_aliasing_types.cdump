@@ -1,0 +1,12 @@
+aliasing.c:2.3-4: `a' -> ([1..0xFFFFFFFF] : ({self : Name(foo)[{0}].(0)* | (self != 0)}))
+aliasing.c:2.7-9: `*b' -> [--..--]
+aliasing.c:2.8-9: `b' -> ([1..0xFFFFFFFF] : ({self : Name(num)[{0}].(0)* | (self != 0)}))
+aliasing.c:3.21-28: `*a == 3' -> {0; 1}
+aliasing.c:3.21-23: `*a' -> [--..--]
+aliasing.c:3.22-23: `a' -> ([1..0xFFFFFFFF] : ({self : Name(foo)[{0}].(0)* | (self != 0)}))
+Unproved regular alarms:
+Unproved additional alarms:
+Proved 3/3 regular alarms
+Unproved 0 regular alarms and 0 additional alarms.
+aliasing.c:3: assertion is FALSE (counter-example exists) (proved with smt solving)
+Solved 1/1 user assertions, proved 0

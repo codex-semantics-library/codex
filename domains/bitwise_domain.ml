@@ -40,8 +40,8 @@ module type Subdomain = Domain_sig.Base
 
 module Make (Sub : Subdomain) = struct
 
-  let name = "Bitwise(" ^ Sub.name ^ ")";;
-  let unique_id = Domain_sig.Fresh_id.fresh name;;
+  let name() = "Bitwise(" ^ (Sub.name()) ^ ")";;
+  let unique_id() = Domain_sig.Fresh_id.fresh @@ name();;
 
   (* To represent values, we could use an array where each bit would
      be a bit in another variable, but this would be slow for most
@@ -53,7 +53,7 @@ module Make (Sub : Subdomain) = struct
     | Extract of { size:int;
                    index:int;
                    oldsize:int;
-                   value:Sub.binary } 
+                   value:Sub.binary }
   ;;
 
   module Part = struct
@@ -175,8 +175,8 @@ module Make (Sub : Subdomain) = struct
     (* Preprend (i.e. put in least significant positions) size bits of value 0.  *)
     let prepend_zero ~size ctx p = append ctx [(Part.zero ~size ctx)] p;;
 
-    (* Append (i.e. put in most significant positions) size bits of value 0.  *)    
-    let append_zero ~size ctx p = append ctx p [(Part.zero ~size ctx)];;    
+    (* Append (i.e. put in most significant positions) size bits of value 0.  *)
+    let append_zero ~size ctx p = append ctx p [(Part.zero ~size ctx)];;
 
     let chop_last l =
       let rec loop acc = function
@@ -230,8 +230,6 @@ module Make (Sub : Subdomain) = struct
         | Ones s -> fprintf fmt "11..1<%d>" s
         | Unknown p -> Part.pretty ctx fmt p
 
-    exception Bottom;;
-
     let decompose_using_known_bits ~size ctx part =
       let Extract{size;index;oldsize;value} = part in
       let sub = Part.do_extract ctx part in
@@ -240,7 +238,7 @@ module Make (Sub : Subdomain) = struct
       let rec loop acc cur i =
         if i >= size then List.rev (cur :: acc)
         else match Z.testbit zeroes i, Z.testbit ones i, cur with
-          | false, true, _ -> raise Bottom
+          | false, true, _ -> raise Domain_sig.Bottom
           | false, _, Zeroes s -> loop acc (Zeroes (s+1)) (i+1)
           | false, _, _ -> loop (cur :: acc) (Zeroes 1) (i+1)
           | _, true, Ones s -> loop acc (Ones (s+1)) (i+1)
@@ -350,7 +348,6 @@ module Make (Sub : Subdomain) = struct
 
   module Types = struct
     type binary = Binary.t
-    type memory = Sub.memory
     type boolean = Sub.boolean
   end
   include Types
@@ -362,37 +359,19 @@ module Make (Sub : Subdomain) = struct
   let root_context = Sub.root_context
   let context_pretty = Sub.context_pretty
 
-  include Transfer_functions.Builtin.Make(Types)(Context)
+  (* include Transfer_functions.Builtin.Make(Types)(Context) *)
 
   let mu_context_open = Sub.mu_context_open
 
   let assume = Sub.assume
-  let imperative_assume = Sub.imperative_assume                 
+  let imperative_assume = Sub.imperative_assume
+  let imperative_assign_context ctx1 ctx2 = Sub.imperative_assign_context ctx1 ctx2
 
   let binary_empty ~size ctx = { parts = []; complete = Sub.binary_empty ~size ctx }
   let boolean_empty = Sub.boolean_empty
 
 
   module Boolean_Forward = Sub.Boolean_Forward
-  module Memory_Forward = struct
-
-    let ptrsize = Codex_config.ptr_size();;
-
-    include Sub.Memory_Forward
-    let load ~size ctx mem addr =
-      let res, mem = Sub.Memory_Forward.load ~size ctx mem addr.complete in
-      Binary.lift0 ~size res, mem
-    let store ~size ctx mem addr value =
-      Sub.Memory_Forward.store ~size ctx mem addr.complete value.complete;;
-    let memcpy ~size  = assert false
-
-    let malloc ~id ~malloc_size ctx mem =
-      let (resb,resm) = Sub.Memory_Forward.malloc ~id ~malloc_size ctx mem in
-      (Binary.lift0 ~size:ptrsize resb, resm)
-    ;;
-
-    let free ctx mem addr = Sub.Memory_Forward.free ctx mem addr.complete;;
-  end
   (* let [@inline always] ar0 ~size f = fun ctx ->
    *   Binary.of_sub ~size @@ f ctx
    * let [@inline always] ar1 ~size f = fun ctx a ->
@@ -437,7 +416,7 @@ module Make (Sub : Subdomain) = struct
     let bchoose ~size _ _ = assert false
     let valid ~size _ = assert false
 
-    (* let valid_ptr_arith ~size _ = assert false                      
+    (* let valid_ptr_arith ~size _ = assert false
      * let bunknown ~size _ = assert false
      * let baddr ~size _  = assert false
      * let biconst ~size _ = assert false
@@ -445,8 +424,8 @@ module Make (Sub : Subdomain) = struct
 
     let bindex ~size _ = assert false
 
-    let valid_ptr_arith ~size ctx a b =
-      Sub.Binary_Forward.valid_ptr_arith ~size ctx a.complete b.complete
+    let valid_ptr_arith ~size arith ctx a b =
+      Sub.Binary_Forward.valid_ptr_arith ~size arith ctx a.complete b.complete
 
     let biconst ~size ctx k = Binary.lift0 ~size @@ SBF.biconst ~size ctx k;;
     let buninit ~size ctx = Binary.lift0 ~size @@ SBF.buninit ~size ctx;;
@@ -580,7 +559,7 @@ module Make (Sub : Subdomain) = struct
               Parts.append ctx acc [slice]
             ) [] a.parts b.parts in
           { parts; complete }
-        with Parts.Bottom -> binary_empty ~size ctx in
+        with Domain_sig.Bottom -> binary_empty ~size ctx in
       (*Codex_log.feedback "result = %a" (binary_pretty ~size ctx) res;*)
       res
 
@@ -604,7 +583,7 @@ module Make (Sub : Subdomain) = struct
           Parts.append ctx acc [slice]
         ) [] a.parts b.parts in
         { parts; complete = SBF.band ~size ctx a.complete b.complete }
-      with Parts.Bottom -> binary_empty ~size ctx
+      with Domain_sig.Bottom -> binary_empty ~size ctx
 
     let xor_bits ~size ctx a b = match a,b with
       | Parts.Zeroes _, _ -> of_bits ctx b
@@ -625,7 +604,7 @@ module Make (Sub : Subdomain) = struct
           Parts.append ctx acc [slice]
         ) [] a.parts b.parts in
         { parts; complete = SBF.bxor ~size ctx a.complete b.complete }
-      with Parts.Bottom -> binary_empty ~size ctx
+      with Domain_sig.Bottom -> binary_empty ~size ctx
 
     let biadd ~size ~nsw ~nuw ~nusw ctx a b =
       (* Codex_log.feedback "@[<v 2>biadd ~size:%d %a %a@]" size (binary_pretty ~size ctx) a (binary_pretty ~size ctx) b; *)
@@ -633,11 +612,11 @@ module Make (Sub : Subdomain) = struct
       let exception Exit in
       let orable = try Parts.fold2 ctx (fun ~size acc pa pb ->
           let za,oa = Sub.Query.(binary ~size ctx (Part.do_extract ctx pa) |> binary_to_known_bits ~size) in
-          let zb,ob = Sub.Query.(binary ~size ctx (Part.do_extract ctx pb) |> binary_to_known_bits ~size) in          
+          let zb,ob = Sub.Query.(binary ~size ctx (Part.do_extract ctx pb) |> binary_to_known_bits ~size) in
           if (Z.equal Z.zero @@ Z.(land) za zb) (* If simultaneously at 0 everywhere *)
           then true
           else raise Exit) true a.parts b.parts
-        with Exit -> false 
+        with Exit -> false
       in
       if orable then
         let complete = SBF.biadd ~size ~nsw ~nuw ~nusw ctx a.complete b.complete in
@@ -651,7 +630,7 @@ module Make (Sub : Subdomain) = struct
   end
 
   let binary_unknown ~size ctx = Binary.lift0 ~size @@ Sub.binary_unknown ~size ctx;;
-  let binary_unknown_typed ~size ctx typ = Binary.lift0 ~size @@ Sub.binary_unknown_typed ~size ctx typ;;  
+  let binary_unknown_typed ~size ctx typ = Binary.lift0 ~size @@ Sub.binary_unknown_typed ~size ctx typ;;
   let boolean_unknown = Sub.boolean_unknown
 
   let union _ = assert false
@@ -671,7 +650,6 @@ module Make (Sub : Subdomain) = struct
     let Result (included, in_tup, deserialize) = subf ctxa a ctxb b (included, acc) in
     Result (included, in_tup, deserialize)
 
-  let serialize_memory ctxa a ctxb b acc = serialize {subf=Sub.serialize_memory} ctxa a ctxb b acc
   let serialize_boolean ctxa a ctxb b acc = serialize {subf=Sub.serialize_boolean} ctxa a ctxb b acc
 
   (* For now we loose everything upon serialization. *)
@@ -688,11 +666,13 @@ module Make (Sub : Subdomain) = struct
     Sub.typed_nondet2 ctxa ctxb acc
 
   let nondet_same_context = Sub.nondet_same_context
-  
+
   (* Note: OCaml infers the wrong type (no principal type), we have to help it here. *)
-  let typed_fixpoint_step (type c) ~init ~arg ~body (included, (acc : c in_tuple)) : bool * (close:bool -> (c out_tuple * Context.t)) =
-    let bool,continuef = Sub.typed_fixpoint_step ~init ~arg ~body (included, acc) in
+  let typed_fixpoint_step (type c) ~iteration ~init ~arg ~body (included, (acc : c in_tuple)) : bool * (close:bool -> (c out_tuple * Context.t)) =
+    let bool,continuef = Sub.typed_fixpoint_step ~iteration ~init ~arg ~body (included, acc) in
     bool,fun ~close -> continuef ~close
+
+  let widened_fixpoint_step = Sub.widened_fixpoint_step
 
   (**************** Queries ****************)
 
@@ -710,9 +690,8 @@ module Make (Sub : Subdomain) = struct
    let may_alias ~size _ = assert false
    let should_focus ~size _ = assert false
 
-                
+
  (**************** Pretty printing ****************)
-  let memory_pretty _ _ _ = assert false
 
 
   (* let basis = Query.binary ~size ctx x in
@@ -730,7 +709,6 @@ module Make (Sub : Subdomain) = struct
 
   let boolean_pretty = Sub.boolean_pretty
 
-  let memory_is_empty _ = assert false
   let binary_is_empty ~size ctx x = x.parts = []
   let integer_is_empty _ = assert false
   let boolean_is_empty _ = assert false
@@ -738,12 +716,6 @@ module Make (Sub : Subdomain) = struct
   let builtin_show_each_in string ctx args memory =
     assert false
 
-
-  let reachable _ = assert false
-
   let satisfiable = Sub.satisfiable
-
-  let may_alias ~ptr_size:_ = assert false
-  let should_focus ~size:_ = assert false
 
 end

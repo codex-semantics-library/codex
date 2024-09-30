@@ -106,6 +106,7 @@ let try_hard_double_check() = false
 (* Number of seconds before the SMT solver times out. *)
 let smt_timeout() = 10;;
 
+let term_group_inductive_variable_by_tuple = false
 
 (* None means: cannot write to an absolute address (default for C). *)
 let r_valid_absolute_addresses:(Z.t * Z.t) option ref = ref None;;
@@ -116,7 +117,7 @@ let set_valid_absolute_addresses (min,max) =
   r_valid_absolute_addresses := Some (min,max);;
 let valid_absolute_addresses() = !r_valid_absolute_addresses;;
 
-let r_show_memory_on_exit = ref true
+let r_show_memory_on_exit = ref false
 let show_memory_on_exit() = !r_show_memory_on_exit
 let set_show_memory_on_exit bool = r_show_memory_on_exit := bool
 let _ = at_exit (fun () ->
@@ -124,7 +125,7 @@ let _ = at_exit (fun () ->
       let minor,promoted,major = Gc.counters() in
       let allocated = minor +. major -. promoted in
       let l1 = String.length (Printf.sprintf "%.0f" allocated) in
-      Printf.eprintf "minor_words:     %*.0f\n\
+      Printf.eprintf "\nGC counters:\nminor_words:     %*.0f\n\
                       major_words:     %*.0f\n\
                       promoted_words:  %*.0f\n\
                       total_allocated: %.0f\n"

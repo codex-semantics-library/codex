@@ -1,0 +1,19 @@
+string.c:10.1-13: `str->content + 0' -> ([1..0xFFFFFFFF] :
+                                          ({self : char(1)[[2..0x7FFFFFFF]][{0}].(0)* | (self != 0)}))
+string.c:10.1-13: `str->content' -> ([1..0xFFFFFFFF] :
+                                      ({self : char(1)[[2..0x7FFFFFFF]][{0}].(0)* | (self != 0)}))
+string.c:10.1-4: `str' -> ([1..0xFFFFFFFF] : ({self : Name(string)[{0}].(0)* | (self != 0)}))
+string.c:11.19-41: `(int)*(str->content + 0) != '7'' -> {0; 1}
+string.c:11.19-34: `(int)*(str->content + 0)' -> [-128..127]
+string.c:11.19-34: `*(str->content + 0)' -> [--..--]
+string.c:11.19-31: `str->content + 0' -> ([1..0xFFFFFFFF] :
+                                           ({self : char(1)[[2..0x7FFFFFFF]][{0}].(0)* | (self != 0)}))
+string.c:11.19-31: `str->content' -> ([1..0xFFFFFFFF] :
+                                       ({self : char(1)[[2..0x7FFFFFFF]][{0}].(0)* | (self != 0)}))
+string.c:11.19-22: `str' -> ([1..0xFFFFFFFB] : ({self : Name(string)[{0}].(0)* | (self != 0)}))
+Unproved regular alarms:
+Unproved additional alarms:
+Proved 4/4 regular alarms
+Unproved 0 regular alarms and 0 additional alarms.
+string.c:11: assertion is FALSE (counter-example exists) (proved with smt solving)
+Solved 1/1 user assertions, proved 0

@@ -19,6 +19,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
+open Frama_c_kernel
 include Cil_state_builder.Varinfo_hashtbl
   (Kernel_function)
   (struct
