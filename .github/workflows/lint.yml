@@ -12,10 +12,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v5
 
-      - name: Use OCaml 5.4
+      - name: Use OCaml 5.3
         uses: ocaml/setup-ocaml@v3
         with:
-          ocaml-compiler: 5.4
+          ocaml-compiler: 5.3
           dune-cache: true
           allow-prerelease-opam: true
 
@@ -32,10 +32,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v5
 
-      - name: Use OCaml 5.4
+      - name: Use OCaml 5.3
         uses: ocaml/setup-ocaml@v3
         with:
-          ocaml-compiler: 5.4
+          ocaml-compiler: 5.3
           dune-cache: true
           allow-prerelease-opam: true
 
@@ -67,10 +67,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v5
 
-      - name: Use OCaml 5.4
+      - name: Use OCaml 5.3
         uses: ocaml/setup-ocaml@v3
         with:
-          ocaml-compiler: 5.4
+          ocaml-compiler: 5.3
           dune-cache: true
           allow-prerelease-opam: true
 
@@ -83,10 +83,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v5
 
-      - name: Use OCaml 5.4
+      - name: Use OCaml 5.3
         uses: ocaml/setup-ocaml@v3
         with:
-          ocaml-compiler: 5.4
+          ocaml-compiler: 5.3
           dune-cache: true
           allow-prerelease-opam: true
 
