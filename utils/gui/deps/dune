@@ -1,0 +1,61 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;  This file is part of the Codex semantics library.                     ;;
+;;                                                                        ;;
+;;  Copyright (C) 2013-2025                                               ;;
+;;    CEA (Commissariat à l'énergie atomique et aux énergies              ;;
+;;         alternatives)                                                  ;;
+;;                                                                        ;;
+;;  you can redistribute it and/or modify it under the terms of the GNU   ;;
+;;  Lesser General Public License as published by the Free Software       ;;
+;;  Foundation, version 2.1.                                              ;;
+;;                                                                        ;;
+;;  It is distributed in the hope that it will be useful,                 ;;
+;;  but WITHOUT ANY WARRANTY; without even the implied warranty of        ;;
+;;  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         ;;
+;;  GNU Lesser General Public License for more details.                   ;;
+;;                                                                        ;;
+;;  See the GNU Lesser General Public License version 2.1                 ;;
+;;  for more details (enclosed in the file LICENSE).                      ;;
+;;                                                                        ;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; (rule
+;;  (targets d3.v7.min.js)
+;;  (mode fallback) ;; do not clean by default
+;;  (action
+;;   (progn
+;;    (system "curl -sSLo %{targets} https://d3js.org/d3.v7.min.js"))))
+
+;; (rule
+;;  (targets d3-graphviz.min.js)
+;;  (mode fallback) ;; do not clean by default
+;;  (action
+;;   (progn
+;;    (system "curl -sSLo %{targets} https://unpkg.com/d3-graphviz@3.0.5/build/d3-graphviz.min.js"))))
+
+
+;; We use a fallback mode: if you use make directly, the files will have already been downloaded.
+;; (you should do that to avoid redownloading the files everytime you build dune)
+
+(rule
+ (targets graphviz.umd.js)
+ (deps Makefile)
+ (mode fallback) ;; do not clean by default
+ (action
+  (progn
+   (system "make %{targets}"))))
+
+
+(rule
+ (targets tailwind4.1.5.css)
+ (deps Makefile)
+ (mode fallback) ;; do not clean by default
+ (action
+  (progn
+   (system "make %{targets}"))))
+
+
+(alias
+ (name js-deps)
+ (deps graphviz.umd.js tailwind4.1.5.css))
+

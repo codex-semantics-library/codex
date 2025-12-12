@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of the Codex semantics library.                     *)
 (*                                                                        *)
-(*  Copyright (C) 2013-2024                                               *)
+(*  Copyright (C) 2013-2025                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,7 +19,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(* A kind of skiplist (average constant-time push), log(n) access to
+(** A kind of skiplist (average constant-time push), log(n) access to
    the ith element (and faster for the latest indices).
 
    Also containes operations when a tree is represented as a set of
@@ -27,8 +27,8 @@
    finding the nearest common ancestor with fast complexity. *)
 type 'a t
 
-(* Length of a list. Constant-time. *)
-val length: 'a t -> int          
+(** Length of a list. Constant-time. *)
+val length: 'a t -> int
 val nil : 'a t
 val is_nil: 'a t -> bool
 val cons : 'a -> 'a t -> 'a t
@@ -36,6 +36,3 @@ val head : 'a t -> 'a
 val tail : 'a t -> 'a t
 val nth : int -> 'a t -> 'a
 val nearest_common_ancestor : 'a t -> 'a t -> 'a t
-
-
-

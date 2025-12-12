@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of the Codex semantics library.                     *)
 (*                                                                        *)
-(*  Copyright (C) 2013-2024                                               *)
+(*  Copyright (C) 2013-2025                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -86,6 +86,15 @@ module type GENERIC_MONOID = sig
 
   val pretty : Format.formatter -> ('a, 'b) t -> unit
   (** Pretty printer for relations *)
+
+  val pretty_with_terms :
+    (Format.formatter -> 'tl -> unit) -> 'tl ->
+    (Format.formatter -> 'tr -> unit) -> 'tr ->
+    Format.formatter -> ('a, 'b) t -> unit
+  (** [pretty_with_terms pp_x x pp_y y rel] pretty-prints the relation [rel]
+      between terms [x] and [y] (respectively printed with [pp_x] and [pp_y]).
+
+      For placeholder variables, use {!pretty} *)
 
   val identity : ('a, 'a) t
   (** The identity relation *)
@@ -175,7 +184,7 @@ end
     and the element, as going back and forth can be costly). *)
 
 (** Simple union-find node, without values *)
-module type SIMPLE_UF_NODE = sig
+module type UF_NODE = sig
   include SIMPLE_GENERIC_ELT
   module Relation : GENERIC_GROUP
 
@@ -189,8 +198,8 @@ module type SIMPLE_UF_NODE = sig
 end
 
 (** union-find node with values *)
-module type UF_NODE = sig
-  include SIMPLE_UF_NODE
+module type UF_NODE_WITH_VALUE = sig
+  include UF_NODE
   module Value : SIMPLE_GENERIC_VALUE with type ('a,'b) relation = ('a,'b) Relation.t
 
   type 'a root = { mutable value : 'a Value.t; mutable size : int }

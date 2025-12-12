@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of the Codex semantics library.                     *)
 (*                                                                        *)
-(*  Copyright (C) 2013-2024                                               *)
+(*  Copyright (C) 2013-2025                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -24,13 +24,13 @@
 
 open Lattice_sig
 
-module Prod2(L1:Join_Semi_Lattice)(L2:Join_Semi_Lattice)
-  :Join_Semi_Lattice with type t = L1.t * L2.t
+module Prod2(L1:JOIN_SEMI_LATTICE)(L2:JOIN_SEMI_LATTICE)
+  :JOIN_SEMI_LATTICE with type t = L1.t * L2.t
 
-module Prod2_With_Bottom(L1:Join_Semi_Lattice_With_Bottom)(L2:Join_Semi_Lattice_With_Bottom)
-  :Join_Semi_Lattice_With_Bottom with type t = L1.t * L2.t
+module Prod2_With_Bottom(L1:JOIN_SEMI_LATTICE_WITH_BOTTOM)(L2:JOIN_SEMI_LATTICE_WITH_BOTTOM)
+  :JOIN_SEMI_LATTICE_WITH_BOTTOM with type t = L1.t * L2.t
 
 module Prod2_With_Inter_Bottom
-    (L1:Join_Semi_Lattice_With_Inter_Bottom)
-    (L2:Join_Semi_Lattice_With_Inter_Bottom)
-  :Join_Semi_Lattice_With_Inter_Bottom with type t = L1.t * L2.t
+    (L1:JOIN_SEMI_LATTICE_WITH_INTER_BOTTOM)
+    (L2:JOIN_SEMI_LATTICE_WITH_INTER_BOTTOM)
+  :JOIN_SEMI_LATTICE_WITH_INTER_BOTTOM with type t = L1.t * L2.t

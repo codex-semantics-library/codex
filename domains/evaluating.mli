@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of the Codex semantics library.                     *)
 (*                                                                        *)
-(*  Copyright (C) 2013-2024                                               *)
+(*  Copyright (C) 2013-2025                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -24,13 +24,10 @@
    terms are manipulated; the associated value is computed on demand
    using "eval". *)
 
-open Domain_sig;;
-
-
 (* Note: does no longer need to be a full domain; we do not need to
    build a term, just to evaluate it. Or should we keep this
    possibility? *)
-module Make_Memory_Binary_Boolean(D:Domain_sig.Base):
+module Make_Memory_Binary_Boolean(D: Sig.BASE):
 sig
   (* include Domain_sig.Base with type binary = Term.t *)
   (*                                 and type boolean = Term.t *)
@@ -43,7 +40,7 @@ sig
 
   (* (\* Note: the backward propagation on terms does nothing, because it *)
   (*    should be done on the underlying domain D. *\) *)
-  (* include With_Memory_Empty with type memory := memory *)
+  (* include WITH_MEMORY_Empty with type memory := memory *)
   (* include With_Binary_Empty with type binary := binary *)
   (*                            and module Context := Context *)
   (* include With_Boolean_Empty with type boolean := boolean *)
@@ -53,15 +50,15 @@ sig
   (* module Context:sig *)
   (*   type t *)
   (* end *)
-  include With_Queries with type memory = Term.t
+  include WITH_QUERIES with type memory = Term.t
                         and type binary = Term.t
                         and type integer = Term.t
                         and type boolean = Term.t
                         and module Query.Boolean_Lattice = Lattices.Quadrivalent
   val root_context: unit -> root_context
   val root_context_upcast: root_context -> Context.t
-      
-  
+
+
   (* MAYBE:  evaluating_lattice could provide a bottom without requiring a bottom.
      This would be done by not evaluating syntactically bottom terms. *)
   val eval: Context.t -> Term.t -> unit
@@ -78,7 +75,7 @@ sig
 
   (* val retrieve_boolean_term: Fresh_id.t -> Context.t -> boolean -> Term.t;; *)
   (* val retrieve_reachable_memory_term: Fresh_id.t -> Context.t -> memory -> Term.t;;   *)
-  
+
   (* Note: the partitionning part is actually optional; we could
      define a functor without it.  But it is just as convenient to
      give a useless split_boolean in the argument.  *)

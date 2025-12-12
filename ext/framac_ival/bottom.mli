@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of the Codex semantics library.                     *)
 (*                                                                        *)
-(*  Copyright (C) 2013-2024                                               *)
+(*  Copyright (C) 2013-2025                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -58,8 +58,8 @@ module Make_Datatype
 
 (** Bounds a semi-lattice. *)
 (* module Bound_Lattice
- *     (Lattice: Lattice_sig.Join_Semi_Lattice)
- *   : Lattice_sig.Join_Semi_Lattice with type t = Lattice.t or_bottom *)
+ *     (Lattice: Lattice_sig.JOIN_SEMI_LATTICE)
+ *   : Lattice_sig.JOIN_SEMI_LATTICE with type t = Lattice.t or_bottom *)
 
 
 

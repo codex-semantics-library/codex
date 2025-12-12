@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of the Codex semantics library.                     *)
 (*                                                                        *)
-(*  Copyright (C) 2013-2024                                               *)
+(*  Copyright (C) 2013-2025                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -58,7 +58,7 @@ end
 (* A node of the control-flow graph. These are mapped 1:1 with control
    locations, but contain more operations (e.g. to iterate on known
    predecessors and successors). *)
-module type Node = sig
+module type NODE = sig
   module Control_location:Control_location;;
   type t
   val control_location: t -> Control_location.t
@@ -82,7 +82,7 @@ end
 (* The control-flow graph. *)
 module type Cfg = sig
   module Control_location:Control_location;;
-  module Node:Node with module Control_location = Control_location;;
+  module Node:NODE with module Control_location = Control_location;;
 
   (** Register an edge from a node to a (possibly new) control
      location. Returns the (possibly newly created) node for the

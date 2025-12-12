@@ -57,8 +57,8 @@ module Make_Datatype
 
 (** Bounds a semi-lattice. *)
 module Bound_Lattice
-    (Lattice: Lattice_type.Join_Semi_Lattice)
-  : Lattice_type.Bounded_Join_Semi_Lattice with type t = Lattice.t or_bottom
+    (Lattice: Lattice_type.JOIN_SEMI_LATTICE)
+  : Lattice_type.Bounded_JOIN_SEMI_LATTICE with type t = Lattice.t or_bottom
 
 
 

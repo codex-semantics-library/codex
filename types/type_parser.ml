@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of the Codex semantics library.                     *)
 (*                                                                        *)
-(*  Copyright (C) 2013-2024                                               *)
+(*  Copyright (C) 2013-2025                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,32 +19,42 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(* A parser for Codex annotations. The grammar may be ambiguous;
-   rather than arbitrarily choose a parse tree, we prefer to detect
-   ambiguities and to ask the user to specify its intention. *)
+(** A parser for Codex annotations. For documentation of the concrete syntax,
+    see {!Type_parse_tree}.
+
+    The grammar may be ambiguous;
+    rather than arbitrarily choose a parse tree, we prefer to detect
+    ambiguities and to ask the user to specify its intention. *)
+
+(*
+   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+   WHEN MODIFYING THIS FILE, PLEASE ALSO UPDATE THE RELEVANT REFERENCE COMMENT
+   IN type_parse_tree.ml
+   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+*)
 
 module Log = Tracelog.Make(struct let category = "Type_parser" end);;
 
 
 module Ast = Type_parse_tree
 
-(* Comparing operators by precedence may be surprising, especially as
-   in C the & or | operators bind less strongly than ==.
+(** Comparing operators by precedence may be surprising, especially as
+   in C the [&] or [|] operators bind less strongly than [==].
 
    To avoid any mistake, we allow only obvious precedences:
 
-   - multiplicative operators ( *,/ and %) bind more strongly than
-     additive operators (+ and -);
-   - both bind less strongly than binary predicates;
-   - binary predicates bind less strongly than && and ||;
+   - multiplicative operators ([*], [/] and [%]) bind more strongly than
+     additive operators ([+] and [-]);
+   - both bind less strongly than binary predicates ([==], [<], ...);
+   - binary predicates bind less strongly than [&&] and [||];
    - multiplicative and additive operators are left-associative.
    - we report an error otherwise.
 
     We don't allow chaining binary predicates, e.g.
-     a < b == c, a < b > c, or a || b && c is forbidden.
+    [a < b == c], [a < b > c], or [a || b && c] is forbidden.
 
-   I got aware of this technique by Per Vognsen, who pointed me to
-   https://www.scattered-thoughts.net/writing/better-operator-precedence/
+    This technique is inspired by Per Vognsen, who pointed it out in
+    {: https://www.scattered-thoughts.net/writing/better-operator-precedence/}
 *)
 module Binop = struct
 
@@ -163,7 +173,6 @@ let merge_definition = report_ambiguities "definition" Ast.Pretty.def;;
 ;;
 
 let id_regexp = "[a-zA-Z_][a-zA-Z0-9_]*"
-let num_regexp = "[0-9]+"
 let fun_id_regexp = "[a-zA-Z_][a-zA-Z0-9_@]*"
 
 (* PPX documentation: see https://www.raffalli.eu/pacomb/pacomb/index.html *)
@@ -174,27 +183,37 @@ let %parser rec
 
 (* The file is a sequence of definitions. *)
 and [@merge merge_definition] def =
-  (x::type_definition) => x
-; (x::c_function_declaration) => x
-; (x::c_global_declaration) => x
-; (x::c_type_definition) => x
+  (x::type_definition) ~? ';' => Ast.TypeDefinition x
+; (x::region_name_definition) ~? ';' => Ast.RegionDefinition x
+; (x::c_function_declaration) ~? ';' => Ast.GlobalDefinition x
+; (x::c_type_definition) ~? ';'  => Ast.RegionDefinition x
+; (x::c_global_declaration) ~? ';' => Ast.GlobalDefinition x
 
 (* Comma-separated list of varid. *)
 and varids = (args::(~+ [","] varid)) => args
 
-(*  Definition of a new type. *)
+(*  Definition of a new region name. *)
+and region_name_definition =
+  ("region" => ()) (name::typeid) '=' (e::typeexpr) =>  (name,Ast.Type e)
+; ("region" => ()) (name::typeid) '=' '<' (vars::varids) '>' (t::typeexpr) =>
+  (Log.warning (fun p -> p "The syntax `type name = <args> type' is deprecated.
+ Use `region name(args) = type' instead.");
+                      (name, Ast.(Constr(Lambda(vars,t)))))
+; ("region" => ()) (name::typeid) '(' (vars::varids) ')' '='  (t::typeexpr) =>
+  (name, Ast.(Constr(Lambda(vars,t))))
+and ptr_annot =
+  '*' => Ast.Maybe_null;
+  '+' => Ast.Non_null;
+  '?' => Ast.Null_or_non_null
+
 and type_definition =
-  ("def" =>(); "type" => ()) (name::typeid) '=' (e::typeexpr) =>  (name,Ast.Type e)
-; ("def" =>(); "type" => ()) (name::typeid) '=' '<' (vars::varids) '>' (t::typeexpr) =>
+  ("type" => ()) (name::typeid) '=' (e::typeexpr) =>  (name,Ast.Type e)
+; ("type" => ()) (name::typeid) '=' '<' (vars::varids) '>' (t::typeexpr) =>
   (Log.warning (fun p -> p "The syntax `type name = <args> type' is deprecated.
  Use `type name(args) = type' instead.");
                       (name, Ast.(Constr(Lambda(vars,t)))))
-; ("def" =>(); "type" => ()) (name::typeid) '(' (vars::varids) ')' '='  (t::typeexpr) =>
+; ("type" => ()) (name::typeid) '(' (vars::varids) ')' '='  (t::typeexpr) =>
   (name, Ast.(Constr(Lambda(vars,t))))
-and ptr_annot =
-  '+' => Ast.Non_null
-; '*' => Ast.Maybe_null
-; '?' => Ast.Maybe_null
 
 (* Type expressions, as can appear at the right of type ... = <type expression>. *)
 and [@merge merge_typeexpr] typeexpr =
@@ -206,7 +225,7 @@ and [@merge merge_typeexpr] typeexpr =
 ; (e::struct_constructor) => e
 ; (e::union_constructor) => e
 ; (e::typeexpr) "with" (p::predicate) => Ast.Constraint(e,p)
-; ("∃" => (); "\\exists" => ()) (v::varid) ':' (t::typeexpr) '.' (t2::typeexpr)   => Ast.Exists(v,t,t2)
+; ("∃" => (); "\\exists" => ()) (v::varid) ':' (t::typeexpr) '.' (t2::typeexpr)   => Ast.(Exists(Symbol.intern v,t,t2))
 (* Should this be the same as c_function_parameters? for which naming the arugmets could be optional? *)
 ; '[' (args::(~* [","] typeexpr)) ']' "->" (ret::typeexpr) => Ast.Function(ret,args)
 (* Looks more like C. *)
@@ -222,13 +241,18 @@ and id = (x::RE id_regexp) => x
 and varid_fun = (x::RE fun_id_regexp) => x
 
 (* Name of C or symbolic variables *)
-and varid = id
+and [@warning "-39"] varid = id
 
-(* Usable ids for types. "struct foo" and "union foo" are valid names, like in C. *)
+(* Usable ids for types. "struct foo" and "union foo" are valid names, like in C.
+   But as in C, struct and union cannot be used as type names, as this
+   creates too many ambiguous parses. *)
 and typeid =
-  (x::id) => x
-; "struct" (x::id) => ("struct " ^ x)
-; "union" (x::id) => ("union " ^ x)
+  (x::id) =>
+    if (x = "struct" || x = "union")
+    then raise (Pacomb.Lex.Give_up "Cannot use struct or union as type identifiers.")
+    else Ast.TypeName x
+; "struct" (x::id) => Ast.TypeNameStruct x
+; "union" (x::id) => Ast.TypeNameUnion x
 
 (* Names of fields in structures and unions.  *)
 and fieldname_id = id
@@ -249,11 +273,11 @@ and pure_keyword =
 
 and c_function_expression =
   (ret_type::typeexpr) (funname::varid_fun) '(' (args::c_function_parameters) ')' => (funname, Ast.Function(ret_type,args))
-; ("∃" => (); "\\exists" => ()) (v::varid) ':' (t::typeexpr) '.' ((funname,f)::c_function_expression) => (funname, Ast.Exists(v,t,f))
+; ("∃" => (); "\\exists" => ()) (v::varid) ':' (t::typeexpr) '.' ((funname,f)::c_function_expression) => (funname, Ast.(Exists(Symbol.intern v,t,f)))
 ; '(' (e::c_function_expression) ')' => e
 
 and c_function_declaration =
-  (inline::inline_keyword) (pure::pure_keyword) ((funname,f)::c_function_expression) ';' => (funname,Ast.FunDef({inline;pure;funtyp=f}))
+  (inline::inline_keyword) (pure::pure_keyword) ((funname,f)::c_function_expression)  => (funname,Ast.FunDef({inline;pure;funtyp=f}))
 
 and c_function_parameters =
   "void" => []                  (* (void) = no parameter. *)
@@ -261,12 +285,11 @@ and c_function_parameters =
 
 (* Shorthand for "type struct foo = struct { ... }". *)
 and c_type_definition =
-  "struct" (name::id) '{' (l::(~* cfield)) '}' ';' => ("struct " ^ name,Ast.Type (Ast.Struct l))
-; "union" (name::id) '{' (l::(~* cfield)) '}' ';' => ("union " ^ name,Ast.Type (Ast.Union l))
-(* TODO: Transform the terminating ';' into an optional separator between definitions. *)
+  "struct" (name::id) '{' (l::(~* cfield)) '}'  => (Ast.TypeNameStruct name,Ast.Type (Ast.Struct l))
+; "union" (name::id) '{' (l::(~* cfield)) '}'  =>  (Ast.TypeNameUnion name,Ast.Type (Ast.Union l))
 
 and c_global_declaration =
-  (t::typeexpr) (name::varid) ';' => (name,Ast.Global t);
+  (t::typeexpr) (name::varid) => (name,Ast.Global t);
 
 (* TODO: Allow ULL etc. For hex, uses the number of digits to deduce the size? *)
 and num_cst =
@@ -296,7 +319,7 @@ and binop =
 (* Expr priorities: atom < unary < binary. *)
 and atom_expr =
   '(' (e::expr) ')' => e
-; (x::varid) => (if x = "self" then Ast.Self else Ast.Var x)
+; (x::varid) => if x = "self" then Ast.Self else Ast.(Var (Symbol.intern x))
 ; (x::num_cst) => Ast.Cst x
 
 and unary_expr =
@@ -318,8 +341,6 @@ and predicate = (e::expr) => e
 
 ;;
 open Pacomb
-
-let blank = Blank.from_charset (Charset.from_string " \n\t")
 
 (* Hard-coded state machine to lex C comments and other blanks out. *)
 module MyBlank = struct

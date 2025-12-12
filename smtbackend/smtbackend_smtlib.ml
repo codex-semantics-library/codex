@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of the Codex semantics library.                     *)
 (*                                                                        *)
-(*  Copyright (C) 2013-2024                                               *)
+(*  Copyright (C) 2013-2025                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -21,7 +21,7 @@
 
 include Smtbackend_smtlib_sig
 
-module Make(P:Param_S) =
+module Make(P:PARAM_S) =
 struct
 
   type t = unit -> unit
@@ -317,7 +317,7 @@ struct
   
 end
 
-module Make_Typed(P:Param_S):Typed_S = struct
+module Make_Typed(P:PARAM_S):TYPED_S = struct
   include Make(P)
   type bitvector
   type ('a,'b) array
@@ -326,19 +326,19 @@ module Make_Typed(P:Param_S):Typed_S = struct
       
 end
 
-module Make_Untyped(P:Param_S):Untyped_S = struct
+module Make_Untyped(P:PARAM_S):UNTYPED_S = struct
   include Make(P)
   type sort = t
   type value = t
 end
 
-module Make_Untyped_Muz(P:Param_S):Untyped_Muz = struct
+module Make_Untyped_Muz(P:PARAM_S):UNTYPED_MUZ = struct
   include Make(P)
   type sort = t
   type value = t  
 end
 
-let with_z3 ?(executable="z3") (f:(module Untyped_Muz) -> 'a) =
+let with_z3 ?(executable="z3") (f:(module UNTYPED_MUZ) -> 'a) =
   let executable = "z3" in
 
   (* Note: careful with functions that pass the env, as the PATH may
@@ -355,4 +355,4 @@ let with_z3 ?(executable="z3") (f:(module Untyped_Muz) -> 'a) =
       let flush () = Stdlib.flush pin
     end
     ) in
-  f (module SMT:Untyped_Muz);;
+  f (module SMT:UNTYPED_MUZ);;

@@ -522,7 +522,7 @@ module Bool = struct
 end
 
 
-module type Collapse = sig
+module type COLLAPSE = sig
   val collapse : bool
 end
 

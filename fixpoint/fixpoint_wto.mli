@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of the Codex semantics library.                     *)
 (*                                                                        *)
-(*  Copyright (C) 2013-2024                                               *)
+(*  Copyright (C) 2013-2025                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -23,7 +23,7 @@
     (which is not memory-efficient). *)
 
 (** Signature for the analysis, which is a standard abstract
-    interpretation [Cousot&Cousot,POPL77] *)
+    interpretation ({{: https://doi.org/10.1145/512950.512973}Cousot and Cousot, POPL'77}) *)
 module type AbstractDomain = sig
 
   (** An abstract domain is a lattice representing abstract states
@@ -35,7 +35,7 @@ module type AbstractDomain = sig
 
   (** An identifier for the loop id. Can be unit if unused; it can be
       used as a widening ID in the symbolic expression domain
-      [Lemerre2023;Lesbre&Lemerre,2024]. *)
+      ({{: https://codex.top/papers/2023-popl-ssa-translation-is-an-abstract-interpretation.html}Lemerre, POPL'23}; {{: https://codex.top/papers/2024-pldi-compiling-with-abstract-interpretation.html}Lesbre & Lemerre, PLDI'24}). *)
   type loop_id
 
 
@@ -81,7 +81,7 @@ end
     the final mapping from all reachable locations to their
     pre-state. Note that it is better if the input node is not part of
     the WTO. *)
-module Make(G : Graph)(D : AbstractDomain  with type transition = G.transition):sig
+module Make(G : Graph)(D : AbstractDomain with type transition = G.transition):sig
   module CLMap : module type of PatriciaTree.MakeMap(G.ControlLocation)
   val fixpoint_partition: D.state CLMap.t -> G.ControlLocation.t Wto.component list -> D.state CLMap.t
 end

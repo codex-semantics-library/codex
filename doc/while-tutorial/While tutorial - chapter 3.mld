@@ -1,0 +1,381 @@
+{0 Interval Analysis on While Language}
+
+{{!page-index.tutorials}Back to main} --
+{{!page-"While tutorial - chapter 2"}Previous chapter: Lattices and Single value abstractions} --
+{{!page-"While tutorial - chapter 4"}Next chapter: Interval analysis using Codex}
+
+In this chapter, we will rewrite most of the analyzer ourselves. The next
+chapter will present how the same thing can be easily built using Codex's
+premade components.
+
+Our {{!page-"While tutorial - chapter 1"}While language} only uses integer variables, with values in {m \mathbb Z}.
+A simple non-relational analysis then simply has to store facts of the form
+{m x \in V} where {m x} is a variable and {m V} some subset of {m \mathbb Z}.
+Any {{!page-"While tutorial - chapter 2".sva}single-value abstraction} will do for {m V}.
+
+In this example, we will use the {!Single_value_abstraction.Ival} abstraction
+for integers expressions and variable, and the {!Single_value_abstraction.Quadrivalent}
+abstraction for boolean expressions. We will directly use those defined by Codex
+rather than their simplified implementations shown in the {{!page-"While tutorial - chapter 2".sva_intv}previous chapter}.
+
+{@ocaml file=analysis_sva.ml,part=sva[
+module SVA_Ival = Single_value_abstraction.Ival
+module SVA_Bval = Single_value_abstraction.Quadrivalent
+]}
+
+{1 Abstract state}
+
+Our global abstract state is represented as a mapping from variables to intervals.
+Any variable without an explicit binding is interpreted as top (any possible value). For this, we can
+use standard maps (like the [State] map from {{!page-"While tutorial - chapter 1".cinterpreter}chapter 1}).
+However, we will use patricia-tree based maps here.
+
+{@ocaml file=analysis_sva.ml,part=sva_state[
+module State = PatriciaTree.MakeMap(Var)
+
+type sva_state = SVA_Ival.integer State.t
+]}
+
+{2 Initial state}
+
+At the beginning of analysis, the abstract state is an empty store. Because the
+analyzer is simple, variables not found in the store are interpreted as being initialized to any value,
+so all variables are effectively assumed to be top initially.
+
+{@ocaml file=analysis_sva.ml,part=initial_state[
+let initial_state() = State.empty
+]}
+
+{2 Lattice structure}
+
+Just like our single value abstraction, our abstract state can be given a lattice structure.
+
+{ul
+{- The ordering simply compares two maps point-wise. A map [s1] includes [s2] if
+   for all variables [v], [s1 v] includes [s2 v].
+   Since absent variables are implicitly bound to top, this is equivalent to checking
+   that all bindings of [s1] are defined in [s2], and comparing
+   shared bindings with {{!Single_value_abstraction.Ival.Integer_Lattice.includes}[SVA_Ival.Integer_Lattice.includes]}.
+
+   Thankfully, the {{!/patricia-tree/PatriciaTree}PatriciaTree} library has a function that does just that:
+{@ocaml file=analysis_sva.ml,part=includes[
+let includes: sva_state -> sva_state -> bool = fun l r ->
+  State.reflexive_subset_domain_for_all2 (fun _ a b -> SVA_Ival.Integer_Lattice.includes a b) l r
+]}
+}
+{- For the join operation, all we need to do is to perform point-wise join on the intersection.
+   Since elements not in the intersection are mapped to top in one of the arguments, their join will
+   also be mapped to top. Widening is similar, except it perform point-wise widening.
+{@ocaml file=analysis_sva.ml,part=join[
+let join s1 s2 =
+  State.idempotent_inter (fun _ v1 v2 -> SVA_Ival.Integer_Lattice.join v1 v2) s1 s2
+
+let widen s1 s2 =
+  State.idempotent_inter (fun _ v1 v2 -> SVA_Ival.Integer_Lattice.widen ~previous:v1 v2) s1 s2
+]}
+}
+{- Symmetrically, for the intersection or meet, we perform point-wise intersection on the union:
+{@ocaml file=analysis_sva.ml,part=inter[
+let inter s1 s2 =
+  State.idempotent_union (fun _ v1 v2 -> SVA_Ival.Integer_Lattice.inter v1 v2) s1 s2
+]}
+}}
+
+{1 Evaluating Expressions}
+
+{2 Arithmetic Expressions}
+
+The function [expression_sva] recursively evaluates arithmetic expressions using the
+interval abstraction. Variables are looked up in the state map, constants are
+turned into singleton intervals, and operators like addition, subtraction, and
+multiplication are computed using the forward transfer functions
+{{!Single_value_abstraction.Ival.Integer_Forward.iadd}[iadd]},
+{{!Single_value_abstraction.Ival.Integer_Forward.isub}[isub]}, and
+{{!Single_value_abstraction.Ival.Integer_Forward.imul}[imul]}. These are defined
+in the {{!Single_value_abstraction.Ival.Integer_Forward}[Sva_Ival.Integer_forward]} module.
+
+{@ocaml file=analysis_sva.ml,part=expression_sva[
+let rec expression_sva : sva_state -> While_ast.aexp -> SVA_Ival.integer =
+  fun state exp -> let open While_ast in
+  match exp with
+  | Var v -> State.find v state
+  | Int c -> SVA_Ival.Integer_Forward.iconst (Z.of_int c)
+  | Add(e1,e2) ->
+      SVA_Ival.Integer_Forward.iadd (expression_sva state e1) (expression_sva state e2)
+  | Sub(e1,e2) ->
+      SVA_Ival.Integer_Forward.isub (expression_sva state e1) (expression_sva state e2)
+  | Mul(e1,e2) ->
+      SVA_Ival.Integer_Forward.imul (expression_sva state e1) (expression_sva state e2)
+]}
+
+
+{2 Boolean Expressions}
+
+The function [bexpression_sva] handles boolean expressions with intervals and
+the quadrivalent lattice. Constants [True], [False] map directly, comparisons
+([Le], [Eq], [Gt]) rely on the implementation from
+{{!Single_value_abstraction.Ival.Integer_Forward}[Sva_Ival.Integer_forward]}, and
+logical operators ([Not], [And]) use functions defined in
+{{!Single_value_abstraction.Quadrivalent.Boolean_Forward}[Sva_Ival.Boolean_forward]}.
+
+{@ocaml file=analysis_sva.ml,part=bexpression_sva[
+let rec bexpression_sva : sva_state -> While_ast.bexp -> SVA_Bval.boolean =
+  fun state exp -> let open While_ast in
+  match exp with
+  | True -> SVA_Bval.Boolean_Forward.true_
+  | False -> SVA_Bval.Boolean_Forward.false_
+  | Le (e1, e2) -> SVA_Ival.Integer_Forward.ile (expression_sva state e1) (expression_sva state e2)
+  | Eq (e1, e2) -> SVA_Ival.Integer_Forward.ieq (expression_sva state e1) (expression_sva state e2)
+  | Not e1 -> SVA_Bval.Boolean_Forward.not (bexpression_sva state e1)
+  | And (e1, e2) -> SVA_Bval.Boolean_Forward.(&&) (bexpression_sva state e1) (bexpression_sva state e2)
+  | Gt (e1, e2) -> SVA_Bval.Boolean_Forward.not @@ SVA_Ival.Integer_Forward.ile (expression_sva state e1) (expression_sva state e2)
+]}
+
+{1 Interval Analysis on While Commands}
+
+The function [analyze_stmt] defines abstract execution of commands.
+[Skip] leaves the state unchanged, assignment updates variable intervals, and
+sequencing propagates states.
+
+Branching ([If]) analyzes the boolean expression. When its value is known,
+the corresponding branch is analyzed. When its value is unknown ([Top]), we analyze
+both branches separately, and merge the results using [join].
+
+Loops ([While]) require computing a fixed point. This is done via recursive calls
+on the same statement. A fixed point is reached when the state after analyzing the loop body ([next])
+is included in the prior state [state]. To ensure termination, [widen] is called before the recursive call.
+
+{@ocaml file=analysis_sva.ml,part=command_sva[
+let rec analyze_stmt : sva_state -> While_ast.stmt -> sva_state =
+  fun state stmt -> let open While_ast in
+  Log.trace (fun p -> p "Statement: %a" While_ast.pp_stmt stmt) ~pp_ret:state_pp @@ fun () ->
+  match stmt with
+  | Skip -> state
+  | Assign(var,exp) ->
+      let v = expression_sva state exp in
+      State.add var v state
+  | Seq (c1,c2) ->
+      let state' = analyze_stmt state c1 in
+      analyze_stmt state' c2
+  | If (cond, if_true, if_false) ->
+      begin match bexpression_sva state cond with
+      | True -> analyze_stmt state if_true
+      | False -> analyze_stmt state if_false
+      | Bottom -> state (* Should be unreachable *)
+      | Top ->
+          (* analyze both, then join the results *)
+          let true_state = analyze_stmt state if_true in
+          let false_state = analyze_stmt state if_false in
+          join true_state false_state
+      end
+  | While (cond, body) ->
+      begin match bexpression_sva state cond with
+      | False -> state (* no need to execute the body *)
+      | Bottom -> state (* Should be unreachable *)
+      | Top | True ->
+          let next = analyze_stmt state body in
+          if includes state next
+          then state (* fixpoint reached *)
+          else analyze_stmt (widen state (join state next)) stmt
+      end
+]}
+
+{1:example Running on an example}
+
+We now have a fully fledged, albeit not very precise, analyzer. We can run it on
+a simple loop program:
+{@ocaml file=while_examples.ml,part=example_ch3[
+[%while_lang
+    x := 13;
+    while(x > 3) do
+       x := x - 2
+    done]
+]}
+
+We can then see the result:
+{@bash[
+$ while_codex --analyzer intv --example chapter3
+[IntvAnalysis] Statement: Seq
+├─[IntvAnalysis] Statement: x := 13
+│ └─[IntvAnalysis] Result: {x -> {13}}
+├─[IntvAnalysis] Statement: While x > 3
+│ ├─[IntvAnalysis] Statement: x := x - 2
+│ │ └─[IntvAnalysis] Result: {x -> {11}}
+│ ├─[IntvAnalysis] Statement: While x > 3
+│ │ ├─[IntvAnalysis] Statement: x := x - 2
+│ │ │ └─[IntvAnalysis] Result: {x -> {9; 11}}
+│ │ ├─[IntvAnalysis] Statement: While x > 3
+│ │ │ ├─[IntvAnalysis] Statement: x := x - 2
+│ │ │ │ └─[IntvAnalysis] Result: {x -> {-1; 1; 3; 5; 7; 9; 11}}
+│ │ │ ├─[IntvAnalysis] Statement: While x > 3
+│ │ │ │ ├─[IntvAnalysis] Statement: x := x - 2
+│ │ │ │ │ └─[IntvAnalysis] Result: {x -> {-3; -1; 1; 3; 5; 7; 9; 11}}
+│ │ │ │ ├─[IntvAnalysis] Statement: While x > 3
+│ │ │ │ │ ├─[IntvAnalysis] Statement: x := x - 2
+│ │ │ │ │ │ └─[IntvAnalysis] Result: {x -> [-0x80000001..11],1%2}
+│ │ │ │ │ ├─[IntvAnalysis] Statement: While x > 3
+│ │ │ │ │ │ ├─[IntvAnalysis] Statement: x := x - 2
+│ │ │ │ │ │ │ └─[IntvAnalysis] Result: {x -> [--..11],1%2}
+│ │ │ │ │ │ └─[IntvAnalysis] Result: {x -> [--..13],1%2}
+│ │ │ │ │ └─[IntvAnalysis] Result: {x -> [--..13],1%2}
+│ │ │ │ └─[IntvAnalysis] Result: {x -> [--..13],1%2}
+│ │ │ └─[IntvAnalysis] Result: {x -> [--..13],1%2}
+│ │ └─[IntvAnalysis] Result: {x -> [--..13],1%2}
+│ └─[IntvAnalysis] Result: {x -> [--..13],1%2}
+└─[IntvAnalysis] Result: {x -> [--..13],1%2}
+]}
+
+Here, we can see that the while loop's body is analyzed 6 times, each time our
+widening makes the state larger. A fixed point is reached when [x -> [--..13],1%2],
+meaning {m x \leqslant 13} and {m x} is odd.
+
+{1 Refining values on conditionals}
+
+While the above analysis is sound, it is not very precise. One notable thing it
+does not do is refine state when a condition is learned. For instance, in the while loop body,
+we do not learn that [x > 3]. Solving that can be done via backward transfer functions, which
+improve the abstraction of a function's arguments given a better abstraction of its result.
+
+{2 Refining arithmetic expressions}
+
+Refining the value of a variable is the part where information is learned.
+Refining a constant does nothing. Finally, for all arithmetic operators, we use
+the single value abstractions' backward transfer functions
+{{!Single_value_abstraction.Ival.Integer_Backward.iadd}[Integer_Backward.iadd]},
+{{!Single_value_abstraction.Ival.Integer_Backward.isub}[Integer_Backward.isub]},
+and
+{{!Single_value_abstraction.Ival.Integer_Backward.imul}[Integer_Backward.imul]}
+to find the refined values of the arguments. Calling these also requires an
+abstraction of the arguments, which we can compute with [expression_sva]. When
+an improvement is found, we can then propagate it to the relevant subexpression
+via a recursive call.
+
+{@ocaml file=analysis_sva.ml,part=refine_aexp[
+let rec refine_aexp : sva_state -> While_ast.aexp -> SVA_Ival.integer -> sva_state =
+  fun state exp result -> match exp with
+  | Var v -> State.add v (SVA_Ival.Integer_Lattice.inter result (State.find v state)) state
+  | Int c -> state
+  | Add(e1,e2) ->
+      let (v1, v2) = SVA_Ival.Integer_Backward.iadd (expression_sva state e1) (expression_sva state e2) result in
+      let state = match v1 with Some v -> refine_aexp state e1 v | None -> state in
+      let state = match v2 with Some v -> refine_aexp state e2 v | None -> state in
+      state
+  | Sub(e1,e2) ->
+      let (v1, v2) = SVA_Ival.Integer_Backward.isub (expression_sva state e1) (expression_sva state e2) result in
+      let state = match v1 with Some v -> refine_aexp state e1 v | None -> state in
+      let state = match v2 with Some v -> refine_aexp state e2 v | None -> state in
+      state
+  | Mul(e1,e2) ->
+      let (v1, v2) = SVA_Ival.Integer_Backward.imul (expression_sva state e1) (expression_sva state e2) result in
+      let state = match v1 with Some v -> refine_aexp state e1 v | None -> state in
+      let state = match v2 with Some v -> refine_aexp state e2 v | None -> state in
+      state
+]}
+
+Note that this implementation is not necessarily the most precise. For example (non-exhaustive list):
+- In the constant case, we could check that the result is contains the constant, and if not, return
+  a special bottom state.
+- In binary operations, we refine the branches in order, but there are cases where
+  the refined information from the right branch could lead to a more precise refinement
+  of the left branch.
+
+Naturally, precision is optional, but soundness is not. For the analysis to work,
+we can let [refine_aexp] be very imprecise, but it must never learn false facts.
+
+{2 Refining boolean expressions}
+
+The principle to refine boolean expression is very much the same as for arithmetic
+expressions. For simplicity, since [x > y] is [!(x <= y)], we rewrite the corresponding
+case into the former to avoid duplicating code.
+
+{@ocaml file=analysis_sva.ml,part=refine_bexp[
+let rec refine_bexp : sva_state -> While_ast.bexp -> SVA_Bval.boolean -> sva_state =
+  fun state exp result -> match exp with
+  | True | False -> state
+  | Not e1 ->
+      let v = SVA_Bval.Boolean_Backward.not (bexpression_sva state e1) result in
+      begin match v with Some v -> refine_bexp state e1 v | None -> state end
+  | Le (e1, e2) ->
+      let (v1, v2) = SVA_Ival.Integer_Backward.ile (expression_sva state e1) (expression_sva state e2) result in
+      let state = match v1 with Some v -> refine_aexp state e1 v | None -> state in
+      let state = match v2 with Some v -> refine_aexp state e2 v | None -> state in
+      state
+  | Eq (e1, e2) ->
+      let (v1, v2) = SVA_Ival.Integer_Backward.ieq (expression_sva state e1) (expression_sva state e2) result in
+      let state = match v1 with Some v -> refine_aexp state e1 v | None -> state in
+      let state = match v2 with Some v -> refine_aexp state e2 v | None -> state in
+      state
+  | And (e1, e2) ->
+      let (v1, v2) =  SVA_Bval.Boolean_Backward.(&&) (bexpression_sva state e1) (bexpression_sva state e2) result in
+      let state = match v1 with Some v -> refine_bexp state e1 v | None -> state in
+      let state = match v2 with Some v -> refine_bexp state e2 v | None -> state in
+      state
+  | Gt (e1, e2) -> refine_bexp state (Not(Le(e1,e2))) result
+]}
+
+{2 Interval Analysis with refinement}
+
+We can now use the [refine_bexp] to refine the state when entering into a conditional.
+All we need to do is to modify the [analyze_stmt] function in the [If] and [While]
+case. For instance, we call [refine_bexp state cond True] when entering an if-true branch.
+
+{@ocaml file=analysis_sva.ml,part=command_sva_refine[
+  | If (cond, if_true, if_false) ->
+      begin match bexpression_sva state cond with
+      (* no refinement possible when the value is known *)
+      | True -> analyze_stmt_refine state if_true
+      | False -> analyze_stmt_refine state if_false
+      | Bottom -> state (* Should be unreachable *)
+      | Top ->
+          (* analyze both, then join the results *)
+          let true_state = analyze_stmt_refine (refine_bexp state cond True) if_true in
+          let false_state = analyze_stmt_refine (refine_bexp state cond False) if_false in
+          join true_state false_state
+      end
+  | While (cond, body) ->
+      let cond_value = bexpression_sva state cond in
+      begin match cond_value with
+      | False -> state (* no need to execute the body *)
+      | Bottom -> state (* Should be unreachable *)
+      | Top | True ->
+          let refined_state = if cond_value == Top then refine_bexp state cond True else state in
+          let next = analyze_stmt_refine refined_state body in
+          if includes state next
+          then refine_bexp state cond False (* at the loop exit, the condition is false *)
+          else analyze_stmt_refine (widen state (join state next)) stmt
+      end
+]}
+
+{2 Running on an example}
+
+With this new analyzer, we can re-analyze the same {{!example}example}, this time
+our result is significantly more precise. After the loop, the value of [x] is known
+to be either 1 or 3:
+
+{@bash[
+$ while_codex --analyzer intv_refine --example chapter3
+[IntvAnalysis] Statement: Seq
+├─[IntvAnalysis] Statement: x := 13
+│ └─[IntvAnalysis] Result: {x -> {13}}
+├─[IntvAnalysis] Statement: While x > 3
+│ ├─[IntvAnalysis] Statement: x := x - 2
+│ │ └─[IntvAnalysis] Result: {x -> {11}}
+│ ├─[IntvAnalysis] Statement: While x > 3
+│ │ ├─[IntvAnalysis] Statement: x := x - 2
+│ │ │ └─[IntvAnalysis] Result: {x -> {9; 11}}
+│ │ ├─[IntvAnalysis] Statement: While x > 3
+│ │ │ ├─[IntvAnalysis] Statement: x := x - 2
+│ │ │ │ └─[IntvAnalysis] Result: {x -> {3; 5; 7; 9; 11}}
+│ │ │ └─[IntvAnalysis] Result: {x -> {1; 3}}
+│ │ └─[IntvAnalysis] Result: {x -> {1; 3}}
+│ └─[IntvAnalysis] Result: {x -> {1; 3}}
+└─[IntvAnalysis] Result: {x -> {1; 3}}
+]}
+
+{1 Full implementation}
+
+All code for this toy example can be found in the {!Whilelib.Analysis_sva} module.
+
+{{!page-index.tutorials}Back to main} --
+{{!page-"While tutorial - chapter 2"}Previous chapter: Lattices and Single value abstractions} --
+{{!page-"While tutorial - chapter 4"}Next chapter: Interval analysis using Codex}

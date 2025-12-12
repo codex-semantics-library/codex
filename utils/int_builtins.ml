@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of the Codex semantics library.                     *)
 (*                                                                        *)
-(*  Copyright (C) 2013-2024                                               *)
+(*  Copyright (C) 2013-2025                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -69,11 +69,15 @@ external highest_bit_untagged_unsafe: (int [@untagged]) -> (int[@untagged]) =
 
 
 
+[@@@ocaml.warning "-32"]
+
 (** [ffs x] returns the position of the first least significant bit
     set, where the least significant bit starts at 1.  [ffs 0] returns
     [0]. *)
 external ffs: (int) -> (int[@untagged]) =
   "caml_int_builtin_ffs_byte" "caml_int_builtin_ffs" [@@noalloc]
+
+[@@@ocaml.warning "+32"]
 
 (** See [ffs]. *)
 external ffs_untaggued: (int [@untagged]) -> (int[@untagged]) =
@@ -83,11 +87,15 @@ external ffs_untaggued: (int [@untagged]) -> (int[@untagged]) =
    must untag anyway. *)
 let ffs = ffs_untaggued
 
+[@@@ocaml.warning "-32"]
+
 (** [count_trailing_zeroes x] returns the number of least significant
     bits that are all set to 0. [count_trailing_zeroes 0] returns
     [Sys.word_size]. *)
 external count_trailing_zeroes: (int) -> (int [@untagged]) =
     "caml_int_builtin_ctz_byte" "caml_int_builtin_ctz" [@@noalloc]
+
+[@@@ocaml.warning "+32"]
 
 external count_trailing_zeroes_untagged: (int [@untagged]) -> (int [@untagged]) =
   "caml_int_builtin_ctz_byte" "caml_int_builtin_ctz_untagged" [@@noalloc]

@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of the Codex semantics library.                     *)
 (*                                                                        *)
-(*  Copyright (C) 2013-2024                                               *)
+(*  Copyright (C) 2013-2025                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,5 +19,5 @@
 (*                                                                        *)
 (**************************************************************************)
 
-include Lattice_sig.Complete_Lattice with type t = unit
+include Lattice_sig.LATTICE with type t = unit
 val singleton: 'a -> unit

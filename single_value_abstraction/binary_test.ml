@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of the Codex semantics library.                     *)
 (*                                                                        *)
-(*  Copyright (C) 2013-2024                                               *)
+(*  Copyright (C) 2013-2025                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -20,17 +20,17 @@
 (**************************************************************************)
 
 module type S = sig
-  include Basis_sig.Binary_Basis;;
-  val concretize: binary -> Lattices.BVSet.t
-  val abstract: size:int -> Lattices.BVSet.t -> binary
-  val pretty: Format.formatter -> binary -> unit
-  val parse_string: string -> binary
+  include Sva_sig.BITVECTOR;;
+  val concretize: bitvector -> Lattices.BVSet.t
+  val abstract: size:int -> Lattices.BVSet.t -> bitvector
+  val pretty: Format.formatter -> bitvector -> unit
+  val parse_string: string -> bitvector
 end
 module Collecting = struct
   include Binary_collecting
-  let equal = Binary_Lattice.equal
+  let equal = Bitvector_Lattice.equal
   let subset = Lattices.BVSet.ZSet.subset
-  let inter = Binary_Lattice.inter ~size:(-1)
+  let inter = Bitvector_Lattice.inter ~size:(Units.In_bits.of_int (-1))
 end
 module Quadrivalent = Lattices.Quadrivalent
 
@@ -204,121 +204,134 @@ module Test(Implem:S) = struct
   let all_test_best2 size = all_test_f2 (test_best_transformer2 ~size);;  
   
 
-  module  BF = Implem.Binary_Forward;;
-  module  BR = Implem.Binary_Backward;;
-  module  CBF = Collecting.Binary_Forward;;
-  module  CBB = Collecting.Binary_Backward;;    
-  module Test() = struct
+  module  BF = Implem.Bitvector_Forward;;
+  module  BR = Implem.Bitvector_Backward;;
+  module  CBF = Collecting.Bitvector_Forward;;
+  module  CBB = Collecting.Bitvector_Backward;;
 
+  let size1 = Units.In_bits.of_int 1;;
+  let size2 = Units.In_bits.of_int 2;;
+  let size3 = Units.In_bits.of_int 3;;
+  let size4 = Units.In_bits.of_int 4;;
+
+  
+  module Test() = struct
+        
     (* all_test_soundness2 1 BF.band Collecting.band;;
      * Format.printf "band is sound@.";; *)
-    all_test_completeness2 1 (BF.band ~size:1) (CBF.band ~size:1);;
+    all_test_completeness2 1 (BF.band ~size:size1) (CBF.band ~size:size1);;
     Format.printf "band is sound and complete@.";;
 
     (* all_test_soundness2 1 BF.bor Collecting.bor;;
      * Format.printf "bor is sound@.";; *)
-    all_test_completeness2 1 (BF.bor ~size:1) (CBF.bor ~size:1);;
+    all_test_completeness2 1 (BF.bor ~size:size1) (CBF.bor ~size:size1);;
     Format.printf "bor is sound and complete@.";;
 
     (* all_test_soundness2 1 BF.bxor CBF.bxor;;
      * Format.printf "bxor is sound@.";; *)
-    all_test_completeness2 1 (BF.bxor ~size:1) (CBF.bxor ~size:1);;
+    all_test_completeness2 1 (BF.bxor ~size:size1) (CBF.bxor ~size:size1);;
     Format.printf "bxor is sound and complete@.";;
 
-    all_test_soundness2 4 (BF.biadd ~size:4 ~nsw:false ~nuw:false ~nusw:false) (CBF.biadd ~size:4 ~nsw:false ~nuw:false ~nusw:false);;
+    let flags = (Operator.Flags.Biadd.pack ~nsw:false ~nuw:false ~nusw:false) in        
+    all_test_soundness2 4 (BF.biadd ~size:size4 ~flags) (CBF.biadd ~size:size4 ~flags);;
     Format.printf "biadd is sound@.";;
-    (* all_test_best2 4 4 (BF.biadd ~size:4) (CBF.biadd ~size:4);;
+    (* all_test_best2 4 4 (BF.biadd ~size:size4) (CBF.biadd ~size:size4);;
      * Format.printf "biadd is maximally precise@.";; *)
     (* biadd is incomplete, and not maximaly precise (e.g. cannot compute 1 + 1 = 2). *)
 
-    all_test_soundness2 4 (BF.bisub ~size:4 ~nsw:false ~nuw:false ~nusw:false) (CBF.bisub ~size:4 ~nsw:false ~nuw:false ~nusw:false);;
+    let flags = (Operator.Flags.Bisub.pack ~nsw:false ~nuw:false ~nusw:false) in    
+    all_test_soundness2 4 (BF.bisub ~size:size4 ~flags) (CBF.bisub ~size:size4 ~flags);;
     Format.printf "bisub is sound@.";;
     (* bisub is incomplete and not maximally precise. *)
 
-    (* all_test_soundness1 2 (BF.buext ~size:4 ~oldsize:2) (CBF.buext ~size:4 ~oldsize:2);;
+    (* all_test_soundness1 2 (BF.buext ~size:size4 ~oldsize:2) (CBF.buext ~size:size4 ~oldsize:2);;
      * Format.printf "buext is sound@.";; *)
-    all_test_completeness1 2 (BF.buext ~size:4 ~oldsize:2) (CBF.buext ~size:4 ~oldsize:2);;
+    all_test_completeness1 2 (BF.buext ~size:size4 ~oldsize:size2) (CBF.buext ~size:size4 ~oldsize:size2);;
     Format.printf "buext is sound and complete@.";;
 
     
-    all_test_soundness1 2 (BF.bsext ~size:4 ~oldsize:2) (CBF.bsext ~size:4 ~oldsize:2);;
+    all_test_soundness1 2 (BF.bsext ~size:size4 ~oldsize:size2) (CBF.bsext ~size:size4 ~oldsize:size2);;
     Format.printf "bsext is sound@.";;
     (* bsext is incomplete, as we loose the fact the the copied bits are all equal. *)  
-    all_test_best1 4 2 (BF.bsext ~size:4 ~oldsize:2) (CBF.bsext ~size:4 ~oldsize:2);;
+    all_test_best1 4 2 (BF.bsext ~size:size4 ~oldsize:size2) (CBF.bsext ~size:size4 ~oldsize:size2);;
     Format.printf "bsext is maximally precise@.";;
     
 
 
-    all_test_soundness2 4 (BF.bshl ~size:4 ~nsw:false ~nuw:false) (CBF.bshl ~size:4 ~nsw:false ~nuw:false);;
+    let flags = (Operator.Flags.Bshl.pack ~nsw:false ~nuw:false) in    
+    all_test_soundness2 4 (BF.bshl ~size:size4 ~flags) (CBF.bshl ~size:size4 ~flags);;
     Format.printf "bshl is sound@.";;
+
     (* bshl is incomplete: 1 << ? = ??, while {1 << 0} U {1 << 1} = {1,10} *)
-    all_test_best2 4 4 (BF.bshl ~size:4 ~nsw:false ~nuw:false) (CBF.bshl ~size:4 ~nsw:false ~nuw:false);;
+    let flags = (Operator.Flags.Bshl.pack ~nsw:false ~nuw:false) in    
+    all_test_best2 4 4 (BF.bshl ~size:size4 ~flags) (CBF.bshl ~size:size4 ~flags);;
     Format.printf "bshl is maximally precise@.";;  
 
-    all_test_soundness2 4 (BF.blshr ~size:4) (CBF.blshr ~size:4);;
+    all_test_soundness2 4 (BF.blshr ~size:size4) (CBF.blshr ~size:size4);;
     Format.printf "blshr is sound@.";;
     (* blshr is incomplete: 1 << ? = ??, while {1 << 0} U {1 << 1} = {1,10} *)
-    all_test_best2 4 4 (BF.blshr ~size:4) (CBF.blshr ~size:4);;
+    all_test_best2 4 4 (BF.blshr ~size:size4) (CBF.blshr ~size:size4);;
     Format.printf "blshr is maximally precise@.";;  
     
 
-    all_test_soundness2 4 (BF.bashr ~size:4) (CBF.bashr ~size:4);;
+    all_test_soundness2 4 (BF.bashr ~size:size4) (CBF.bashr ~size:size4);;
     Format.printf "bashr is sound@.";;
-    all_test_best2 4 4 (BF.bashr ~size:4) (CBF.bashr ~size:4);;
+    all_test_best2 4 4 (BF.bashr ~size:size4) (CBF.bashr ~size:size4);;
     Format.printf "bashr is maximally precise@.";;  
     
     
-    (* all_test_soundness2_pred 2 (BF.beq ~size:2) (CBF.beq ~size:2);;
+    (* all_test_soundness2_pred 2 (BF.beq ~size:size2) (CBF.beq ~size:size2);;
      * Format.printf "beq is sound@.";; *)
-    all_test_completeness2_pred 2 (BF.beq ~size:2) (CBF.beq ~size:2);;
+    all_test_completeness2_pred 2 (BF.beq ~size:size2) (CBF.beq ~size:size2);;
     Format.printf "beq is sound and complete@.";;
 
     
 
-    (* all_test_soundness2_pred 4 (BF.bisle ~size:4) (CBF.bisle ~size:4);;
+    (* all_test_soundness2_pred 4 (BF.bisle ~size:size4) (CBF.bisle ~size:size4);;
      * Format.printf "bisle is sound@.";; *)
-    all_test_completeness2_pred 2 (BF.bisle ~size:4) (CBF.bisle ~size:4);;
+    all_test_completeness2_pred 2 (BF.bisle ~size:size4) (CBF.bisle ~size:size4);;
     Format.printf "bisle is sound and complete@.";;
     
 
-    (* all_test_soundness2_pred 4 (BF.biule ~size:4) (CBF.biule ~size:4);;
+    (* all_test_soundness2_pred 4 (BF.biule ~size:size4) (CBF.biule ~size:size4);;
      * Format.printf "biule is sound@.";; *)
-    all_test_completeness2_pred 2 (BF.biule ~size:4) (CBF.biule ~size:4);;
+    all_test_completeness2_pred 2 (BF.biule ~size:size4) (CBF.biule ~size:size4);;
     Format.printf "biule is sound and complete@.";;
     
 
     
-    (* all_test_soundness2 3 (BF.bconcat ~size1:3 ~size2:3) (CBF.bconcat ~size1:3 ~size2:3);;
+    (* all_test_soundness2 3 (BF.bconcat ~size1:size3 ~size2:size3) (CBF.bconcat ~size1:size3 ~size2:size3);;
      * Format.printf "bconcat is sound@.";; *)
-    all_test_completeness2 3 (BF.bconcat ~size1:3 ~size2:3) (CBF.bconcat ~size1:3 ~size2:3);;
+    all_test_completeness2 3 (BF.bconcat ~size1:size3 ~size2:size3) (CBF.bconcat ~size1:size3 ~size2:size3);;
     Format.printf "bconcat is sound and complete@.";;
 
 
-    (* all_test_soundness1 4 (BF.bextract ~index:1 ~size:2 ~oldsize:4) (CBF.bextract ~index:1 ~size:2 ~oldsize:4);;
+    (* all_test_soundness1 4 (BF.bextract ~index:1 ~size:size2 ~oldsize:size4) (CBF.bextract ~index:1 ~size:size2 ~oldsize:size4);;
      * Format.printf "bextract is sound@.";; *)
-    all_test_completeness1 4 (BF.bextract ~index:1 ~size:2 ~oldsize:4) (CBF.bextract ~index:1 ~size:2 ~oldsize:4);;
+    all_test_completeness1 4 (BF.bextract ~index:size1 ~size:size2 ~oldsize:size4) (CBF.bextract ~index:size1 ~size:size2 ~oldsize:size4);;
     Format.printf "bextract is sound and complete@.";;
 
 
 
-    all_test_soundness2 4 (BF.bimul ~size:4 ~nsw:false ~nuw:false) (CBF.bimul ~size:4 ~nuw:false ~nsw:false);;
+    all_test_soundness2 4 (BF.bimul ~size:size4 ~flags:(Operator.Flags.Bimul.pack ~nsw:false ~nuw:false))
+      (CBF.bimul ~size:size4 ~flags:(Operator.Flags.Bimul.pack ~nsw:false ~nuw:false));;
     Format.printf "bimul is sound@.";;
     (* bisub is incomplete. *)
   end;;
 
-    all_test_soundness2 4 (BF.biudiv ~size:4) (CBF.biudiv ~size:4);;
+    all_test_soundness2 4 (BF.biudiv ~size:size4) (CBF.biudiv ~size:size4);;
     Format.printf "biudiv is sound@.";;
 
-    all_test_soundness2 4 (BF.biumod ~size:4) (CBF.biumod ~size:4);;
+    all_test_soundness2 4 (BF.biumod ~size:size4) (CBF.biumod ~size:size4);;
     Format.printf "biumod is sound@.";;
     
-    all_test_soundness2 3 (BF.bisdiv ~size:3) (CBF.bisdiv ~size:3);;
+    all_test_soundness2 3 (BF.bisdiv ~size:size3) (CBF.bisdiv ~size:size3);;
     Format.printf "bisdiv is sound@.";;
 
-    all_test_soundness2 4 (BF.bismod ~size:4) (CBF.bismod ~size:4);;
+    all_test_soundness2 4 (BF.bismod ~size:size4) (CBF.bismod ~size:size4);;
     Format.printf "bismod is sound@.";;
 
-  (* all_test_completeness1 2 (BF.bnot ~size:2) (CBF.bnot ~size:2);;
+  (* all_test_completeness1 2 (BF.bnot ~size:size2) (CBF.bnot ~size:size2);;
    * Format.printf "bnot is sound@.";; *)
   (* end;; *)
 
@@ -475,96 +488,102 @@ module Test(Implem:S) = struct
   (* let all_test_backward_completeness2_pred = all_test_f3' test_backward_completeness2_pred;;       *)
 
   module BTest() = struct
-  (* all_test_backward_soundness1 (2,2) (BR.bnot ~size:2) (Collecting.bnot ~size:2);;
+  (* all_test_backward_soundness1 (2,2) (BR.bnot ~size:size2) (Collecting.bnot ~size:size2);;
    * Format.printf "rev_bnot is sound (and complete)@.";; *)
 
-  all_test_backward_soundness2 (2,2,2) (BR.band ~size:2) (CBF.band ~size:2);;
+  all_test_backward_soundness2 (2,2,2) (BR.band ~size:size2) (CBF.band ~size:size2);;
   Format.printf "rev_band is sound@.";;
 
-  all_test_backward_soundness2 (2,2,2) (BR.bor ~size:2) (CBF.bor ~size:2);;
+  all_test_backward_soundness2 (2,2,2) (BR.bor ~size:size2) (CBF.bor ~size:size2);;
   Format.printf "rev_bor is sound@.";;
 
-  all_test_backward_soundness2 (2,2,2) (BR.bxor ~size:2) (CBF.bxor ~size:2);;
+  all_test_backward_soundness2 (2,2,2) (BR.bxor ~size:size2) (CBF.bxor ~size:size2);;
   Format.printf "rev_bxor is sound@.";;
 
-  all_test_backward_soundness2 (2,2,4) (BR.bconcat ~size1:2 ~size2:2) (CBF.bconcat ~size1:2 ~size2:2);;
+  all_test_backward_soundness2 (2,2,4) (BR.bconcat ~size1:size2 ~size2:size2) (CBF.bconcat ~size1:size2 ~size2:size2);;
   Format.printf "rev_bconcat is sound@.";;
 
-  all_test_backward_soundness1 (4,2) (BR.bextract ~size:2 ~index:1 ~oldsize:4) (CBF.bextract ~size:2 ~index:1 ~oldsize:4);;
+  all_test_backward_soundness1 (4,2) (BR.bextract ~size:size2 ~index:size1 ~oldsize:size4) (CBF.bextract ~size:size2 ~index:size1 ~oldsize:size4);;
   Format.printf "rev_bextract is sound@.";;
 
-  all_test_backward_soundness1 (2,4) (BR.buext ~size:4 ~oldsize:2) (CBF.buext ~size:4 ~oldsize:2);;
+  all_test_backward_soundness1 (2,4) (BR.buext ~size:size4 ~oldsize:size2) (CBF.buext ~size:size4 ~oldsize:size2);;
   Format.printf "rev_buext is sound@.";;
 
-  all_test_backward_soundness1 (2,4) (BR.bsext ~size:4 ~oldsize:2) (CBF.bsext ~size:4 ~oldsize:2);;
+  all_test_backward_soundness1 (2,4) (BR.bsext ~size:size4 ~oldsize:size2) (CBF.bsext ~size:size4 ~oldsize:size2);;
   Format.printf "rev_bsext is sound@.";;
 
 
   (* Takes around 15s. *)
-  all_test_backward_soundness2 (4,4,4) (BR.bshl ~size:4 ~nsw:false ~nuw:false) (CBF.bshl ~size:4 ~nsw:false ~nuw:false);;
+  let flags = (Operator.Flags.Bshl.pack ~nsw:false ~nuw:false) in
+  all_test_backward_soundness2 (4,4,4) (BR.bshl ~size:size4 ~flags) (CBF.bshl ~size:size4 ~flags);;
   Format.printf "rev_bshl is sound@.";;
 
-  all_test_backward_soundness2 (4,4,4) (BR.blshr ~size:4) (CBF.blshr ~size:4);;
+  all_test_backward_soundness2 (4,4,4) (BR.blshr ~size:size4) (CBF.blshr ~size:size4);;
   Format.printf "rev_blshr is sound@.";;
 
-  all_test_backward_soundness2 (2,2,2) (BR.bashr ~size:2) (CBF.bashr ~size:2);;
+  all_test_backward_soundness2 (2,2,2) (BR.bashr ~size:size2) (CBF.bashr ~size:size2);;
   Format.printf "rev_bashr is sound@.";;
 
   
-  all_test_backward_soundness2 (4,4,4) (BR.bashr ~size:4) (CBF.bashr ~size:4);;
+  all_test_backward_soundness2 (4,4,4) (BR.bashr ~size:size4) (CBF.bashr ~size:size4);;
   Format.printf "rev_bashr is sound@.";;
 
 
-  all_test_backward_soundness2_pred (3,3,3) (BR.beq ~size:3) (CBF.beq ~size:3);;
+  all_test_backward_soundness2_pred (3,3,3) (BR.beq ~size:size3) (CBF.beq ~size:size3);;
   Format.printf "rev_beq is sound@.";;
 
-  (* all_test_backward_completeness2_pred (3,3,3) (forward_then_backward_pred (BF.beq ~size:3) (BR.beq ~size:3)) (CBF.beq ~size:3);;
+  (* all_test_backward_completeness2_pred (3,3,3) (forward_then_backward_pred (BF.beq ~size:size3) (BR.beq ~size:size3)) (CBF.beq ~size:size3);;
    * Format.printf "rev_beq is complete@.";; *)
-  all_test_backward_soundness2_pred (3,3,3) (BR.biule ~size:3) (CBF.biule ~size:3);;
+  all_test_backward_soundness2_pred (3,3,3) (BR.biule ~size:size3) (CBF.biule ~size:size3);;
   Format.printf "rev_biule is sound@.";;
 
-  all_test_backward_soundness2_pred (3,3,3) (BR.bisle ~size:3) (CBF.bisle ~size:3);;
+  all_test_backward_soundness2_pred (3,3,3) (BR.bisle ~size:size3) (CBF.bisle ~size:size3);;
   Format.printf "rev_bisle is sound@.";;  
 
-  
-  all_test_backward_soundness2 (3,3,3) (BR.biadd ~size:3 ~nsw:false ~nuw:false ~nusw:false) (CBF.biadd ~size:3 ~nsw:false ~nuw:false ~nusw:false);;
+
+  let flags = (Operator.Flags.Biadd.pack ~nsw:false ~nuw:false ~nusw:false) in        
+  all_test_backward_soundness2 (3,3,3) (BR.biadd ~size:size3 ~flags) (CBF.biadd ~size:size3 ~flags);;
   Format.printf "rev_biadd is sound@.";;
 
-  all_test_backward_soundness2 (3,3,3) (BR.bisub ~size:3 ~nsw:false ~nuw:false ~nusw:false) (CBF.bisub ~size:3 ~nsw:false ~nuw:false ~nusw:false);;
+  let flags = (Operator.Flags.Bisub.pack ~nsw:false ~nuw:false ~nusw:false) in      
+  all_test_backward_soundness2 (3,3,3) (BR.bisub ~size:size3 ~flags) (CBF.bisub ~size:size3 ~flags);;
   Format.printf "rev_bisub is sound@.";;
 
 
-  all_test_backward_soundness2 (3,3,3) (BR.bimul ~nsw:false ~nuw:false ~size:3) (CBF.bimul ~nsw:false ~nuw:false ~size:3);;
+  let flags = (Operator.Flags.Bimul.pack ~nsw:false ~nuw:false) in
+  all_test_backward_soundness2 (3,3,3) (BR.bimul ~flags ~size:size3) (CBF.bimul ~flags ~size:size3);;
   Format.printf "rev_bimul is sound@.";;
-
   
-  all_test_backward_soundness2 (3,3,3) (BR.bimul ~nsw:true ~nuw:false ~size:3) (CBF.bimul ~nsw:true ~nuw:false ~size:3);;
+  let flags = (Operator.Flags.Bimul.pack ~nsw:true ~nuw:false) in
+  all_test_backward_soundness2 (3,3,3) (BR.bimul ~flags ~size:size3) (CBF.bimul ~flags ~size:size3);;
   Format.printf "rev_bimul is sound@.";;
 
-  all_test_backward_soundness2 (3,3,3) (BR.bimul ~nsw:false ~nuw:true ~size:3) (CBF.bimul ~nsw:false ~nuw:true ~size:3);;
+  let flags = (Operator.Flags.Bimul.pack ~nsw:false ~nuw:true) in
+  all_test_backward_soundness2 (3,3,3) (BR.bimul ~flags ~size:size3) (CBF.bimul ~flags ~size:size3);;
   Format.printf "rev_bimul is sound@.";;
 
-  all_test_backward_soundness2 (3,3,3) (BR.bimul ~nsw:true ~nuw:true ~size:3) (CBF.bimul ~nsw:true ~nuw:true ~size:3);;
+  let flags = (Operator.Flags.Bimul.pack ~nsw:true ~nuw:true) in
+  all_test_backward_soundness2 (3,3,3) (BR.bimul ~flags ~size:size3) (CBF.bimul ~flags ~size:size3);;
   Format.printf "rev_bimul is sound@.";;
 
-  all_test_backward_soundness2 (3,3,3) (BR.biudiv ~size:3) (CBF.biudiv ~size:3);;
+  all_test_backward_soundness2 (3,3,3) (BR.biudiv ~size:size3) (CBF.biudiv ~size:size3);;
   Format.printf "rev_biudiv is sound@.";;
 
-  all_test_backward_soundness2 (3,3,3) (BR.bisdiv ~size:3) (CBF.bisdiv ~size:3);;
+  all_test_backward_soundness2 (3,3,3) (BR.bisdiv ~size:size3) (CBF.bisdiv ~size:size3);;
   Format.printf "rev_bisdiv is sound@.";;
   
-  all_test_backward_soundness2 (3,3,3) (BR.biumod ~size:3) (CBF.biumod ~size:3);;
+  all_test_backward_soundness2 (3,3,3) (BR.biumod ~size:size3) (CBF.biumod ~size:size3);;
   Format.printf "rev_biumod is sound@.";;
 
-  all_test_backward_soundness2 (3,3,3) (BR.bismod ~size:3) (CBF.bismod ~size:3);;
+  all_test_backward_soundness2 (3,3,3) (BR.bismod ~size:size3) (CBF.bismod ~size:size3);;
   Format.printf "rev_bismod is sound@.";;
   end;;  
   
-  (* all_test_backward_completeness2_pred (3,3,3) (BR.biule ~size:3) (CBF.biule ~size:3);;
+  (* all_test_backward_completeness2_pred (3,3,3) (BR.biule ~size:size3) (CBF.biule ~size:size3);;
    * Format.printf "rev_biule is complete@.";; *)
 
   
-  (* all_test_backward_completeness2_pred (3,3,3) (BF.biule ~size:3) (BR.biule ~size:3) (CBF.biule ~size:3);;
+  (* all_test_backward_completeness2_pred (3,3,3) (BF.biule ~size:size3) (BR.biule ~size:size3) (CBF.biule ~size:size3);;
    * Format.printf "rev_biule is complete@.";; *)
 
   
@@ -572,15 +591,15 @@ module Test(Implem:S) = struct
    * 
    * XXX:biule marche pas mal, mais ameliorer                                                               *)                                                  
   
-  (* all_test_backward_soundness2_pred (4,4,4) (BR.biule ~size:4) (CBF.biule ~size:4);;
+  (* all_test_backward_soundness2_pred (4,4,4) (BR.biule ~size:size4) (CBF.biule ~size:size4);;
    * Format.printf "rev_biule is sound@.";; *)
 
   
-  (* all_test_best2 3 3 (BF.bismod ~size:3) (CBF.bismod ~size:3);;
+  (* all_test_best2 3 3 (BF.bismod ~size:size3) (CBF.bismod ~size:size3);;
    * Format.printf "bismod is maximlly precise@.";; *)
 
   
-  (* all_test_soundness2 4 (BF.bisdiv ~size:4) (CBF.bisdiv ~size:4);;
+  (* all_test_soundness2 4 (BF.bisdiv ~size:size4) (CBF.bisdiv ~size:size4);;
    * Format.printf "bisdiv is sound@.";; *)
 
 end;;

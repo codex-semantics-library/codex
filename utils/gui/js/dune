@@ -1,0 +1,42 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;  This file is part of the Codex semantics library.                     ;;
+;;                                                                        ;;
+;;  Copyright (C) 2013-2025                                               ;;
+;;    CEA (Commissariat à l'énergie atomique et aux énergies              ;;
+;;         alternatives)                                                  ;;
+;;                                                                        ;;
+;;  you can redistribute it and/or modify it under the terms of the GNU   ;;
+;;  Lesser General Public License as published by the Free Software       ;;
+;;  Foundation, version 2.1.                                              ;;
+;;                                                                        ;;
+;;  It is distributed in the hope that it will be useful,                 ;;
+;;  but WITHOUT ANY WARRANTY; without even the implied warranty of        ;;
+;;  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         ;;
+;;  GNU Lesser General Public License for more details.                   ;;
+;;                                                                        ;;
+;;  See the GNU Lesser General Public License version 2.1                 ;;
+;;  for more details (enclosed in the file LICENSE).                      ;;
+;;                                                                        ;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(library
+ (name prefix_tree)
+ (modules prefix_tree))
+
+(library
+ (name prefix_tree_tests)
+ (libraries qcheck-core prefix_tree)
+ (inline_tests)
+ (modules prefix_tree_tests)
+ (preprocess (pps ppx_inline_test)))
+
+(executables
+   (modes js)
+   (names binsec_webapp)
+   (modules :standard \ prefix_tree prefix_tree_tests)
+;   (modules_without_implementation component)	
+   (libraries prefix_tree vdom.base vdom js_of_ocaml codex.gui.interface codex.syntax_tree codex.binarytrace)
+   (preprocess (pps ppx_deriving.eq ppx_deriving.ord js_of_ocaml-ppx)))
+
+
+

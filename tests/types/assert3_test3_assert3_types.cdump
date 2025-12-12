@@ -1,8 +1,0 @@
-assert3.c:22.20-30: `value == (int *)0' -> {0x0}
-assert3.c:22.20-25: `value' -> {{ &i }}
-Unproved regular alarms:
-Unproved additional alarms:
-Proved 0/0 regular alarms
-Unproved 0 regular alarms and 0 additional alarms.
-assert3.c:22: assertion is FALSE (invalid) (proved with abstract interpretation)
-Solved 1/1 user assertions, proved 0

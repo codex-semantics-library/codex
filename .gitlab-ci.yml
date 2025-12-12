@@ -1,0 +1,419 @@
+# Note about the name of CI targets. They should correspond to makefile targets.
+# - path//target means that the corresponding target can be done locally using make -C path target.
+#   - Path and target can be empty: path// means make -C path, and //target means make target.
+
+
+default:
+  artifacts:
+    expire_in: 1 day            # Default is 30 days.
+
+
+stages:
+  - build-codex
+  - build
+  - test
+  - bundle
+
+
+variables:
+    FF_USE_FASTZIP: "true"
+    # A workaround against a bug in gitlab-runner's default
+    # unzipping implementation, which partially breaks caching for the dune _build cache.
+    # See https://gitlab.com/gitlab-org/gitlab-runner/-/issues/27496 for more details.
+
+    # Note: I have issues with z3 on later versions of nix.
+    # NIXPKGS: "-I nixpkgs=https://github.com/NixOS/nixpkgs/archive/554be6495561ff07b6c724047bdd7e0716aa7b46.tar.gz"
+    # NIXPKGS: ""
+    NIXPKGS: "-I nixpkgs=https://github.com/NixOS/nixpkgs/archive/544961dfcce86422ba200ed9a0b00dd4b1486ec5.tar.gz"
+    # We need a recent version, else this cannot build dune package with dune_lang >= 2.8
+    # nixpkgs commit hash can be obtained by git ls-remote https://github.com/nixos/nixpkgs nixos-unstable
+    # When a recent version is installed, we can just set NIXPKGS to "".
+    NIX_SHELL_PREFIX: "nix-shell -v -v -v --show-trace --impure $NIXPKGS ./devenv/nix/shell.nix --run"
+    # NIX_SHELL_PREFIX: "nix develop --no-write-lock-file .#ci -c bash -c"
+
+    NIX_CONFIG: |
+      experimental-features = nix-command flakes
+      access-tokens = git.frama-c.com=gitlab-ci-token:${CI_JOB_TOKEN}
+    # We need insecure flag here if our dependencies require insecure packages like python 2.7
+    NIXPKGS_ALLOW_INSECURE: "1"
+    # No dependency, fixed version: should always be at the same place.
+#    SV_BENCHMARKS_DIR: "/nix/store/pvh2fnxzkgjbflx3nwgplaakacy8jbh9-sv-benchmarks-svcomp24-final"
+
+
+# Export environment variables for by nix scripts.
+before_script:
+  - nix eval nixpkgs#lib.version
+  - export PATRICIA_TREE_REV=$(git ls-tree --object-only HEAD utils/patricia-tree)
+  - export CUDDML_REV=$(git ls-tree --object-only HEAD utils/cudd.ml)
+  - export SV_BENCHMARKS_DIR=$(nix build $NIXPKGS -f nix/sv-benchmarks.nix)
+
+# We build the deps as a nix package, to avoid doing this at every commit.
+//deps:
+  stage: build-codex
+  tags: ["nix-v2"]
+  script:
+#      - rm -Rf utils/cudd.ml && git clone --depth=1 --single-branch --branch=main https://gitlab-ci-token:${CI_JOB_TOKEN}@git.frama-c.com/pub/codex/cudd.ml utils/cudd
+      - TMP=$(cd utils/gui/deps/js && nix-build -I nixpkgs=https://github.com/NixOS/nixpkgs/archive/cfd6b5fc90b15709b780a5a1619695a88505a176.tar.gz) && cp $TMP/bundle-output.js utils/gui/deps/js/bundle-output.js && cp $TMP/graphviz.umd.js utils/gui/deps/graphviz.umd.js && cp $TMP/*.css utils/gui/deps/ && touch utils/gui/deps/*
+  artifacts:
+    paths: ["utils/gui/deps/js/bundle-output.js", "utils/gui/deps/graphviz.umd.js", "utils/gui/deps/*.css"]
+
+//build:
+  stage: build-codex
+  tags: ["nix-v2"]
+  needs:
+    - //deps
+  script:
+      - $NIX_SHELL_PREFIX 'dune build -p codex'
+  artifacts:
+    expire_in: 1 hour
+    paths: ["_build","utils/gui/deps"]
+
+frontends/frama-c//build:
+  stage: build
+  tags: ["nix-v2"]
+  needs:
+    - //build
+    - //deps
+  script: $NIX_SHELL_PREFIX 'make -C frontends/frama-c build'
+  artifacts:
+    expire_in: 1 hour
+# Note: we re-export the javascript file obtained in build-deps, otherwise some test jobs try to rebuild that.
+    paths: ["_build", "utils/gui/deps/js/bundle-output.js", "utils/gui/deps/graphviz.umd.js", "utils/gui/deps/*.css"]
+
+
+frontends/frama-c//test.opt:
+  stage: test
+  tags: ["nix-v2"]
+  needs:
+    - frontends/frama-c//build
+  script:
+    - $NIX_SHELL_PREFIX 'make -C frontends/frama-c test.opt'
+
+# TODO: really test some of those.
+frontends/frama-c//test:svcomp:
+  stage: test
+  tags: ["nix-v2"]
+  needs:
+    - //build
+  script:
+    - $NIX_SHELL_PREFIX 'test -d $SV_BENCHMARKS_DIR' # Test if svdir exists
+
+frontends/frama-c//tests/integration:
+  stage: test
+  tags: ["nix-v2"]
+  needs:
+    - frontends/frama-c//build
+  script:
+  # Execute the test suite and return an error if this introduces a diff.
+    - $NIX_SHELL_PREFIX 'z3 -version && which z3 && cd frontends/frama-c && make tests/integration && git diff --exit-code .'
+
+frontends/frama-c/tests/types//all:
+  stage: test
+  tags: ["nix-v2"]
+  needs:
+    - frontends/frama-c//build
+  script:
+  # Execute the test suite and return an error if this introduces a diff.
+    - $NIX_SHELL_PREFIX 'cd frontends/frama-c/tests/types && make all && git diff --exit-code .'
+
+
+
+
+frontends/binsec//build:
+  stage: build
+  tags: ["nix-v2"]
+  needs:
+    - //build
+  script: $NIX_SHELL_PREFIX 'make -C frontends/binsec build'
+  artifacts:
+    expire_in: 1 hour
+    paths: ["_build"]
+
+
+frontends/binsec//test:
+  stage: test
+  tags: ["nix-v2"]
+  needs:
+    - //deps
+    - frontends/binsec//build
+  script:
+    - touch tests/vmcai2022/liSemanticDirected2017/*.exe
+    - touch tests/vmcai2022/liSemanticDirected2017/gdsl/*.exe
+    - $NIX_SHELL_PREFIX 'cd tests/vmcai2022/liSemanticDirected2017 && rm -f *.alarms && make regression'
+  artifacts:
+    paths: ["tests/vmcai2022/lisemanticdirected2017/*.alarms"]
+
+frontends/binsec//bundle:
+  stage : bundle
+  tags: ["nix-v2"]
+  needs:
+      - frontends/binsec//build
+  script:
+    # - nix-shell $NIXPKGS -p binutils --run 'cp _build/default/binsec/binsec_codex.exe . && chmod u+w binsec_codex.exe && strip binsec_codex.exe'
+    - $NIX_SHELL_PREFIX 'cp _build/default/frontends/binsec/binsec_codex.exe . && chmod u+w binsec_codex.exe && strip binsec_codex.exe'
+  artifacts:
+    expire_in: 1 hour
+    paths: ["binsec_codex.exe"]
+
+# Build the doc to ensure no new issues (warnings are fine, but not crashes)
+//doc:
+  stage: build
+  tags: ["nix-v2"]
+  needs:
+    - //build
+    - frontends/frama-c//build
+    - frontends/binsec//build
+  script: $NIX_SHELL_PREFIX 'make doc'
+
+# Check that the headers are up-to-date.
+//update_headers:
+  stage: test
+  tags: ["nix-v2"]
+  script:
+    - $NIX_SHELL_PREFIX 'make update_headers && git diff --exit-code'
+
+bench:get:
+  stage: build-codex
+  tags: ["nix-v2"]
+  # Try to pull benchmarks from the https://git.frama-c.com/codex/types-benchmarks repository
+  # - first try pulling a branch with the same name as the current one
+  #   this allows modifying tests in sync with a branch
+  # - if that fails, pull the master branch
+  script: |
+    cd benchmarks
+    branch=${CI_COMMIT_REF_NAME}
+    rm -Rf types
+    git clone --depth=1 --single-branch --branch=$branch https://gitlab-ci-token:${CI_JOB_TOKEN}@git.frama-c.com/codex/types-benchmarks.git types || \
+    git clone --depth=1 --single-branch --branch=master https://gitlab-ci-token:${CI_JOB_TOKEN}@git.frama-c.com/codex/types-benchmarks.git types
+  artifacts:
+    expire_in: 1 hour
+    paths: ["benchmarks"]
+
+benchmarks/types//c_contiki_list:
+  stage: test
+  tags: ["nix-v2"]
+  needs:
+      - frontends/frama-c//build
+      - bench:get
+  script:
+      - $NIX_SHELL_PREFIX "cd benchmarks/types/contiki_list && find . -name '*.cdump' -delete"
+      - $NIX_SHELL_PREFIX 'cd benchmarks/types && make c_contiki_list && diff2junit -o ../../c_contiki.xml contiki_list'
+  artifacts:
+    reports:
+      junit: c_contiki.xml
+
+
+benchmarks/types//c_linux_rbtree:
+  stage: test
+  tags: ["nix-v2"]
+  needs:
+      - frontends/frama-c//build
+      - bench:get
+  script:
+      - $NIX_SHELL_PREFIX "cd benchmarks/types/linux_rbtree && find . -name '*.cdump' -delete"
+      - $NIX_SHELL_PREFIX 'cd benchmarks/types && make c_linux_rbtree && diff2junit -o ../../c_linux_rbtree.xml linux_rbtree'
+  artifacts:
+    reports:
+      junit: c_linux_rbtree.xml
+
+# tests:c:small-types:
+#   stage: test
+#   tags: ["nix-v2"]
+#   needs:
+#       - frontends/frama-c//build
+#   script:
+#       - $NIX_SHELL_PREFIX 'cd tests/types && make c_analysis && diff2junit -o ../../tests_c_small-types.xml -- "*.cdump"'
+#   artifacts:
+#     reports:
+#       junit: tests_c_small-types.xml
+
+
+benchmarks/types//c_vmcai2022:
+  stage: test
+  tags: ["nix-v2"]
+  needs:
+      - frontends/frama-c//build
+      - bench:get
+  script:
+      - $NIX_SHELL_PREFIX "cd benchmarks/types/vmcai2022 && find . -name '*.cdump' -delete"
+      - $NIX_SHELL_PREFIX 'cd benchmarks/types && make c_vmcai2022 && diff2junit -o ../../c_vmcai2022.xml vmcai2022'
+  artifacts:
+    reports:
+      junit: c_vmcai2022.xml
+
+
+
+benchmarks/types//c_Olden/bh:
+  stage: test
+  tags: ["nix-v2"]
+  needs:
+      - frontends/frama-c//build
+      - bench:get
+  script:
+      - $NIX_SHELL_PREFIX "cd benchmarks/types/Olden/bh && find . -name '*.cdump' -delete"
+      - $NIX_SHELL_PREFIX 'cd benchmarks/types && make c_Olden/bh && diff2junit -o ../../c_Olden_bh.xml Olden/bh'
+  artifacts:
+    reports:
+      junit: c_Olden_bh.xml
+
+
+benchmarks/types//c_Olden/bisort:
+  stage: test
+  tags: ["nix-v2"]
+  needs:
+      - frontends/frama-c//build
+      - bench:get
+  script:
+      - $NIX_SHELL_PREFIX "cd benchmarks/types/Olden/bisort && find . -name '*.cdump' -delete"
+      - $NIX_SHELL_PREFIX 'cd benchmarks/types && make c_Olden/bisort && diff2junit -o ../../c_Olden_bisort.xml Olden/bisort'
+  artifacts:
+    reports:
+      junit: c_Olden_bisort.xml
+
+benchmarks/types//c_Olden/em3d:
+  stage: test
+  tags: ["nix-v2"]
+  needs:
+      - frontends/frama-c//build
+      - bench:get
+  script:
+      - $NIX_SHELL_PREFIX "cd benchmarks/types/Olden/em3d && find . -name '*.cdump' -delete"
+      - $NIX_SHELL_PREFIX 'cd benchmarks/types && make c_Olden/em3d && diff2junit -o ../../c_Olden_em3d.xml Olden/em3d'
+  artifacts:
+    reports:
+      junit: c_Olden_em3d.xml
+
+benchmarks/types//c_Olden/health:
+  stage: test
+  tags: ["nix-v2"]
+  needs:
+      - frontends/frama-c//build
+      - bench:get
+  script:
+      - $NIX_SHELL_PREFIX "cd benchmarks/types/Olden/health && find . -name '*.cdump' -delete"
+      - $NIX_SHELL_PREFIX 'cd benchmarks/types && make c_Olden/health && diff2junit -o ../../c_Olden_health.xml Olden/health'
+  artifacts:
+    reports:
+      junit: c_Olden_health.xml
+
+benchmarks/types//c_Olden/mst:
+  stage: test
+  tags: ["nix-v2"]
+  needs:
+      - frontends/frama-c//build
+      - bench:get
+  script:
+      - $NIX_SHELL_PREFIX "cd benchmarks/types/Olden/mst && find . -name '*.cdump' -delete"
+      - $NIX_SHELL_PREFIX 'cd benchmarks/types && make c_Olden/mst && diff2junit -o ../../c_Olden_mst.xml Olden/mst'
+  artifacts:
+    reports:
+      junit: c_Olden_mst.xml
+
+
+
+benchmarks/types//c_Olden/perimeter:
+  stage: test
+  tags: ["nix-v2"]
+  needs:
+      - frontends/frama-c//build
+      - bench:get
+  script:
+      - $NIX_SHELL_PREFIX 'cd benchmarks/types && make c_Olden/perimeter && diff2junit -o ../../c_Olden_perimeter.xml Olden/perimeter'
+  artifacts:
+    reports:
+      junit: c_Olden_perimeter.xml
+
+benchmarks/types//c_Olden/power:
+  stage: test
+  tags: ["nix-v2"]
+  needs:
+      - frontends/frama-c//build
+      - bench:get
+  script:
+      - $NIX_SHELL_PREFIX 'cd benchmarks/types && make c_Olden/power && diff2junit -o ../../c_Olden_power.xml Olden/power'
+  artifacts:
+    reports:
+      junit: c_Olden_power.xml
+
+
+
+benchmarks/types//c_Olden/treeadd:
+  stage: test
+  tags: ["nix-v2"]
+  needs:
+      - frontends/frama-c//build
+      - bench:get
+  script:
+      - $NIX_SHELL_PREFIX "cd benchmarks/types/Olden/treeadd && find . -name '*.cdump' -delete"
+      - $NIX_SHELL_PREFIX 'cd benchmarks/types && make c_Olden/treeadd && diff2junit -o ../../c_Olden_treeadd.xml Olden/treeadd'
+  artifacts:
+    reports:
+      junit: c_Olden_treeadd.xml
+
+benchmarks/types//c_Olden/tsp:
+  stage: test
+  tags: ["nix-v2"]
+  needs:
+      - frontends/frama-c//build
+      - bench:get
+  script:
+      - $NIX_SHELL_PREFIX "cd benchmarks/types/Olden/tsp && find . -name '*.cdump' -delete"
+      - $NIX_SHELL_PREFIX 'cd benchmarks/types && make c_Olden/tsp && diff2junit -o ../../c_Olden_tsp.xml Olden/tsp'
+  artifacts:
+    reports:
+      junit: c_Olden_tsp.xml
+
+benchmarks/types//c_Olden/voronoi:
+  stage: test
+  tags: ["nix-v2"]
+  needs:
+      - frontends/frama-c//build
+      - bench:get
+  script:
+      - $NIX_SHELL_PREFIX "cd benchmarks/types/Olden/voronoi && find . -name '*.cdump' -delete"
+      - $NIX_SHELL_PREFIX 'cd benchmarks/types && make c_Olden/voronoi && diff2junit -o ../../c_Olden_voronoi.xml Olden/voronoi'
+  artifacts:
+    reports:
+      junit: c_Olden_voronoi.xml
+
+benchmark/types//infer_orig_vmcai2022:
+  stage: test
+  tags: ["nix-v2"]
+  needs:
+      - frontends/frama-c//build
+      - bench:get
+  script:
+      - $NIX_SHELL_PREFIX 'cd benchmarks/types && make infer_orig_vmcai2022 && diff2junit -o ../../infer_orig_vmcai2022.xml "vmcai2022/*/infered-spec/*.typedc"'
+  artifacts:
+    reports:
+      junit: infer_orig_vmcai2022.xml
+
+benchmark/types//infer_orig_contiki_list:
+  stage: test
+  tags: ["nix-v2"]
+  needs:
+      - frontends/frama-c//build
+      - bench:get
+  script:
+      - $NIX_SHELL_PREFIX 'cd benchmarks/types && make infer_orig_contiki_list && diff2junit -o ../../infer_orig_contiki_list.xml "contiki_list/infered-spec/*.typedc"'
+  artifacts:
+    reports:
+      junit: infer_orig_contiki_list.xml
+
+//unit_tests:
+  stage: test
+  tags: ["nix-v2"]
+  needs:
+    - //build
+  script: $NIX_SHELL_PREFIX 'make unit_tests'
+
+tests/types//all:
+  stage: test
+  tags: ["nix-v2"]
+  needs:
+    - frontends/frama-c//build
+  script:
+    - $NIX_SHELL_PREFIX 'cd tests/types && (make all; diff2junit -o ../../tests_types.xml .)'
+  artifacts:
+   reports:
+     junit: tests_types.xml

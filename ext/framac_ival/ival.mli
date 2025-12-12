@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of the Codex semantics library.                     *)
 (*                                                                        *)
-(*  Copyright (C) 2013-2024                                               *)
+(*  Copyright (C) 2013-2025                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -25,6 +25,7 @@
 
 open Abstract_interp
 
+(* $MDX part-begin=ival *)
 type t = private
   | Set of Int.t array
   | Float of Fval.t
@@ -35,6 +36,7 @@ type t = private
 
       Actual [Top] is thus represented by Top(None,None,Int.zero,Int.one) *)
   | Top of Int.t option * Int.t option * Int.t * Int.t
+(* $MDX part-end *)
 
 (** {2 General guidelines of this module}
 
@@ -68,7 +70,7 @@ val diff_if_one: t -> t -> t
 val join: t -> t -> t
 val widen: (Integer.t * Widen_Hints.t) -> t -> t -> t
 
-(* include Lattice_sig.Join_Semi_Lattice
+(* include Lattice_sig.JOIN_SEMI_LATTICE
  *    with type t := t *)
    (* and type widen_hint = size_widen_hint * generic_widen_hint *)
 

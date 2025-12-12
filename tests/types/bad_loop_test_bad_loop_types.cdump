@@ -1,7 +1,0 @@
-bad_loop.c:3.9-15: `i < -1' -> {0x0}
-bad_loop.c:3.9-10: `i' -> {0}
-Unproved regular alarms:
-Unproved additional alarms:
-Proved 0/0 regular alarms
-Unproved 0 regular alarms and 0 additional alarms.
-Solved 0/0 user assertions, proved 0

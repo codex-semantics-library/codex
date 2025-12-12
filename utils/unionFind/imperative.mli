@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of the Codex semantics library.                     *)
 (*                                                                        *)
-(*  Copyright (C) 2013-2024                                               *)
+(*  Copyright (C) 2013-2025                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -24,13 +24,14 @@
     union by size and lazy path compression. *)
 
 (** {2 Nodes}
-    Building nodes out of elements, relations and values*)
+    Functors used to build nodes out of elements, relations and values *)
 
-module MakeSimpleNode
+(** Create a simple node by wrapping an elt with a pointer *)
+module MakeNode
     (Elt : Parameters.SIMPLE_GENERIC_ELT)
     (Relation : Parameters.GENERIC_GROUP) :
 sig
-    include Parameters.SIMPLE_UF_NODE
+    include Parameters.UF_NODE
        with module Relation = Relation
 
     val payload : 'a t -> 'a Elt.t
@@ -41,13 +42,14 @@ sig
         At most one node should be created per unique element! *)
 end
 
-(** Same as [MakeSimpleNode], but also remembers all built node in a [PatriciaTree]
+(** Same as {!MakeNode}, but also remembers all built node in a hash-table
     so we can check if elements already have an associated node *)
-module MakeSimpleNumberedNode
-    (Elt : PatriciaTree.HETEROGENEOUS_KEY)
-    (Relation : Parameters.GENERIC_GROUP) :
+module MakeNumberedNode
+    (Elt : HetHashtbl.HETEROGENEOUS_HASHED_TYPE)
+    (Relation : Parameters.GENERIC_GROUP)
+    () :
 sig
-    include module type of MakeSimpleNode(Elt)(Relation)
+    include module type of MakeNode(Elt)(Relation)
 
     val get_node : 'a Elt.t -> 'a t option
     (** Checks if a node has already been constructed for the given element *)
@@ -56,12 +58,14 @@ sig
     (** Returns the node associated with the given element if it exists, else builds it *)
 end
 
-module MakeNode
+(** This creates a valued node by wrapping an elt with a pointer (same as {!MakeSimpleNode}),
+    but here representatives also have a [Value.t] attached. *)
+module MakeValuedNode
     (Elt : Parameters.SIMPLE_GENERIC_ELT)
     (Relation : Parameters.GENERIC_GROUP)
     (Value : Parameters.SIMPLE_GENERIC_VALUE with type ('a,'b) relation = ('a,'b) Relation.t) :
 sig
-    include Parameters.UF_NODE
+    include Parameters.UF_NODE_WITH_VALUE
        with module Relation = Relation
         and module Value = Value
 
@@ -73,12 +77,15 @@ sig
         At most one node should be created per element! *)
 end
 
-module MakeNumberedNode
-    (Elt : PatriciaTree.HETEROGENEOUS_KEY)
+(** Same as {!MakeValuedNode}, but also remembers all built node in a hash-table
+    so we can check if elements already have an associated node *)
+module MakeValuedNumberedNode
+    (Elt : HetHashtbl.HETEROGENEOUS_HASHED_TYPE)
     (Relation : Parameters.GENERIC_GROUP)
-    (Value : Parameters.SIMPLE_GENERIC_VALUE with type ('a,'b) relation = ('a,'b) Relation.t) :
+    (Value : Parameters.SIMPLE_GENERIC_VALUE with type ('a,'b) relation = ('a,'b) Relation.t)
+    () :
 sig
-    include module type of MakeNode(Elt)(Relation)(Value)
+    include module type of MakeValuedNode(Elt)(Relation)(Value)
 
     val get_node : 'a Elt.t -> 'a t option
     (** Checks if a node has already been constructed for the given element *)
@@ -87,6 +94,11 @@ sig
     (** Returns the node associated with the given element if it exists, else builds it
         The value is only used when creating nodes *)
 end
+
+module HashtblSimpleNode
+  (Elt: HetHashtbl.HETEROGENEOUS_HASHED_TYPE)
+  (Relation: Parameters.GENERIC_GROUP) :
+Parameters.UF_NODE with type 'a t = 'a Elt.t and module Relation = Relation
 
 (** {2 Union find structures} *)
 
@@ -101,14 +113,14 @@ end
     This is fully imperative and mutable.
     - Create at most one node per ['a Elt.t]
     - Do NOT perform [union] between related nodes *)
-module GenericRelationalValued(Node: Parameters.UF_NODE) :
+module GenericRelationalValued(Node: Parameters.UF_NODE_WITH_VALUE) :
   Signatures.IMPERATIVE_GENERIC_RELATIONAL_VALUED
     with type 'a t = 'a Node.t
      and type ('a, 'b) relation = ('a, 'b) Node.Relation.t
      and type 'a value = 'a Node.Value.t
 
 (** Same as {!GenericRelationalValued}, but without the values *)
-module GenericRelational (Node: Parameters.SIMPLE_UF_NODE) :
+module GenericRelational (Node: Parameters.UF_NODE) :
   Signatures.IMPERATIVE_GENERIC_RELATIONAL
     with type 'a t = 'a Node.t
      and type ('a, 'b) relation = ('a, 'b) Node.Relation.t

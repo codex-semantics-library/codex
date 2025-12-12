@@ -1,8 +1,0 @@
-pair2.c:13.2-3: `p' -> ([1..0xFFFFFFFF] : ({self : Name(struct pair)[{0}].(0)* | (self != 0)}))
-pair2.c:14.2-3: `p' -> ([1..0xFFFFFFFF] : ({self : Name(struct pair)[{0}].(0)* | (self != 0)}))
-Unproved regular alarms:
-Unproved additional alarms:
-+ Return -> typing_store ;
-Proved 2/2 regular alarms
-Unproved 0 regular alarms and 1 additional alarms.
-Solved 0/0 user assertions, proved 0

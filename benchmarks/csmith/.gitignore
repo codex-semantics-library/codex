@@ -1,0 +1,3 @@
+# Ignore all generated c files and analysis results, only commit folder
+c*.c
+c*.main.cdump

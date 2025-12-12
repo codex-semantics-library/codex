@@ -115,7 +115,7 @@ module Make_Datatype
 
 
 module Bound_Lattice
-    (Lattice: Lattice_type.Join_Semi_Lattice)
+    (Lattice: Lattice_type.JOIN_SEMI_LATTICE)
 = struct
   include Make_Datatype (Lattice)
 

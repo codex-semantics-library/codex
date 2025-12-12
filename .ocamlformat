@@ -1,0 +1,42 @@
+# The goal of code is to be read, and formatting conveys meaning that
+# helps readability. Thus, we don't use ocamlformat by
+# default. However, it can help improve badly-formatted code. Here, we
+# setup ocamlformat to minimize changes in the code (and to fight its
+# tendency to take up a lot of vertical space). Remember to review the
+# changes introduced by a call to ocamlformat.
+
+# We recommend the use of ocp-indent.
+# ocp-indent-compat = true
+
+# Preserve as much of the original input as possible
+module-item-spacing = preserve
+sequence-blank-line = preserve-one
+
+# Line length / margin
+margin = 100             # fewer forced breaks
+wrap-fun-args = false    # do not force wrapping of function arguments
+wrap-comments = false    # keep comment layout as-is
+parse-docstrings = false
+
+# Reduce vertical expansion
+break-sequences = false  # do not break sequences (e.g., a; b; c) across lines unnecessarily
+break-infix = wrap       # avoid breaking infix expressions across lines
+# break-constructs = false # avoid breaking control constructs unless necessary
+break-struct = natural   # avoid extra line breaks in structures
+break-fun-decl = wrap   # avoid breaking function declarations unnecessarily
+break-fun-sig = wrap    # avoid breaking function declarations unnecessarily
+break-collection-expressions = wrap
+break-before-in = auto
+
+# Misc alignment
+let-binding-spacing = compact  # keep spacing around let bindings
+type-decl = compact
+
+# Expression grouping
+exp-grouping = preserve   # Retain original grouping (`begin`/`end` vs. parentheses)
+
+space-around-arrays = false
+space-around-lists = false
+space-around-records = false
+space-around-variants = false
+field-space = tight

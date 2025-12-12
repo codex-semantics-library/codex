@@ -1,0 +1,398 @@
+{0 Interval Analysis using Codex}
+
+{{!page-index.tutorials}Back to main} --
+{{!page-"While tutorial - chapter 3"}Previous chapter: Interval analysis on the While language}
+
+The previous chapter required a significant amount of programming effort to
+implement our analysis, and that's just for a small toy language. This is
+costly, and easily error-prone. Codex aims to regroup generic reusable
+components for program analysis.
+
+In this chapter, we will re-create the previous analyzer with pre-built Codex
+components. This will not only save us the trouble of defining our own domains,
+but also allow us to use the more complex abstractions Codex provides.
+
+This task can be split in two parts:
+- Building a domain by combining the components provided in Codex
+- Translating the While language to Codex's representation
+
+Crucially, both of these are fairly distinct. Therefore, one can easily change
+the analysis domain used without having to redo the whole translation.
+
+{1 Building the domain}
+
+{2 Terms}
+
+In our previous chapter, a non-relational abstraction was a mapping from
+variables to some abstract values (for example intervals). One key difference
+with Codex is that we will use {e terms} instead of variables. A term represents a
+symbolic value. It is shared between variables when a value is copied, and a new
+term is created for each new sub-expression (Specifically, terms are SSA variables,
+see our {{: https://codex.top/papers/2023-popl-ssa-translation-is-an-abstract-interpretation.html}POPL'23}
+and {{: https://codex.top/papers/2024-pldi-compiling-with-abstract-interpretation.html}PLDI'24} papers for details).
+
+Terms are created dynamically with a functor call. They take two arguments:
+- A {i path-condition}, used to represent the term's dominator.
+  These are defined in {!Terms.Condition}. For most cases, {!Terms.Condition.ConditionCudd} is the best option.
+- A {i relation} used to annotate labeled union-find pointers between terms.
+  Since we won't be using these, we use the equality relation ({!Terms.Relations.Equality}) here.
+  For details on this, see our {{: https://codex.top/papers/2025-pldi-relational-abstractions-labeled-uf.html}PLDI'25} paper).
+{@ocaml file=while_analysis.ml,part=make_terms[
+module Terms = Terms.Builder.Make
+    (Terms.Condition.ConditionCudd)
+    (Terms.Relations.Equality)
+    ()
+]}
+
+{2 Single value abstraction}
+
+Just as in the previous chapter, we will also need a single value abstraction to
+represent our terms abstract values. Unlike the simple while language, which only
+had two types: integer and boolean, most Codex domain support four: integer, boolean,
+fixed sized bitvector, and enum values.
+
+The {!Single_value_abstraction.Ival} that we have already used actually already
+contains three of those types: integers (abstracted using frama-c's
+{{!Framac_ival.Ival}[Ival]}), bitvector (abstracted as a pair of
+{{!Framac_ival.Ival}[Ival]}s, one for the unsigned value, and one for the signed
+value), and booleans (abstracted using {!Lattices.Quadrivalent}). Thus, we only
+need to add an enum abstraction to cover all four types. Since we won't really
+use enum here, any abstraction will do. {!Single_value_abstraction.Bitfield} is
+the most precise abstraction, it essentially stores the set of possible cases as
+a (large) integer, each bit corresponding to a case.
+
+{@ocaml file=while_analysis.ml,part=make_sva[
+module SVA: Single_value_abstraction.Sig.NUMERIC_ENUM = struct
+  include Single_value_abstraction.Ival
+  include Single_value_abstraction.Bitfield
+end
+]}
+
+{2 Non-relational domain}
+
+We can now instantiate our non-relational domain: {!Domains.Term_domain.Make},
+it simply takes as parameters the terms and the single-value abstraction we have
+just defined:
+
+{@ocaml file=while_analysis.ml,part=make_nonrel[
+module NonRelationalDomain = Codex.Domains.Term_based.Nonrelational.Make(Terms)(SVA)
+]}
+
+{2 Finalizing the domain}
+
+The last step is translating our imperative While values to terms, a.k.a. perform the
+SSA translation of the While language. This is done in {!Domains.Term_domain.Make}, which
+takes as parameters our terms, as well as the term-based domain we wish to use.
+
+
+{@ocaml file=while_analysis.ml,part=make_domain[
+(* This is an instance of the numerical domain, of signature Domain_sig.Base. *)
+module Domain = Domains.Term_domain.Make(Terms)(NonRelationalDomain)
+]}
+
+With that last step, our domain is fully built and ready to use. All we now need
+to do is to map the While language to the domains interface.
+
+{1 From While to Codex}
+
+{2 Abstract State}
+
+To translate from While to Codex, we use an internal state the contains:
+{ul
+{- A {b context} ({{!Domains.Sig.Context}[Domain.Context.t]}), which is the central
+   state heavily used in the analysis. It is a mutable record that carries:
+   {ol
+    {- the current numeric domain state (domain)}
+    {- the accumulated path condition (path_condition)}
+    {- the current SSA/fixpoint level (level)}}
+{@ocaml skip[
+type context = {
+  unique_id: int;
+  mutable path_condition: Boolean.t;
+  level: int;
+  mutable domain: Domain.t;
+}
+]}
+The transfer functions take a [ctx : Context.t] so they can read and update the
+current domain in-place.
+}
+{- A mapping from our While variable to the domain's own integer variable.}
+}
+By combining [ctx] and [store], the [State.t] record acts
+as the full abstract state of the program at a given point:
+{@ocaml file=while_analysis.ml,part=state[
+type state = {
+  ctx: Domain.Context.t;
+  store: Domain.integer Store.t
+}
+
+(* initial value at analysis start *)
+let initial_state() = { ctx = Domain.root_context (); store = Store.empty }
+]}
+
+
+{2 Translating Arithmetic Expressions}
+
+Codex uses a tagless final representation (see {{: https://doi.org/10.1017/s0956796809007205}\[Carrete 2009\]}.
+This means, in essence, that instead of converting the While AST to a Codex internal AST,
+you simply call the Codex evaluation functions directly.
+
+The function [aexp] evaluates arithmetic expressions in the abstract domain.
+Each operation both constructs a symbolic term and updates the numeric abstract
+state inside the context ([ctx]), ensuring that constraints and approximations
+evolve consistently.
+
+{@ocaml file=while_analysis.ml,part=aexp[
+let rec aexp: state -> While_ast.aexp -> Domain.integer =
+  fun state exp -> match exp with
+  | Var v -> Store.find v state.store
+  | Int c -> Domain.Integer_Forward.iconst (Z.of_int c) state.ctx
+  | Add (e1, e2) ->
+      Domain.Integer_Forward.iadd state.ctx (aexp state e1) (aexp state e2)
+  | Sub (e1, e2) ->
+      Domain.Integer_Forward.isub state.ctx (aexp state e1) (aexp state e2)
+  | Mul (e1, e2) ->
+      Domain.Integer_Forward.imul state.ctx (aexp state e1) (aexp state e2)
+]}
+
+
+{2 Translating Boolean Expressions}
+
+The function [bexp] is similar to [aexp]. It lifts relational operators ([Le],
+[Eq], [Gt]) into constraints over arithmetic expressions. Logical connectives
+([And], [Not]) are handled through [Boolean_Forward] from Quadrivalent SVA.
+
+{@ocaml file=while_analysis.ml,part=bexp[
+let rec bexp: state -> While_ast.bexp -> Domain.boolean =
+  fun state exp -> match exp with
+  | True -> Domain.Boolean_Forward.true_ state.ctx
+  | False -> Domain.Boolean_Forward.false_ state.ctx
+  | Le (e1, e2) -> Domain.Integer_Forward.ile state.ctx (aexp state e1) (aexp state e2)
+  | Eq (e1, e2) -> Domain.Integer_Forward.ieq state.ctx (aexp state e1) (aexp state e2)
+  | And (e1, e2) -> Domain.Boolean_Forward.(&&) state.ctx (bexp state e1) (bexp state e2)
+  | Not e1 -> Domain.Boolean_Forward.not state.ctx (bexp state e1)
+  | Gt (e1, e2) -> Domain.Boolean_Forward.not state.ctx @@ Domain.Integer_Forward.ile state.ctx (aexp state e1) (aexp state e2)
+]}
+
+{2 Serialize, join and widen}
+
+In order to define our join and widening operations, we need to first define a
+serialize function. Essentially, this function will inspect both states to be
+joined, and create new terms (SSA {m \phi}-terms) for While variables that are
+not represented by the same term. Each individual new variable is created by a
+call to
+{{!Domains.Sig.BASE_WITH_INTEGER.serialize_integer}[Domain.serialize_integer]}.
+
+Unfortunately, this is a bit complex. To create all terms simultaneously,
+{{!Domains.Sig.BASE_WITH_INTEGER.serialize_integer}[serialize_integer]} does not return the new variable, it returns a
+{{!Domains.Sig.Context.Result}[Result(included, in_tuple, continue)]}, where
+- [included] indicates whether or not the new value is included in the old one.
+  This is useful for widening, as it allows doing fixpoint detection at the same time
+  as the join.
+- [in_tuple] is a symbolic representation of all variables that will be created simultaneously
+- [continue] is a continuation function, that once called on the full generated tuple,
+  will return the new value.
+
+Our serialize function proceeds in the same way: it also returns a {{!Domains.Sig.Context.Result}[Result]}
+with its own continuation. Specifically, all that new continuation needs to do
+is get the new term (from {{!Domains.Sig.BASE_WITH_INTEGER.serialize_integer}[serialize_integer]}'s continuation)
+and update store so that the variable maps to the new term.
+
+The full code is as follows.
+{@ocaml file=while_analysis.ml,part=serialize[
+let serialize ~widens state_a state_b =
+  (* for all While variables that are not bound to the same Domain.integer *)
+  Store.fold_on_nonequal_union (fun var i1 i2 (Domain.Context.Result(included, in_tuple, continue) as result) ->
+    if i1 == i2 then result else (* check they are indeed bound to different integers *)
+    (* If one of these variable is unbound in one branch, bind it to top *)
+    let i1 = match i1 with Some i1 -> i1 | None -> Domain.integer_empty state_a.ctx in
+    let i2 = match i2 with Some i2 -> i2 | None -> Domain.integer_empty state_b.ctx in
+    (* Create a new join variable using Domain.serialize_integer *)
+    let Domain.Context.Result(included, in_tuple, local_continue) =
+      Domain.serialize_integer ~widens
+        state_a.ctx i1
+        state_b.ctx i2
+        (included, in_tuple) in
+    Domain.Context.Result(included, in_tuple, fun ctx out_tuple ->
+      (* Call the local continuation which will give us the new integer value for our variable *)
+      let integer, out_tuple = local_continue ctx out_tuple in
+      (* Call the global continuation which will build the rest of the store *)
+      let store, out_tuple = continue ctx out_tuple in
+      (* Add the new value to the store *)
+      (Store.add var integer store, out_tuple))
+    )
+  state_a.store state_b.store
+  (* Initial result: returned when all variables are the same:
+     - inclusion is true
+     - the serialize tuple is empty
+     - the store is initialized to the left branch's store *)
+  (Domain.Context.Result (true, Domain.Context.empty_tuple (), fun _ctx out -> state_a.store, out))
+]}
+
+From this serialize function, we can then define the join. It calls serialize
+to initialize the join tuple, and then
+{{!Domains.Sig.BASE_WITH_INTEGER.typed_nondet2}[Domain.typed_nondet2]} to join
+the contexts and fill in the join tuple. We then finalize using the continuation
+returned by serialize, which gives us our updated store.
+
+{@ocaml file=while_analysis.ml,part=join[
+let join state_a state_b =
+  let Domain.Context.Result(included, in_tuple, continue) = serialize ~widens:false state_a state_b in
+  let ctx, out = Domain.typed_nondet2 state_a.ctx state_b.ctx in_tuple in
+  let store, _ = continue ctx out in
+  { ctx; store }
+]}
+
+One final step: we will actually use [state option] to represent our state, where
+[None] will represent the bottom state. Thus, we lift the above join on states to
+one on state options:
+
+{@ocaml file=while_analysis.ml,part=join_opt[
+let join_opt a b = match a, b with
+  | None, x | x, None -> x
+  | Some a, Some b -> Some (join a b)
+]}
+
+Widening is somewhat similar to join. Instead of {{!Domains.Sig.BASE_WITH_INTEGER.typed_nondet2}[Domain.typed_nondet2]},
+it uses {{!Domains.Sig.BASE_WITH_INTEGER.widened_fixpoint_step}[Domain.widened_fixpoint_step]}
+to update the context and fill in the join tuple. We also return the [included] variable,
+which indicates whether the widened value is included in the parent (and thus the fixpoint has been reached).
+{@ocaml file=while_analysis.ml,part=widen[
+let widen widening_id state_a state_b =
+  let Domain.Context.Result(included, in_tuple, continue) = serialize ~widens:true state_a state_b in
+  let ctx, included, out = Domain.widened_fixpoint_step
+      ~widening_id ~previous:state_a.ctx ~next:state_b.ctx (included,in_tuple) in
+  let store, _ = continue ctx out in
+  { ctx; store }, included
+]}
+
+{2 Translating Statements}
+
+With join and widen, we can now translate our while statements to codex.
+The function [analyze_stmt] is quite similar to the one we saw in the previous chapter.
+One big difference is that the recursive fixpoint computation is done locally, via
+a [loop] recursive function. This enables the use of a different unique widening
+identifier for each loop, which helps the widening be more precise.
+
+One thing to watch out for is, that since domains are imperative, they should be
+copied whenever we intend to reuse two version of a domain, for instance at
+control flow splits (used in both branches) or loop heads (used in widening).
+
+{@ocaml file=while_analysis.ml,part=stmt[
+let copy { store; ctx } = { store; ctx=Domain.Context.copy ctx }
+
+let (let*) = Option.bind
+
+let rec analyze_stmt: state option -> While_ast.stmt -> state option =
+  fun state_opt stmt ->
+  let* state = state_opt in
+  Log.trace (fun p -> p "analyze_stmt %a" While_ast.pp_stmt stmt) ~pp_ret @@ fun () ->
+  match stmt with
+  | Skip -> state_opt
+  | Assign(var,exp) ->
+      let v = aexp state exp in
+      Some {state with store = Store.add var v state.store}
+  | Seq (c1,c2) ->
+      let state_opt' = analyze_stmt state_opt c1 in
+      analyze_stmt state_opt' c2
+  | If (cond, if_true, if_false) -> (
+      let bexp_cond = bexp state cond in
+      let state' = copy state in
+      match
+          Domain.assume state.ctx bexp_cond,
+          Domain.assume state'.ctx (Domain.Boolean_Forward.not state'.ctx bexp_cond)
+      with
+      | None, None (* bottom *) -> None
+      | Some ctx, None (* true *)  -> analyze_stmt (Some {state with ctx = ctx}) if_true
+      | None, Some ctx (* false *) -> analyze_stmt (Some {state' with ctx = ctx}) if_false
+      | Some ctx_true, Some ctx_false (* top *) ->
+          join_opt
+            (analyze_stmt (Some {state with ctx = ctx_true}) if_true)
+            (analyze_stmt (Some {state' with ctx = ctx_false}) if_false))
+  | While (cond, body) ->
+          let widening_id = Domains.Sig.Widening_Id.fresh () in
+          let one_iteration state =
+            (* update the state by one loop iteration: assume the condition and apply the body *)
+            let* ctx = Domain.assume state.ctx (bexp state cond) in
+            analyze_stmt (Some {state with ctx}) body
+          in
+          let initial_state = copy state in
+          let rec loop head =
+            let* next_head = one_iteration head in
+            let next_head = join initial_state next_head in
+            let widened, included = widen widening_id head next_head in
+            if not included
+            then loop widened
+            else (* fixpoint reached: exit loop, assume condition is false *)
+              let* ctx =
+                bexp next_head cond |>
+                Domain.Boolean_Forward.not next_head.ctx |>
+                Domain.assume next_head.ctx in
+              Some { next_head with ctx }
+          in loop state
+]}
+
+{1 Running on an example}
+
+We can now run our analyzer on the {{!page-"While tutorial - chapter 3".example} same example as in the previous chapter}.
+With the current widening setup, we see that the analyzer learns that the final
+value of x is exactly 3.
+
+Our printer here is a bit misleading, in reality,
+x is mapped to the SSA variable [<(i:22)>] (in the [store] part of our state),
+whose value is known to be [3] (in the [ctx] part of our state). For simplicity,
+the printer directly inlines this definition, making it look like our store
+contains [x -> {3}] directly.
+
+{@bash[
+$ while_codex --analyzer codex --example chapter3
+[While_analysis] analyze_stmt Seq
+├─[While_analysis] analyze_stmt x := 13
+│ ├─[Terms.Builder] let i8 = 13
+│ └─[While_analysis] Result: {ctx:Context{id=1, <empty>}
+│                             store:{x -> {13}}}
+├─[While_analysis] analyze_stmt While x > 3
+│ ├─[Terms.Builder] let i9 = 3
+│ ├─[While_analysis] analyze_stmt x := x - 2
+│ │ ├─[Terms.Builder] let i10 = 2
+│ │ ├─[Terms.Builder] let i11 = (<(i:8)> - <(i:10)>)
+│ │ ├─[Terms.Builder] let i12 = 11
+│ │ └─[While_analysis] Result: {ctx:Context{id=1, <empty>}
+│ │                             store:{x -> {11}}}
+│ ├─[Terms.Builder] let <(i:14)> = phi_nondet(<(i:8)> when <(b:1)>,<(i:12)> when <(b:1)>)
+│ ├─[Terms.Builder] let i15 = ivar(1)
+│ ├─[Terms.Builder] let b16 = (<(i:15)> <= <(i:9)>)
+│ ├─[While_analysis] analyze_stmt x := x - 2
+│ │ ├─[Terms.Builder] let i17 = (<(i:15)> - <(i:10)>)
+│ │ └─[While_analysis] Result: {ctx:Context{id=3,
+│ │                                         <(b:16)> -> {false};
+│ │                                         <(i:15)> -> {11; 13}; <(i:17)> -> {9; 11}}
+│ │                             store:{x -> {9; 11}}}
+│ ├─[Terms.Builder] let <(i:19)> = phi_nondet(<(i:8)> when <(b:1)>,<(i:17)> when <(b:1)>)
+│ ├─[Terms.Builder] let b20 = !(<(b:16)>)
+│ ├─[While_analysis] analyze_stmt x := x - 2
+│ │ └─[While_analysis] Result: {ctx:Context{id=6,
+│ │                                         <(b:16)> -> {false}; <(b:20)> -> {true};
+│ │                                         <(i:15)> -> {5; 7; 9; 11; 13};
+│ │                                         <(i:17)> -> {3; 5; 7; 9; 11}}
+│ │                             store:{x -> {3; 5; 7; 9; 11}}}
+│ ├─[Terms.Builder] let <(i:22)> = phi_nondet(<(i:8)> when <(b:1)>,<(i:17)> when <(b:20)>)
+│ ├─[Terms.Builder] let b23 = (<(i:22)> <= <(i:9)>)
+│ ├─[Terms.Builder] let b24 = !(<(b:23)>)
+│ ├─[Terms.Builder] let b25 = !(<(b:24)>)
+│ └─[While_analysis] Result: {ctx:Context{id=9,
+│                                         <(b:23)> -> {true}; <(b:24)> -> {true;false};
+│                                         <(i:22)> -> {3}}
+│                             store:{x -> {3}}}
+└─[While_analysis] Result: {ctx:Context{id=9,
+                                        <(b:23)> -> {true}; <(b:24)> -> {true;false};
+                                        <(i:22)> -> {3}}
+                            store:{x -> {3}}}
+]}
+
+{1 Full implementation}
+
+The full implementation of this chapter can be found in the {!Whilelib.While_analysis} module.
+
+{{!page-index.tutorials}Back to main} --
+{{!page-"While tutorial - chapter 3"}Previous chapter: Interval analysis on the While language}

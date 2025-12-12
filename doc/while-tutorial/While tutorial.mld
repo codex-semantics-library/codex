@@ -1,0 +1,17 @@
+{0 Extending Codex to a simple while language}
+
+
+{%html:
+<!--parent="Tutorials"-->
+<!--nav_order=1-->
+%}
+
+We present a tutorial on a simple imperative [while] language, and demonstrates
+how to statically analyze programs written in it using Codex, a modular abstract
+interpretation library. This also serves as a nice introduction to various codex
+components ({!Lattices}, {!Single_value_abstraction}, {!Domains}...). It is mostly
+meant for developers who wish to use and extend Codex.
+- {{!page-"While tutorial - chapter 1"}Chapter 1}: Contains the syntax which is defined with variables, arithmetic, boolean expressions, and control structures (e.g., [if] and [while]). It also provides a concrete interpreter for the [while] language;
+- {{!page-"While tutorial - chapter 2"}Chapter 2}: Describes {!Lattices} and {!Single_value_abstraction} with simpler implementations;
+- {{!page-"While tutorial - chapter 3"}Chapter 3}: Contains simple interval abstract domain which is then used to run the analysis on simple while programs;
+- {{!page-"While tutorial - chapter 4"}Chapter 4}: Shows how one can use Codex building blocks to recreate the interval domain from chapter 3.

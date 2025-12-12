@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of the Codex semantics library.                     *)
 (*                                                                        *)
-(*  Copyright (C) 2013-2024                                               *)
+(*  Copyright (C) 2013-2025                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,6 +19,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
+
+module In_bits = Units.In_bits
 
 (**************** Standard abstractions for bitvectors. ****************)
 
@@ -63,7 +65,7 @@ module Known_Bits = struct
      that can change the sign or higher bits).  *)
   include Integer_standard.ZPair
 
-  let chop ~size x = Z.extract x 0 size
+  let chop ~(size:In_bits.t) x = Z.extract x 0 (size:>int)
 
   let bottom ~size = (Z.zero, chop ~size Z.minus_one);;
   let is_bottom ~size x = Integer_standard.Known_Bits.is_bottom x
@@ -79,7 +81,7 @@ module Known_Bits = struct
   (* Intersection: keep the bits known by one side. *)  
   let inter0 = Z.(land)
   let inter1 = Z.(lor)
-  let inter ~size:_ (x0,x1) (y0,y1) = (inter0 x0 y0, inter1 x1 y1);;
+  let inter ~size:(_:In_bits.t) (x0,x1) (y0,y1) = (inter0 x0 y0, inter1 x1 y1);;
 
   let join0 = Z.(lor)
   let join1 = Z.(land)
@@ -90,11 +92,11 @@ module Known_Bits = struct
   let includes ~size x y = is_included ~size y x
 
   (* A widening operator from a paper by Antoine Miné. *)
-  let widen ~size ~previous:(prev0,prev1) (new0,new1) =
+  let widen ~(size:In_bits.t) ~previous:(prev0,prev1) (new0,new1) =
     let res0 =
       let t = join0 prev0 new0 in
       if Z.equal prev0 t then prev0
-      else Z.extract Z.minus_one 0 size
+      else Z.extract Z.minus_one 0 (size:>int)
     in
     let res1 =
       let t = join1 prev1 new1 in
@@ -105,7 +107,15 @@ module Known_Bits = struct
   ;;
 
   let includes_or_widen ~size ~previous _ = assert false
-  
+
+  (* TODO. *)
+  let is_singleton ~size _x = assert false
+  let is_empty ~size _x = assert false
+  let fold_crop_signed ~size _x ~inf ~sup _acc _f  = assert false
+  let fold_crop_unsigned ~size _x ~inf ~sup _acc _f  = assert false    
+  let to_known_bits ~size x = x
+  let to_unsigned_interval ~size _ = assert false
+  let to_signed_interval ~size _ = assert false    
 end
   
 

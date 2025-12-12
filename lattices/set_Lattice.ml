@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of the Codex semantics library.                     *)
 (*                                                                        *)
-(*  Copyright (C) 2013-2024                                               *)
+(*  Copyright (C) 2013-2025                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -23,10 +23,10 @@ open Lattice_sig
 
 module type S = sig
   include Set.S
-  include Join_Semi_Lattice with type t := t
-  include With_Bottom with type t := t
+  include JOIN_SEMI_LATTICE with type t := t
+  include WITH_BOTTOM with type t := t
   val is_bottom: t -> bool
-  include With_Inter with type t := t
+  include WITH_INTER with type t := t
   val eq: t -> t -> Quadrivalent_Lattice.t
   val intersects: t -> t -> bool
 end
@@ -35,7 +35,7 @@ module Make(E:Datatype_sig.S) = struct
   include Datatype_sig.Set(E)
   (* let inter = E.Set.inter *)
   let is_bottom = is_empty
-  let bottom = empty
+  let bottom () = empty
   let join = union
 (* let is_included = subset *)
   let includes a b = subset b a

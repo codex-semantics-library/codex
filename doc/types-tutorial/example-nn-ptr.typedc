@@ -1,0 +1,13 @@
+region buffer = ∃ len : int. (char[len])
+
+struct message {
+  struct message* next;
+  buffer* buffer;
+};
+
+struct message_box {
+  int length;
+  struct message* first;
+};
+
+void zeros_buffer(struct message_box+ box);

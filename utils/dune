@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;  This file is part of the Codex semantics library.                     ;;
 ;;                                                                        ;;
-;;  Copyright (C) 2013-2024                                               ;;
+;;  Copyright (C) 2013-2025                                               ;;
 ;;    CEA (Commissariat à l'énergie atomique et aux énergies              ;;
 ;;         alternatives)                                                  ;;
 ;;                                                                        ;;
@@ -30,19 +30,14 @@
  (public_name "codex.datatype_sig")
  (name datatype_sig)
  (modules Datatype_sig)
- (libraries codex.extstdlib)
+ (libraries codex.extstdlib codex.hashing)
 )
 
 (library
  (public_name "codex.bdd")
  (name bdd)
  (modules Bdd)
-)
-
-(library
- (public_name "codex.immutable_dynamic_array")
- (name immutable_dynamic_array)
- (modules Immutable_dynamic_array)
+ (libraries codex.hashing)
 )
 
 (library
@@ -66,32 +61,10 @@
 )
 
 (library
- (public_name "codex.utils.mutable_radix_trie")
- (name mutable_radix_trie)
- (modules mutable_radix_trie)
-)
-
-
-(library
- (public_name "codex.utils.okasakimap")
- (name okasakimap)
- (libraries zarith)
- (modules Okasakimap)
-)
-
-(library
- (public_name "codex.utils.okasakiset")
- (name okasakiset)
- (libraries okasakimap)
- (modules Okasakiset)
-)
-
-
-(library
  (public_name "codex.interval_map")
  (name interval_map)
  (modules Interval_map)
- (libraries tracelog)
+ (libraries tracelog codex.hashing)
 )
 
 (library
@@ -112,12 +85,26 @@
 
 
 (library
+  (public_name codex.file_to_html)
+  (name file_to_html)
+  (inline_tests)
+  (preprocess (pps ppx_inline_test))
+  (libraries base64)
+  (modules file_to_html))
+
+(library
  (public_name "codex.record_time")
  (name record_time)
  (modules record_time)
  (foreign_stubs (language c) (names record_time))
 )
 
+(library
+ (public_name "codex.emit_alarm")
+ (name emit_alarm)
+ (modules emit_alarm)
+ (libraries tracelog operator)
+)
 
 (library
  (public_name "codex.online_nearest_common_ancestor_skiplist")
@@ -136,14 +123,33 @@
 )
 
 (library
-  (public_name codex.cuddfix)
-  (name cuddfix)
-  (modules)
-  (foreign_stubs (language c) (names cuddfix_c))
-)
+  (public_name codex.hashing)
+  (name hashing)
+  (modules hashing))
+
+(library
+  (public_name codex.hook)
+  (name hook)
+  (modules hook))
 
 (library
  (name HetHashtbl)
  (public_name codex.het-hashtbl)
  (modules HetHashtbl)
  (libraries patricia-tree))
+
+(library
+  (public_name "codex.syntax_tree")
+  (name syntax_tree)
+  (modules syntax_tree))
+
+(library
+ (name stats)
+ (public_name codex.stats)
+ (modules stats)
+ (libraries hook zarith))
+
+(library
+ (name units)
+ (public_name codex.units)
+ (modules units))

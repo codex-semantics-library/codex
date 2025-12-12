@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of the Codex semantics library.                     *)
 (*                                                                        *)
-(*  Copyright (C) 2013-2024                                               *)
+(*  Copyright (C) 2013-2025                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -27,7 +27,7 @@ type sat =
   | Unknown
 
 
-module type Common_S = sig
+module type COMMON_S = sig
 
   (* An SMTLIB printer, with an higher-order abstract syntax
      interface, that does not require any buffering (for fast
@@ -66,8 +66,8 @@ module type Common_S = sig
 end
 
 
-module type Typed_S = sig
-  include Common_S
+module type TYPED_S = sig
+  include COMMON_S
   type 'a sort
   type 'a value
 
@@ -131,9 +131,9 @@ module type Typed_S = sig
 end
 
 
-module type Untyped_S = sig
+module type UNTYPED_S = sig
 
-  include Common_S
+  include COMMON_S
   
   type sort
   type value
@@ -231,8 +231,8 @@ module type Untyped_S = sig
 end
 
 (**************** Mu-z extensions, described in http://rise4fun.com/Z3/tutorialcontent/fixedpoints ****************)
-module type Untyped_Muz = sig
-  include Untyped_S
+module type UNTYPED_MUZ = sig
+  include UNTYPED_S
 
   type relation = value list -> value
 
@@ -250,7 +250,7 @@ module type Untyped_Muz = sig
 
 end
 
-module type Param_S = sig
+module type PARAM_S = sig
   val print : string -> unit
   val inc: Stdlib.in_channel
   val flush: unit -> unit

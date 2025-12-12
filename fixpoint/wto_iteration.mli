@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of the Codex semantics library.                     *)
 (*                                                                        *)
-(*  Copyright (C) 2013-2024                                               *)
+(*  Copyright (C) 2013-2025                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -20,7 +20,7 @@
 (**************************************************************************)
 
 
-module type AbstractDomain = sig
+module type ABSTRACTDOMAIN = sig
 
   (* An abstract domain is a lattice... *)
   type t
@@ -44,9 +44,9 @@ module type AbstractDomain = sig
 
 end
 
-module WTOFixpoint(L : AbstractDomain):
+module WTOFixpoint(L : ABSTRACTDOMAIN):
 sig
-  module CLMap: module type of Okasakimap.Make(L.ControlLocation)
+  module CLMap: PatriciaTree.MAP with type key = L.ControlLocation.t
 
   (* Given an initial map with the prestate for some locations
      (typically, the entry point), perform a fixpoint iteration and

@@ -1,0 +1,21 @@
+[submodule "binsec/binsec"]
+	path = binsec/binsec
+	url = git@git.frama-c.com:binary/binsec.git
+[submodule "benchmarks/types"]
+	path = benchmarks/types
+	url = git@git.frama-c.com:codex/types-benchmarks.git
+[submodule "utils/patricia-tree"]
+	path = utils/patricia-tree
+	url = git@github.com:codex-semantics-library/patricia-tree.git
+	branch = main
+[submodule "benchmarks/sv-benchmarks4codex"]
+	path = benchmarks/sv-benchmarks4codex
+	url = git@git.frama-c.com:codex/sv-benchmarks4codex.git
+[submodule "benchmarks/whole-program"]
+	path = benchmarks/whole-program
+	url = git@git.frama-c.com:codex/whole-program-examples.git
+	branch = main
+[submodule "utils/cudd.ml"]
+	path = utils/cudd.ml
+	url = git@git.frama-c.com:pub/codex/cudd.ml.git
+	branch = main

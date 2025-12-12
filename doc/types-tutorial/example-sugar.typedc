@@ -1,0 +1,15 @@
+region buffer = ∃ len : int. (char[len])
+
+// Here "struct message" is the new region name
+region struct message = struct {
+  struct message* next;
+  buffer* buffer;
+};
+
+// The struct prefix is optional, I can also simply name thie struct "message_box"
+region message_box = struct {
+  int length;
+  struct message* first;
+};
+
+void zeros_buffer(message_box* box);

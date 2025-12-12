@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of the Codex semantics library.                     *)
 (*                                                                        *)
-(*  Copyright (C) 2013-2024                                               *)
+(*  Copyright (C) 2013-2025                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -23,9 +23,8 @@ type t = unit
 
 let pretty fmt t = Format.fprintf fmt "<unit lattice>"
 let join () () = ()
-let top = ()
-let is_top () = false
-let bottom = ()
+let top () = ()
+let bottom () = ()
 let is_bottom () = false
 let widen ~previous:() () = ()
 let includes () () = true

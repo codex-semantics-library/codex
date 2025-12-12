@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of the Codex semantics library.                     *)
 (*                                                                        *)
-(*  Copyright (C) 2013-2024                                               *)
+(*  Copyright (C) 2013-2025                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,16 +19,22 @@
 (*                                                                        *)
 (**************************************************************************)
 
+(** A parser for Codex annotations. For documentation of the concrete syntax,
+    see {!Type_parse_tree}.
+
+    The grammar may be ambiguous;
+    rather than arbitrarily choose a parse tree, we prefer to detect
+    ambiguities and to ask the user to specify its intention. *)
+
 type 'a grammar
 (** A grammmar returning a 'a. *)
 
-val annotations: (string * Type_parse_tree.t) list grammar
+val annotations: Type_parse_tree.definition list grammar
 val typeexpr: (Type_parse_tree.typ) grammar
 
 
 val parse_file: string -> 'a grammar -> 'a
-(** Parse a file whose path is string with a given grammar.  *)  
+(** Parse a file whose path is string with a given grammar.  *)
 
 val parse_string: string -> 'a grammar -> 'a
-(** Parse a string with a given grammar.  *)    
-
+(** Parse a string with a given grammar.  *)

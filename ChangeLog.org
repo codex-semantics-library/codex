@@ -1,0 +1,104 @@
+This file describes the history of significant (e.g., user-visible) changes in Codex.
+
+* Not merged yet
+
+- While frontend
+- New bitvector -> integer translation
+- New string abstraction
+- SVComp support
+- New, more dynamic GUI
+
+
+* Unreleased changes
+
+** New Cudd bindings (!328)
+
+These bindings should be compatible with OCaml 5.1
+
+** Improved compatibility with Nix (!328)
+
+We now have a flake.nix which makes things simpler.
+
+** Automatic logging of calls to Single_Value_Abstraction and Domain (!313)
+
+With these functions, all calls now show in the Tracelog trace, easing understanding of what the analyzer does.
+
+** New prototype GUI for Binsec/Codex (!225,!276)
+
+With an OCaml compiled to js backend that communicates with the native code using marshalled binary data.
+
+** Merge the labeled union-find branch in the non-relational domain (!269,!274)
+
+This corresponds to the NSAD'2024 publication, and its (not yet published followup)
+
+** Improvements to the non-relational abstract domains (!278,!279)
+
+In particular when converting data from relational to the non-relational domain.
+
+** TypedC specification ensures that pointers point only to named types (!255)
+
+We generally create new names automatically when needed, but this process does not cover every case yet. 
+The abstract domains do not yet fully take advantage of the fact that we can only point to names yet.
+
+** Codex can now analyze several functions at once (!250)
+
+We now have a function -codex-analyze-functions to specify the list of functions to analyzer, 
+and -codex-output-prefix to give an additional prefix of the output files (.html and .cdump)
+
+** Simplification to the intern TypedC grammar (Merge request !238)
+
+This includes:
+- Removing the "absence of length" case in arrays, the enum case
+- Giving names to many "basic types" (though some, like bytes or integers, have no names because they cannot be pointed to)
+- Supressing useless constructs like Constructor
+- etc.    
+
+
+** Transfer_functions.Alarms: a new module to uniformize the alarms
+We have started some work to classify and categorize the alarms reported by the analysis. We now have a place to centralize all the alarms in Transfer_functions.Alarms
+
+** There is a new notion of block (contiguous memory region) and offset
+These appear in Memory_sig.ml. 
+
+** The cache domain can now remember blocks of variable length
+This makes use of the new block abstraction, that can handle blocks of variable length.
+
+** Many small bugfixes and refactoring
+Including but not limited to:
+- Unifying of hashing functions
+- Change of the queries interface
+- Remove most of the warnings when compiling Codex
+
+** The numerical domain perform constrait factorization using labeled union-find
+This follows the [NSAD'24] paper.
+
+** The grammar for type files has been improved
+ The trailing semicolon is no longer necessary. However, you can no longer use struct or union as a type name.
+
+** Start using odoc to document the Codex internals  
+This covers only a the modules Transfer_functions and some toplevel documentation for now.
+
+** Improved handling of overflows in transfer functions
+We now have a module at the bottom of the domain hierarchy (domains_constraints_overflow_check) that reports alarms when flags such as nsw, nuw, nusw are used. This allows intermediate modules (e.g., performing pointer arithmetics) to use these flags and receive an alarm in case of overflow.
+
+** There is a new basic type: enums
+This new type exists in addition to boolean, binary, and integer
+values. It roughly corresponds to an enum type in C. The main purpose
+of this type is to represent (in the abstract) a finite set of
+objects, that is enumerated precisely, unlike e.g. using intervals for
+the same thing.
+
+** Binsec/Codex: There is a new 'mmios' option to allow writing to an absolute range of addresses
+This is useful notably when analyzing device drivers.
+
+* Codex RC3 <2024-09-30 Mon>
+
+This version corresponds to the artefact published at OOPSLA'24.
+
+* Codex RC2 <2024-01-18 Thu>
+
+Second released version.
+
+* Codex RC1 <2023-11-17 Fri>
+
+This is the first released version.

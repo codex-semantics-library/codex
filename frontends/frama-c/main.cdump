@@ -1,0 +1,16 @@
+test.c:29.10-23: `p->i + p->j' -> [8..0x7FFFFFFF]
+test.c:29.10-14: `p->i' -> {3}
+test.c:29.10-11: `p' -> {0} or ([1..0xFFFFFFFF] : struct foo*)
+test.c:29.17-23: `p->j' -> [5..0x7FFFFFFF]
+test.c:29.17-18: `p' -> ([1..0xFFFFFFFF] : struct foo*)
+test.c:30.9-12: `a + 1' -> [9..0x7FFFFFFF]
+test.c:30.9-10: `a' -> [8..0x7FFFFFFF]
+test.c:30.2-13: `__retres' -> [9..0x7FFFFFFF]
+Unproved regular alarms:
+test.c:29: Memory_access(p->i, read) {true;false}
+test.c:29: Signed_overflow(p->i + p->j <= 2147483647) {true;false}
+test.c:30: Signed_overflow(a + 1 <= 2147483647) {true;false}
+Unproved additional alarms:
+Proved 3/6 regular alarms
+Unproved 3 regular alarms and 0 additional alarms.
+Solved 0/0 user assertions, proved 0

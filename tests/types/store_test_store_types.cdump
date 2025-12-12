@@ -1,9 +1,0 @@
-store.c:4.3-4: `a' -> ([1..0xFFFFFFFF] : ({self : Name(int1)[{0}].(0)* | (self != 0)}))
-store.c:4.7-9: `*b' -> [--..--]
-store.c:4.8-9: `b' -> ([1..0xFFFFFFFF] : ({self : Name(foo1)[{0}].(0)* | (self != 0)}))
-Unproved regular alarms:
-Unproved additional alarms:
-+ Return -> typing_store ;
-Proved 2/2 regular alarms
-Unproved 0 regular alarms and 1 additional alarms.
-Solved 0/0 user assertions, proved 0

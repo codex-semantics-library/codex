@@ -1,0 +1,41 @@
+default: help
+
+################ Help ################
+# set to ON/OFF to toggle ANSI escape sequences
+COLOR = ON
+
+ifeq ($(COLOR),ON)
+	color_yellow = \033[93;1m
+	color_orange = \033[33m
+	color_red    = \033[31m
+	color_green  = \033[32m
+	color_blue   = \033[34;1m
+	color_reset  = \033[0m
+endif
+
+# padding for help on targets
+# should be > than the longest target
+HELP_PADDING = 20
+
+# Argument: $1 = the additional argument to make.
+PRINT_HELP_TITLE = echo -e "useful $(color_yellow)make $1$(color_reset) targets:"
+
+PRINT_HELP_BODY = egrep -h '\s\#\#\s' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?\#\# "}; {printf " $(color_blue)%-$(HELP_PADDING)s$(color_reset) %s\n", $$1, $$2}'
+
+# Usage: $(call PRINT_HELP,-C directory/Makefile)
+PRINT_HELP = @$(call PRINT_HELP_TITLE,$1); $(PRINT_HELP_BODY)
+
+
+################ Executing Frama-C/Codex ################
+
+THIS_MK := $(lastword $(MAKEFILE_LIST))
+THIS_DIR := $(dir $(THIS_MK))
+FRAMA_C_CODEX = $(abspath $(THIS_DIR)_build/default/frontends/frama-c/frama_c_codex.exe)
+
+# For use in shell scripts: do make -f path-to-this-file which_frama_c_codex.
+which_frama_c_codex: 
+	@echo $(FRAMA_C_CODEX)
+
+# Local Variables:
+# mode: makefile
+# End:

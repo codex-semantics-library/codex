@@ -1,0 +1,3 @@
+A reverse polish notation calculator, that creates the expressions from a string and then evaluates it.
+
+Actually, do two versions: one with internal tags, and one with external tags.

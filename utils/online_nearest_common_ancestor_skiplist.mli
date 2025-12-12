@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of the Codex semantics library.                     *)
 (*                                                                        *)
-(*  Copyright (C) 2013-2024                                               *)
+(*  Copyright (C) 2013-2025                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -21,7 +21,7 @@
 
 type 'a parents
 
-(* Functor to create an efficient data structure for online
+(** Functor to create an efficient data structure for online
    computation of the nearest common ancestor. *)
 module Make(Elt : sig
     type t
@@ -35,5 +35,3 @@ sig
   val nearest_common_ancestor_same_depth : Elt.t -> Elt.t -> Elt.t
   val nearest_common_ancestor : Elt.t -> Elt.t -> Elt.t
 end
-
-

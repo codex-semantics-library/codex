@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of the Codex semantics library.                     *)
 (*                                                                        *)
-(*  Copyright (C) 2013-2024                                               *)
+(*  Copyright (C) 2013-2025                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -68,7 +68,7 @@ val diff_if_one: t -> t -> t
 val join: t -> t -> t
 val widen: (Integer.t * Widen_Hints.t) -> t -> t -> t
 
-(* include Lattice_sig.Join_Semi_Lattice
+(* include Lattice_sig.JOIN_SEMI_LATTICE
  *    with type t := t *)
    (* and type widen_hint = size_widen_hint * generic_widen_hint *)
 
@@ -87,10 +87,10 @@ val neg_int : t -> t
 val sub_int : t -> t -> t
 val sub_int_under: t -> t -> t
 
-val min_int : t -> Integer.t 
+val min_int : t -> Integer.t
 (** A [None] result means the argument is unbounded.
     Raises [Error_Bottom] if the argument is bottom. *)
-val max_int : t -> Integer.t 
+val max_int : t -> Integer.t
 (** A [None] result means the argument is unbounded.
     Raises [Error_Bottom] if the argument is bottom. *)
 (* val min_max_r_mod :
@@ -130,7 +130,7 @@ val zero_or_one : t
 
 (* val positive_integers : t
  * (\** The lattice element that contains exactly the positive or null integers *\)
- * 
+ *
  * val negative_integers : t
  * (\** The lattice element that contains exactly the negative or null integers *\) *)
 
@@ -210,7 +210,7 @@ val fold_int_decrease : (Integer.t -> 'a -> 'a) -> t -> 'a -> 'a
     potentially infinite integer. *)
 
 val fold_enum : (t -> 'a -> 'a) -> t -> 'a -> 'a
-(** Iterate on every value of the ival. Raise {!Abstract_intrep.Error_Top} if
+(** Iterate on every value of the ival. Raise {!Abstract_interp.Error_Top} if
     the argument is a non-singleton float or a potentially infinite integer. *)
 
 val fold_int_bounds: (t -> 'a -> 'a) -> t -> 'a -> 'a

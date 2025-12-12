@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of the Codex semantics library.                     *)
 (*                                                                        *)
-(*  Copyright (C) 2013-2024                                               *)
+(*  Copyright (C) 2013-2025                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -20,31 +20,35 @@
 (**************************************************************************)
 
 module Log = Tracelog.Make(struct let category = "Domains.Loop" end);;
-module TC = Transfer_functions.Term
-module Constraints_smt = Constraints.Smt
+module TC = Operator.Function_symbol
 
-let index_size = 64 ;;
+module In_bits = Units.In_bits
+
+(* let index_size = 64 ;; *)
+let index_size = In_bits.of_int 32
 
 module Make
-    (Constraints:Constraints.Constraints_sig.Constraints)
-    (Sub:Domain_sig.Base
-      with type binary = TC.binary Constraints.t
-      and type boolean = TC.boolean Constraints.t
-    )
-  :Domain_sig.Base = struct
+    (Terms: Terms.Sig.TERMS)
+    (Sub: Sig.BASE
+      with type binary = TC.binary Terms.t
+       and type boolean = TC.boolean Terms.t
+       and type enum = TC.enum Terms.t)
+  : Sig.BASE = struct
 
   let name () = "Loop_Domain(" ^ Sub.name () ^ ")";;
-  let unique_id () = Domain_sig.Fresh_id.fresh @@ name ();;
+  let unique_id () = Sig.Fresh_id.fresh @@ name ();;
 
   module Types = struct
     type binary = Sub.binary
     type boolean = Sub.boolean
+    type enum = Sub.enum
   end
 
   include Types
 
   module Binary = Sub.Binary
   module Boolean = Sub.Boolean
+  module Enum = Sub.Enum
 
   type context =
   {
@@ -55,6 +59,9 @@ module Make
   module Context = struct
     type t = context
     let copy x = { x with subcontext=Sub.Context.copy x.subcontext }
+    let assign ctx1 ctx2 =
+      Sub.Context.assign ctx1.subcontext ctx2.subcontext
+
     let level ctx = Sub.Context.level ctx.subcontext
 
     type 'a in_tuple = 'a Sub.Context.in_tuple
@@ -82,18 +89,12 @@ module Make
   let context_pretty fmt ctx =
     match ctx.index with
     | None -> Format.fprintf fmt "Context{sub=%a}" Sub.context_pretty ctx.subcontext
-    | Some idx -> Format.fprintf fmt "Context{sub=%a,index=%a}" Sub.context_pretty ctx.subcontext (Sub.binary_pretty ~size:32 ctx.subcontext) idx
+    | Some idx -> Format.fprintf fmt "Context{sub=%a,index=%a}" Sub.context_pretty ctx.subcontext (Sub.binary_pretty ~size:index_size ctx.subcontext) idx
 
-  (* include Transfer_functions.Builtin.Make(Types)(Context) *)
+  (* include Operator.Builtin.Make(Types)(Context) *)
 
   let assume ctx cond =
     Option.map (fun subctx -> {ctx with subcontext = subctx}) (Sub.assume ctx.subcontext cond)
-
-  let imperative_assume ctx cond = Sub.imperative_assume ctx.subcontext cond
-
-  let imperative_assign_context ctx newctx =
-    (* ctx.index <- newctx.index ; *)
-    Sub.imperative_assign_context ctx.subcontext newctx.subcontext
 
   module Boolean_Forward = struct
     let (||) ctx = Sub.Boolean_Forward.(||) ctx.subcontext
@@ -106,15 +107,15 @@ module Make
 
   module Binary_Forward = struct
 
-    let biadd ~size ~nsw ~nuw ~nusw ctx = Sub.Binary_Forward.biadd ~size ~nsw ~nuw ~nusw ctx.subcontext
-    let bisub ~size ~nsw ~nuw ~nusw ctx = Sub.Binary_Forward.bisub ~size ~nsw ~nuw ~nusw ctx.subcontext
-    let bimul ~size ~nsw ~nuw ctx = Sub.Binary_Forward.bimul ~size ~nsw ~nuw ctx.subcontext
+    let biadd ~size ~flags ctx = Sub.Binary_Forward.biadd ~size ~flags ctx.subcontext
+    let bisub ~size ~flags ctx = Sub.Binary_Forward.bisub ~size ~flags ctx.subcontext
+    let bimul ~size ~flags ctx = Sub.Binary_Forward.bimul ~size ~flags ctx.subcontext
     let bxor ~size ctx = Sub.Binary_Forward.bxor ~size ctx.subcontext
     let band ~size ctx = Sub.Binary_Forward.band ~size ctx.subcontext
     let bor ~size ctx = Sub.Binary_Forward.bor ~size ctx.subcontext
     let bashr ~size ctx = Sub.Binary_Forward.bashr ~size ctx.subcontext
     let blshr ~size ctx = Sub.Binary_Forward.blshr ~size ctx.subcontext
-    let bshl ~size ~nsw ~nuw ctx = Sub.Binary_Forward.bshl ~size ~nsw ~nuw ctx.subcontext
+    let bshl ~size ~flags ctx = Sub.Binary_Forward.bshl ~size ~flags ctx.subcontext
 
     let bisdiv ~size ctx = Sub.Binary_Forward.bisdiv ~size ctx.subcontext
     let biudiv ~size ctx = Sub.Binary_Forward.biudiv ~size ctx.subcontext
@@ -138,70 +139,87 @@ module Make
     let bindex ~size _ = assert false
     let valid ~size _ = assert false
     let valid_ptr_arith ~size _ = assert false
+  end
 
+  module Enum_Forward = struct
+    let caseof ~case ctx = Sub.Enum_Forward.caseof ~case ctx.subcontext
+    let enum_const ~case ctx = Sub.Enum_Forward.enum_const ~case ctx.subcontext
   end
 
   let boolean_empty ctx = Sub.boolean_empty ctx.subcontext
   let binary_empty ~size ctx = Sub.binary_empty ~size ctx.subcontext
+  let enum_empty ctx = Sub.enum_empty ctx.subcontext
 
   let boolean_unknown ctx = Sub.boolean_unknown ctx.subcontext
   let binary_unknown ~size ctx = Sub.binary_unknown ~size ctx.subcontext
+  let enum_unknown ~enumsize ctx = Sub.enum_unknown ~enumsize ctx.subcontext
 
   let boolean_pretty ctx fmt x = Sub.boolean_pretty ctx.subcontext fmt x
   let binary_pretty ~size ctx fmt x = Sub.binary_pretty ~size ctx.subcontext fmt x
+  let enum_pretty ctx fmt x = Sub.enum_pretty ctx.subcontext fmt x
 
 
-  let serialize_binary ~size ctxa a ctxb b acc =
-    let Sub.Context.Result (included, in_tup, deserialize) = Sub.serialize_binary ~size ctxa.subcontext a ctxb.subcontext b acc in
+
+  let serialize_binary ~widens ~size ctxa a ctxb b acc =
+    let Sub.Context.Result (included, in_tup, deserialize) = Sub.serialize_binary ~widens ~size ctxa.subcontext a ctxb.subcontext b acc in
     Context.Result (included, in_tup, (fun ctx out_tup -> deserialize ctx.subcontext out_tup))
 
+  let pretty_index fmt ctx =
+    match ctx.index with
+    | None -> Format.fprintf fmt "None"
+    | Some v -> binary_pretty ~size:index_size ctx fmt v
+
   (* TODO : look at the way arithmetic flags are used to unsure the absence of unsoundness *)
-  let serialize_binary ~size ctxa a ctxb b ((inc, tup) as acc) =
-    Log.debug (fun p -> p "Loop_domain.serialize_binary ~size:%d %a %a with index = %a" size
+  let serialize_binary ~widens ~(size:In_bits.t) ctxa a ctxb b ((inc, tup) as acc) =
+    Log.debug (fun p -> p "Loop_domain.serialize_binary ~widens:%b ~size:%d %a %a with index = %a" widens (size:>int)
       (binary_pretty ~size ctxa) a
       (binary_pretty ~size ctxb) b
       (fun fmt index -> match index with None -> Format.fprintf fmt "None" | Some idx -> (binary_pretty ~size ctxa fmt) idx) ctxa.index);
-    if size <> 32 then serialize_binary ~size ctxa a ctxb b acc
+    if size <> index_size then serialize_binary ~widens ~size ctxa a ctxb b acc
+    else if not widens then serialize_binary ~widens ~size ctxa a ctxb b acc
     else
     let cur_level = Context.level ctxa in
     match ctxa.index with
-    | Some (Constraints.Binary{term=T0{tag=TC.Biconst(_size,k)}}) when (* Z.equal Z.one k *) Z.equal Z.zero k ->
+    (* Case 1 : First iteration of the loop *)
+    | Some (Terms.Binary{term=T0{tag=TC.Biconst(_size,k)}}) when (* Z.equal Z.one k *) Z.equal Z.zero k ->
       begin
         match a,b with
         (* case 1 : with prev_index = 0, base \cup (offset + base) = ((offset * index) + base) *)
-        | Constraints.(Binary _ as x),
-          Constraints.(Binary{term=T2{tag=TC.Biadd{size=size';nsw;nuw;nusw};
+        | Terms.(Binary _ as x),
+          Terms.(Binary{term=T2{tag=TC.Biadd{size=size';flags};
                                       a=Binary{term=T0{tag=TC.Biconst(_size2,k)}};
                                       b=Binary _ as y}})
-            when Constraints.equal x y
-            && (Constraints.level x) < cur_level && (Constraints.level y) < cur_level ->
+            when Terms.equal x y
+            && (Terms.level x) < cur_level ->
               Log.debug (fun p -> p "in Loop_domain.serialize, applying substitution 1");
               Result (inc, tup, (fun ctx out ->
                 match ctx.index with
                 | Some idx ->
-                  let offset = Binary_Forward.biconst ~size:32 k ctx in
-                  let offset = Binary_Forward.bimul ~size:32 ~nsw:false ~nuw:false ctx offset idx in
-                  let res = Binary_Forward.biadd ~size:32 ~nsw ~nuw ~nusw ctx offset x in
+                  let offset = Binary_Forward.biconst ~size:index_size k ctx in
+                  let offset = Binary_Forward.bimul ~size:index_size
+                      ~flags:(Operator.Flags.Bimul.pack ~nsw:false ~nuw:false) ctx offset idx in
+                  let res = Binary_Forward.biadd ~size:index_size ~flags ctx offset x in
                   res, out
 
                 | _ -> assert false
               ))
 
         (* case 2 : with prev_index = 0, base \cup (base - offset) = base - (offset * index) *)
-        | Constraints.(Binary _ as x),
-          Constraints.(Binary{term=T2{tag=TC.Bisub{size=size';nsw;nuw;nusw};
+        | Terms.(Binary _ as x),
+          Terms.(Binary{term=T2{tag=TC.Bisub{size=size';flags=flagssub};
                                       a=Binary _ as y;
                                       b=Binary{term=T0{tag=TC.Biconst(_size2,k)}}}})
-            when Constraints.equal x y
-            && (Constraints.level x) < cur_level && (Constraints.level y) < cur_level ->
+            when Terms.equal x y
+            && (Terms.level x) < cur_level ->
               Log.debug (fun p -> p "in Loop_domain.serialize, applying substitution 2");
               Result (inc, tup, (fun ctx out ->
                 match ctx.index with
                 | Some idx ->
                   Log.debug (fun p -> p "while, applying substitution 2, index = %a" (binary_pretty ~size ctx) idx);
-                  let offset = Binary_Forward.biconst ~size:32 k ctx in
-                  let offset = Binary_Forward.bimul ~size:32 ~nsw:false ~nuw:false ctx offset idx in
-                  let res = Binary_Forward.bisub ~size:32 ~nsw ~nuw ~nusw ctx x offset in
+                  let flags = Operator.Flags.Bimul.pack ~nsw:false ~nuw:false in
+                  let offset = Binary_Forward.biconst ~size:index_size k ctx in
+                  let offset = Binary_Forward.bimul ~size:index_size ~flags ctx offset idx in
+                  let res = Binary_Forward.bisub ~size:index_size ~flags:flagssub ctx x offset in
                   Log.debug (fun p -> p "Loop_domain.serialize_binary, returning %a" Binary.pretty res);
                   res, out
 
@@ -209,19 +227,21 @@ module Make
               ))
 
         (* case 7 & 8 : with constant values *)
-        | Constraints.(Binary{term=T0{tag=TC.Biconst(_size1, k)}}),
-          Constraints.(Binary{term=T0{tag=TC.Biconst(_size2, l)}})
+        | Terms.(Binary{term=T0{tag=TC.Biconst(_size1, k)}}),
+          Terms.(Binary{term=T0{tag=TC.Biconst(_size2, l)}})
           when not @@ Z.equal k l ->
-            let l = Z.signed_extract l 0 32 in
+            let l = Z.signed_extract l 0 (index_size:>int) in
             if Z.leq k l then (
               Log.debug (fun p -> p "in Loop_domain.serialize, applying substitution 7");
               Result (inc, tup, (fun ctx out ->
                 match ctx.index with
                 | Some idx ->
-                  let base = Binary_Forward.biconst ~size:32 k ctx in
-                  let offset = Binary_Forward.biconst ~size:32 (Z.sub l k) ctx in
-                  let offset = Binary_Forward.bimul ~size:32 ~nsw:false ~nuw:false ctx idx offset in
-                  let res = Binary_Forward.biadd ~size:32 ~nsw:false ~nuw:false ~nusw:false ctx base offset in
+                  let base = Binary_Forward.biconst ~size:index_size k ctx in
+                  let offset = Binary_Forward.biconst ~size:index_size (Z.sub l k) ctx in
+                  let offset = Binary_Forward.bimul ~size:index_size
+                      ~flags:(Operator.Flags.Bimul.pack ~nsw:false ~nuw:false) ctx idx offset in
+                  let res = Binary_Forward.biadd ~size:index_size
+                      ~flags:(Operator.Flags.Biadd.pack ~nsw:false ~nuw:false ~nusw:false) ctx base offset in
                   res, out
 
                 | _ -> assert false
@@ -232,35 +252,39 @@ module Make
               Result (inc, tup, (fun ctx out ->
                 match ctx.index with
                 | Some idx ->
-                  let base = Binary_Forward.biconst ~size:32 k ctx in
-                  let offset = Binary_Forward.biconst ~size:32 (Z.sub k l) ctx in
-                  let offset = Binary_Forward.bimul ~size:32 ~nsw:false ~nuw:false ctx offset idx in
-                  let res = Binary_Forward.bisub ~size:32 ~nsw:false ~nuw:false ~nusw:false ctx base offset in
+                  let base = Binary_Forward.biconst ~size:index_size k ctx in
+                  let offset = Binary_Forward.biconst ~size:index_size (Z.sub k l) ctx in
+                  let offset = Binary_Forward.bimul ~size:index_size
+                      ~flags:(Operator.Flags.Bimul.pack ~nsw:false ~nuw:false) ctx offset idx in
+                  let res = Binary_Forward.bisub ~size:index_size ~flags:(Operator.Flags.Bisub.pack ~nsw:false ~nuw:false ~nusw:false) ctx base offset in
                   res, out
 
                 | _ -> assert false
               )))
 
-        | _ -> Log.debug (fun p -> p "in Loop_domain.serialize, applying no substituation(1)");
-          serialize_binary ~size ctxa a ctxb b acc
+        | _ ->
+          Log.debug (fun p -> p "in Loop_domain.serialize, applying no substituation") ;
+          serialize_binary ~widens ~size ctxa a ctxb b acc
+
       end
 
+    (* Case 2 : Subsequent iteration of the loop *)
     | Some previdx ->
       begin
         match a,b with
 
         (* case 3 : ((offset * prev_index) + base) \cup (offset + ((offset * prev_index) + base) = ((offset * index) + base) *)
-        | Constraints.(Binary{term=T2{tag=TC.Biadd{size=_size1;nsw=nsw1;nuw=nuw1;nusw=nusw1};
+        | Terms.(Binary{term=T2{tag=TC.Biadd{size=_size1;flags=flags1};
                                     a=Binary{term=T2{tag=TC.Bimul _size2;
                                         a=Binary{term=T0{tag=TC.Biconst(_size3, i)}};
                                         b=Binary _ as u
                                       }};
                                     b=Binary _ as x;
                                     }}),
-          Constraints.(Binary{term=T2{tag=TC.Biadd{size=_size4;nsw=nsw4;nuw=nuw4;nusw=nusw4};
+          Terms.(Binary{term=T2{tag=TC.Biadd{size=_size4;flags=flags4};
                                     a=Binary{term=T0{tag=TC.Biconst(_size5, k)}};
-                                    b=Binary{term=T2{tag=TC.Biadd{size=_size6;nsw=nsw6;nuw=nuw6;nusw=nusw6};
-                                        a=Binary{term=T2{tag=TC.Bimul{size=_size7;nsw=nsw7;nuw=nuw7};
+                                    b=Binary{term=T2{tag=TC.Biadd{size=_size6;flags=flags6};
+                                        a=Binary{term=T2{tag=TC.Bimul{size=_size7;flags=flags7};
                                             a=Binary{term=T0{tag=TC.Biconst(_size8, j)}};
                                             b=Binary _ as v
                                           }};
@@ -268,33 +292,33 @@ module Make
                                       }};
                                   }})
           when Z.equal i j && Z.equal i k
-          && Constraints.equal x y && Constraints.equal u v && Constraints.equal u previdx
-          && (Constraints.level x) < cur_level && (Constraints.level y) < cur_level
-          && nsw1 = nsw4 && nuw1 = nuw4 && nusw1 = nusw4 ->
+          && Terms.equal x y && Terms.equal u v && Terms.equal u previdx
+          && (Terms.level x) < cur_level
+          && flags1 = flags4 ->
             Log.debug (fun p -> p "in Loop_domain.serialize, applying substitution 3");
             Result (inc, tup, (fun ctx out ->
               match ctx.index with
               | Some idx ->
-                let offset = Binary_Forward.biconst ~size:32 i ctx in
-                let offset = Binary_Forward.bimul ~size:32 ~nsw:false ~nuw:false ctx offset idx in
-                let res = Binary_Forward.biadd ~size:32 ~nsw:nsw1 ~nuw:nuw1 ~nusw:nusw1 ctx offset x in
+                let offset = Binary_Forward.biconst ~size:index_size i ctx in
+                let offset = Binary_Forward.bimul ~size:index_size ~flags:flags7 ctx offset idx in
+                let res = Binary_Forward.biadd ~size:index_size ~flags:flags1 ctx offset x in
                 res, out
 
               | _ -> assert false
             ))
 
         (* case 4 : (base - (offset * prev_index)) \cup ((base - (offset * prev_index)) - offset) = (base - (offset * index)) *)
-        | Constraints.(Binary{term=T2{tag=TC.Bisub {size=_size1;nsw=nsw1;nuw=nuw1;nusw=nusw1};
+        | Terms.(Binary{term=T2{tag=TC.Bisub {size=_size1;flags=flags1};
                                     a=Binary _ as x;
-                                    b=Binary{term=T2{tag=TC.Bimul {size=_size2;nsw=nsw2;nuw=nuw2};
+                                    b=Binary{term=T2{tag=TC.Bimul {size=_size2;flags=flags2};
                                         a=Binary{term=T0{tag=TC.Biconst(_size3, i)}};
                                         b=Binary _ as u}
                                       }}
                                   }),
-          Constraints.(Binary{term=T2{tag=TC.Bisub {size=_size4;nsw=nsw4;nuw=nuw4;nusw=nusw4};
-                                    a=Binary{term=T2{tag=TC.Bisub {size=_size5;nsw=nsw5;nuw=nuw5;nusw=nusw5};
+          Terms.(Binary{term=T2{tag=TC.Bisub {size=_size4;flags=flags4};
+                                    a=Binary{term=T2{tag=TC.Bisub {size=_size5;flags=flags5};
                                         a=Binary _ as y;
-                                        b=Binary{term=T2{tag=TC.Bimul {size=_size6;nsw=nsw6;nuw=nuw6};
+                                        b=Binary{term=T2{tag=TC.Bimul {size=_size6;flags=flags6};
                                             a=Binary{term=T0{tag=TC.Biconst(_size7, j)}};
                                             b=Binary _ as v
                                           }}
@@ -302,90 +326,90 @@ module Make
                                     b=Binary{term=T0{tag=TC.Biconst(_size8, k)}}}
                                   })
           when Z.equal i j && Z.equal i k
-          && Constraints.equal x y && Constraints.equal u v && Constraints.equal u previdx
-          && (Constraints.level x) < cur_level && (Constraints.level y) < cur_level
-          && nsw1 = nsw4 && nuw1 = nuw4 && nusw1 = nusw4 && nsw2 = nsw6 && nuw2 = nuw6 ->
+          && Terms.equal x y && Terms.equal u v && Terms.equal u previdx
+          && (Terms.level x) < cur_level
+          && flags1 = flags4 && flags2 = flags6 ->
             Log.debug (fun p -> p "in Loop_domain.serialize, applying substitution 4");
             Result (inc, tup, (fun ctx out ->
               match ctx.index with
               | Some idx ->
-                let offset = Binary_Forward.biconst ~size:32 i ctx in
-                let offset = Binary_Forward.bimul ~size:32 ~nsw:nsw2 ~nuw:nuw2 ctx offset idx in
-                let res = Binary_Forward.bisub ~size:32 ~nsw:nsw1 ~nuw:nuw1 ~nusw:nusw1 ctx x offset in
+                let offset = Binary_Forward.biconst ~size:index_size i ctx in
+                let offset = Binary_Forward.bimul ~size:index_size ~flags:flags2 ctx offset idx in
+                let res = Binary_Forward.bisub ~size:index_size ~flags:flags1 ctx x offset in
                 res, out
 
               | _ -> assert false
             ))
 
         (* case 5 : (prev_index + base) \cup (1 + (prev_index + base)) = (index + base) *)
-        | Constraints.(Binary{term=T2{tag=TC.Biadd {size=_size1;nsw=nsw1;nuw=nuw1;nusw=nusw1};
+        | Terms.(Binary{term=T2{tag=TC.Biadd {size=_size1;flags=flags1};
                                     a=Binary _ as u;
                                     b=Binary _ as x }}),
-          Constraints.(Binary{term=T2{tag=TC.Biadd {size=_size2;nsw=nsw2;nuw=nuw2;nusw=nusw2};
+          Terms.(Binary{term=T2{tag=TC.Biadd {size=_size2;flags=flags2};
                                     a=Binary{term=T0{tag=TC.Biconst(_size3, k)}};
-                                    b=Binary{term=T2{tag=TC.Biadd {size=_size4;nsw=nsw4;nuw=nuw4;nusw=nusw4};
+                                    b=Binary{term=T2{tag=TC.Biadd {size=_size4;flags=flags4};
                                         a=Binary _ as v;
                                         b=Binary _ as y
                                       }}
                                   }})
           when Z.equal k Z.one
-          && Constraints.equal x y && Constraints.equal u v && Constraints.equal u previdx
-          && (Constraints.level x) < cur_level && (Constraints.level y) < cur_level
-          && nsw1 = nsw2 && nuw1 = nuw2 && nusw1 = nusw2 && nsw1 = nsw4 && nuw1 = nuw4 && nusw1 = nusw4 ->
+          && Terms.equal x y && Terms.equal u v && Terms.equal u previdx
+          && (Terms.level x) < cur_level
+          && flags1 = flags2 && flags1 = flags4 ->
             Log.debug (fun p -> p "in Loop_domain.serialize, applying substitution 5");
             Result (inc, tup, (fun ctx out ->
               match ctx.index with
               | Some idx ->
-                let res = Binary_Forward.biadd ~size:32 ~nsw:nuw1 ~nuw:nuw1 ~nusw:nusw1 ctx idx x in
+                let res = Binary_Forward.biadd ~size:index_size ~flags:flags1 ctx idx x in
                 res, out
 
               | _ -> assert false
             ))
 
         (* case 6 : (base - prev_index) \cup (base - prev_index - 1) = (base - index) *)
-        | Constraints.(Binary{term=T2{tag=TC.Bisub {size=_size1;nsw=nsw1;nuw=nuw1;nusw=nusw1};
+        | Terms.(Binary{term=T2{tag=TC.Bisub {size=_size1;flags=flags1};
                                     a=Binary _ as x;
                                     b=Binary _ as u }}),
-          Constraints.(Binary{term=T2{tag=TC.Bisub {size=_size2;nsw=nsw2;nuw=nuw2;nusw=nusw2};
-                                    a=Binary{term=T2{tag=TC.Bisub {size=_size3;nsw=nsw3;nuw=nuw3;nusw=nusw3};
+          Terms.(Binary{term=T2{tag=TC.Bisub {size=_size2;flags=flags2};
+                                    a=Binary{term=T2{tag=TC.Bisub {size=_size3;flags=flags3};
                                         a=Binary _ as y;
                                         b=Binary _ as v
                                       }};
                                     b=Binary{term=T0{tag=TC.Biconst(_size4, k)}}
                                   }})
           when Z.equal k Z.one
-          && Constraints.equal x y && Constraints.equal u v && Constraints.equal u previdx
-          && (Constraints.level x) < cur_level && (Constraints.level y) < cur_level
-          && nsw1 = nsw2 && nuw1 = nuw2 && nusw1 = nusw2 && nsw1 = nsw3 && nuw1 = nuw3 && nusw1 = nusw3 ->
+          && Terms.equal x y && Terms.equal u v && Terms.equal u previdx
+          && (Terms.level x) < cur_level
+          && flags1 = flags2 && flags1 = flags3 ->
             Log.debug (fun p -> p "in Loop_domain.serialize, applying substitution 6");
             Result (inc, tup, (fun ctx out ->
               match ctx.index with
               | Some idx ->
-                let res = Binary_Forward.bisub ~size:32 ~nsw:nsw1 ~nuw:nuw1 ~nusw:nusw1 ctx x idx in
+                let res = Binary_Forward.bisub ~size:index_size ~flags:flags1 ctx x idx in
                 res, out
 
               | _ -> assert false
             ))
 
         (* case 9 : (offset * prev_index) \cup (offset + (offset * prev_index)) = (offset * index) (with base = 0) *)
-        | Constraints.(Binary{term=T2{tag=TC.Bimul {size=_size1;nsw=nsw1;nuw=nuw1};
+        | Terms.(Binary{term=T2{tag=TC.Bimul {size=_size1;flags=flags1};
                                     a=Binary{term=T0{tag=TC.Biconst(_size2, i)}};
                                     b=Binary _ as x}}),
-          Constraints.(Binary{term=T2{tag=TC.Biadd {size=_size3;nsw=nsw3;nuw=nuw3;nusw=nusw3};
+          Terms.(Binary{term=T2{tag=TC.Biadd {size=_size3;flags=flags3};
                                     a=Binary{term=T0{tag=TC.Biconst(_size4, j)}};
-                                    b=Binary{term=T2{tag=TC.Bimul {size=_size5;nsw=nsw5;nuw=nuw5};
+                                    b=Binary{term=T2{tag=TC.Bimul {size=_size5;flags=flags5};
                                         a=Binary{term=T0{tag=TC.Biconst(_size6, k)}};
                                         b=Binary _ as y
                                       }};
                                   }})
-          when Constraints.equal x y && Constraints.equal x previdx && Z.equal i j && Z.equal i k
-          && nsw1 = nsw5 && nuw1 = nuw5 ->
+          when Terms.equal x y && Terms.equal x previdx && Z.equal i j && Z.equal i k
+          && flags1 = flags5 ->
             Log.debug (fun p -> p "in Loop_domain.serialize, applying substitution 9");
             Result (inc, tup, (fun ctx out ->
               match ctx.index with
               | Some idx ->
-                let offset = Binary_Forward.biconst ~size:32 i ctx in
-                let res = Binary_Forward.bimul ~size:32 ~nsw:nsw5 ~nuw:nuw5 ctx offset idx in
+                let offset = Binary_Forward.biconst ~size:index_size i ctx in
+                let res = Binary_Forward.bimul ~size:index_size ~flags:flags5 ctx offset idx in
                 res, out
 
               | _ -> assert false
@@ -395,13 +419,13 @@ module Make
         (* TODO : check if it is necessary *)
 
         (* case 11 : prev_index \cup 1 + prev_index = index (when offset = 1 & base = 0) *)
-        | Constraints.(Binary _ as x),
-          Constraints.(Binary{term=T2{tag=TC.Biadd {size=_size;nsw;nuw;nusw};
+        | Terms.(Binary _ as x),
+          Terms.(Binary{term=T2{tag=TC.Biadd {size=_size;flags};
                                     a=Binary{term=T0{tag=TC.Biconst(_size2, k)}};
                                     b=Binary _ as y
                                 }})
           when Z.equal k Z.one
-          && Constraints.equal x y && Constraints.equal x previdx ->
+          && Terms.equal x y && Terms.equal x previdx ->
             Log.debug (fun p -> p "in Loop_domain.serialize, applying substitution 11");
             Result (inc, tup, (fun ctx out ->
               match ctx.index with
@@ -415,75 +439,83 @@ module Make
 
         (* generally for constant value bases *)
         (* case 13 : (base + (offset * prev_index)) \cup (offset + (base + (offset + base))) = ((offset * index) + base) *)
-        | Constraints.(Binary{term=T2{tag=TC.Biadd {size=_size1;nsw=nsw1;nuw=nuw1;nusw=nusw1};
+        | Terms.(Binary{term=T2{tag=TC.Biadd {size=_size1;flags=flags1};
                                     a=Binary _ as x;
-                                    b=Binary{term=T2{tag=TC.Bimul {size=_size2;nsw=nsw2;nuw=nuw2};
+                                    b=Binary{term=T2{tag=TC.Bimul {size=_size2;flags=flags2};
                                         a=Binary {term=T0{tag=TC.Biconst(_size3, i)}};
                                         b=Binary _ as u
                                       }}
                                     }}),
-          Constraints.(Binary{term=T2{tag=TC.Biadd {size=_size4;nsw=nsw4;nuw=nuw4;nusw=nusw4};
+          Terms.(Binary{term=T2{tag=TC.Biadd {size=_size4;flags=flags4};
                                     a=Binary{term=T0{tag=TC.Biconst(_size5, k)}};
-                                    b=Binary{term=T2{tag=TC.Biadd {size=_size6;nsw=nsw6;nuw=nuw6;nusw=nusw6};
+                                    b=Binary{term=T2{tag=TC.Biadd {size=_size6;flags=flags6};
                                         a=Binary _ as y;
-                                        b=Binary{term=T2{tag=TC.Bimul {size=_size7;nsw=nsw7;nuw=nuw7};
+                                        b=Binary{term=T2{tag=TC.Bimul {size=_size7;flags=flags7};
                                             a=Binary{term=T0{tag=TC.Biconst(_size8, j)}};
                                             b=Binary _ as v
                                           }}
                                       }};
                                   }})
           when Z.equal i j && Z.equal i k
-          && Constraints.equal x y && Constraints.equal u v && Constraints.equal u previdx
-          && (Constraints.level x) < cur_level && (Constraints.level y) < cur_level
-          && nsw1 = nsw4 && nuw1 = nuw4 && nusw1 = nusw4 && nsw1 = nsw6 && nuw1 = nuw6 && nusw1 = nusw6
-          && nsw2 = nsw7 && nuw2 = nuw7 ->
+          && Terms.equal x y && Terms.equal u v && Terms.equal u previdx
+          && (Terms.level x) < cur_level
+          && flags1 = flags4 && flags1 = flags6
+          && flags2=flags7 ->
             Log.debug (fun p -> p "in Loop_domain.serialize, applying substitution 13");
             Result (inc, tup, (fun ctx out ->
               match ctx.index with
               | Some idx ->
-                let offset = Binary_Forward.biconst ~size:32 i ctx in
-                let offset = Binary_Forward.bimul ~size:32 ~nsw:false ~nuw:false ctx offset idx in
-                let res = Binary_Forward.biadd ~size:32 ~nsw:false ~nuw:false ~nusw:false ctx offset x in
+                let offset = Binary_Forward.biconst ~size:index_size i ctx in
+                let offset = Binary_Forward.bimul ~size:index_size ~flags:flags2 ctx offset idx in
+                let res = Binary_Forward.biadd ~size:index_size ~flags:flags1 ctx offset x in
                 res, out
 
               | _ -> assert false
             ))
 
         (* case 14 : (base + prev_index) \cup (1 + (base + prev_index)) = (base + index) *)
-        | Constraints.(Binary{term=T2{tag=TC.Biadd {size=_size1;nsw=nsw1;nuw=nuw1;nusw=nusw1};
+        | Terms.(Binary{term=T2{tag=TC.Biadd {size=_size1;flags=flags1};
                                     a=Binary _ as x;
                                     b=Binary _ as u }}),
-          Constraints.(Binary{term=T2{tag=TC.Biadd {size=_size2;nsw=nsw2;nuw=nuw2;nusw=nusw2};
+          Terms.(Binary{term=T2{tag=TC.Biadd {size=_size2;flags=flags2};
                                     a=Binary{term=T0{tag=TC.Biconst(_size3, k)}};
-                                    b=Binary{term=T2{tag=TC.Biadd {size=_size4;nsw=nsw4;nuw=nuw4;nusw=nusw4};
+                                    b=Binary{term=T2{tag=TC.Biadd {size=_size4;flags=flags4};
                                         a=Binary _ as y;
                                         b=Binary _ as v
                                       }}
                                   }})
           when Z.equal k Z.one
-          && Constraints.equal x y && Constraints.equal u v && Constraints.equal u previdx
-          && (Constraints.level x) < cur_level && (Constraints.level y) < cur_level
-          && nsw1 = nsw2 && nuw1 = nuw2 && nusw1 = nusw2 && nsw1 = nsw4 && nuw1 = nuw4 && nusw1 = nusw4 ->
+          && Terms.equal x y && Terms.equal u v && Terms.equal u previdx
+          && (Terms.level x) < cur_level
+          && flags1 = flags2 && flags1 = flags4 ->
             Log.debug (fun p -> p "in Loop_domain.serialize, applying substitution 14");
             Result (inc, tup, (fun ctx out ->
               match ctx.index with
               | Some idx ->
-                let res = Binary_Forward.biadd ~size:32 ~nsw:false ~nuw:false ~nusw:false ctx x idx in
+                let res = Binary_Forward.biadd ~size:index_size ~flags:(Operator.Flags.Biadd.pack ~nsw:false ~nuw:false ~nusw:false) ctx x idx in
                 res, out
 
               | _ -> assert false
             ))
 
 
-        | _ -> Log.debug (fun p -> p "in Loop_domain.serialize, applying no substituation(2)"); serialize_binary ~size ctxa a ctxb b acc
+        | _ ->
+          Log.debug (fun p -> p "in Loop_domain.serialize, applying no substituation") ;
+          serialize_binary ~widens ~size ctxa a ctxb b acc
 
       end
 
-    | _ -> Log.debug (fun p -> p "in Loop_domain.serialize, unable to substitute without an adequate loop index"); serialize_binary ~size ctxa a ctxb b acc
+    | _ ->
+      Log.debug (fun p -> p "in Loop_domain.serialize, unable to substitute without an adequate loop index") ;
+      serialize_binary ~widens ~size ctxa a ctxb b acc
 
 
   let serialize_boolean ctxa a ctxb b acc =
     let Sub.Context.Result (included, in_tup, deserialize) = Sub.serialize_boolean ctxa.subcontext a ctxb.subcontext b acc in
+    Context.Result (included, in_tup, (fun ctx out_tup -> deserialize ctx.subcontext out_tup))
+
+  let serialize_enum ctxa a ctxb b acc =
+    let Sub.Context.Result (included, in_tup, deserialize) = Sub.serialize_enum ctxa.subcontext a ctxb.subcontext b acc in
     Context.Result (included, in_tup, (fun ctx out_tup -> deserialize ctx.subcontext out_tup))
 
   (**************** Nondet and union. ****************)
@@ -494,7 +526,7 @@ module Make
 
   let typed_nondet2 ctxa ctxb in_tup =
     match ctxa.index, ctxb.index with
-    | Some ia, Some ib when Constraints.equal ia ib ->
+    | Some ia, Some ib when Terms.equal ia ib ->
       let subctx, out = Sub.typed_nondet2 ctxa.subcontext ctxb.subcontext in_tup in
       {subcontext = subctx; index = Some ia}, out
     | _ ->
@@ -511,14 +543,13 @@ module Make
   let typed_fixpoint_step ~iteration ~init ~arg ~body ((inc, tup) : bool * 'a in_tuple) : bool * (close:bool -> 'a out_tuple * Context.t)  =
     match arg.index with
     | Some idx ->
-        let one = Sub.Binary_Forward.biconst ~size:32 Z.one init.subcontext in
-        let next_idx = Sub.Binary_Forward.biadd ~size:32 ~nsw:false ~nuw:false ~nusw:false body.subcontext idx one in (* TODO : we should probably use flag "nuw" *)
-        let Sub.Context.Result(inc, tup, deserialize) = Sub.serialize_binary ~size:32 arg.subcontext idx body.subcontext next_idx (inc, tup) in
+        let one = Sub.Binary_Forward.biconst ~size:index_size Z.one init.subcontext in
+        let next_idx = Sub.Binary_Forward.biadd ~size:index_size ~flags:(Operator.Flags.Biadd.pack ~nsw:false ~nuw:false ~nusw:false) body.subcontext idx one in (* TODO : we should probably use flag "nuw" *)
+        let Sub.Context.Result(inc, tup, deserialize) = Sub.serialize_binary ~widens:true ~size:index_size arg.subcontext idx body.subcontext next_idx (inc, tup) in
         let bool, continuef = Sub.typed_fixpoint_step ~iteration ~init:init.subcontext ~arg:arg.subcontext ~body:body.subcontext (inc, tup) in
         let continuef ~close =
           let out, ctx = continuef ~close in
           let new_index, out = deserialize ctx out in
-          (* Log.debug (fun p -> p "in Loop_domain.typed_fixpoint_step (deserialize), new_index = %a" (Sub.binary_pretty ~size:32 ctx) new_index ; *)
           out, {subcontext = ctx; index = Some new_index}
         in bool, continuef
 
@@ -530,15 +561,14 @@ module Make
 
   let mu_context_open parent_ctx =
     let subctx = Sub.mu_context_open parent_ctx.subcontext in
-    let zero = Sub.Binary_Forward.biconst ~size:32 Z.zero parent_ctx.subcontext in
+    let zero = Sub.Binary_Forward.biconst ~size:index_size Z.zero parent_ctx.subcontext in
     {subcontext = subctx; index = Some zero}
-    (* let one = Sub.Binary_Forward.biconst ~size:32 Z.one parent_ctx.subcontext in
-    {subcontext = subctx; index = Some one} *)
 
   module Query = struct
     include Sub.Query
 
-    let binary ~size ctx x = Sub.Query.binary ~size ctx.subcontext x
+    let binary ~size ctx = Sub.Query.binary ~size ctx.subcontext
+    let enum ctx = Sub.Query.enum ctx.subcontext
   end
 
   let query_boolean ctx b = Sub.query_boolean ctx.subcontext b

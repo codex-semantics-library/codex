@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of the Codex semantics library.                     *)
 (*                                                                        *)
-(*  Copyright (C) 2013-2024                                               *)
+(*  Copyright (C) 2013-2025                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,8 +19,9 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(* Most of this code is adapated from the OCaml Standard library's implementation
-   of Hashtbl.
+(** Most of this code is adapated from the OCaml Standard library's implementation
+   of [Hashtbl]. It is just adapted for polymorphic types. I.E. a ['b t] hashtabl
+   binding ['a key] to [('a,'b) value] (note that ['a] is quantified existantially here).
 
    Copyright 1996 Institut National de Recherche en Informatique et en Automatique.
    distributed under the terms of the GNU Lesser General Public License

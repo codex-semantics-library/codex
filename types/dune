@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;  This file is part of the Codex semantics library.                     ;;
 ;;                                                                        ;;
-;;  Copyright (C) 2013-2024                                               ;;
+;;  Copyright (C) 2013-2025                                               ;;
 ;;    CEA (Commissariat à l'énergie atomique et aux énergies              ;;
 ;;         alternatives)                                                  ;;
 ;;                                                                        ;;
@@ -19,24 +19,31 @@
 ;;                                                                        ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-
 (library
  (public_name "codex.types.type_parse_tree")
  (name type_parse_tree)
  (modules type_parse_tree)
- (libraries zarith)
-)
+ (libraries zarith))
 
 (library
  (public_name "codex.types")
  (name types)
- (libraries zarith codex.datatype_sig tracelog codex.types.type_parse_tree codex.types.parser)
- (modules ctypes parse_ctypes)
- )
+ (libraries
+  codex.codex_config
+  zarith
+  codex.datatype_sig
+  tracelog
+  operator
+  emit_alarm
+  codex.units
+  codex.types.type_parse_tree
+  codex.types.parser)
+ (modules typedC parse_ctypes type_check_tree))
 
 (library
  (public_name "codex.types.parser")
  (name Type_parser)
  (modules Type_parser)
  (libraries pacomb zarith codex.types.type_parse_tree tracelog)
- (preprocess (pps pacomb.ppx)))
+ (preprocess
+  (pps pacomb.ppx)))

@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of the Codex semantics library.                     *)
 (*                                                                        *)
-(*  Copyright (C) 2013-2024                                               *)
+(*  Copyright (C) 2013-2025                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -24,7 +24,7 @@
  * it edge labels, or pairs of vertices if the edges are unlabeled).  The input
  * graph must be without self-loops, i.e. edges of the form (n,n). 
    All the nodes should also be reachable from the initial node. *)
-module type GraphI = sig
+module type GRAPHI = sig
   type t
     (** CFG type *)
 
@@ -47,7 +47,7 @@ module type GraphI = sig
   val fold_pred_e : (E.t -> 'a -> 'a) -> t -> V.t -> 'a -> 'a
 end
 
-module Make (G : GraphI) (R : Regex.S with type letter = G.E.t) : sig
+module Make (G : GRAPHI) (R : Regex.S with type letter = G.E.t) : sig
   type state = (G.V.t, R.t) Hashtbl.t
 
   val compute_exprs : G.t -> G.V.t Wto.partition -> state

@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of the Codex semantics library.                     *)
 (*                                                                        *)
-(*  Copyright (C) 2013-2024                                               *)
+(*  Copyright (C) 2013-2025                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,7 +19,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(* This is the OCaml translation of the online least common ancestor algorithm given in:
+(** This is the OCaml translation of the online least common ancestor algorithm given in:
 
 - https://www.slideshare.net/ekmett/skewbinary-online-lowest-common-ancestor-search
 - https://www.schoolofhaskell.com/user/edwardk/online-lca.Arith_status
@@ -34,7 +34,7 @@ type id = int
 (* MAYBE: Tip = 0, Bin = 1 in binary. Two can appear only at the beginning, and is seend as two ones. *)
 (* Non, en fait on a une liste chainee avec que les 1, mais les 0 sont
    absents, et a la place on utilise la taille des arbres pour savoir
-   à quel chiffre ca correspond. Et un invariant: path_size = sum des tree_size dans l'arbre. 
+   à quel chiffre ca correspond. Et un invariant: path_size = sum des tree_size dans l'arbre.
    Le 2 correspond a avoir deux 1 a la suite, et ca ne peut arriver qu'en tête de liste.
 
    We could create a unique id on cons to avoid that.
@@ -43,7 +43,7 @@ type tree = Leaf of id | Node of id * tree * tree
 
 let equal_id = (==)
 
-(* We identify the the tree (logically representing the tip of a path in the tree) 
+(* We identify the the tree (logically representing the tip of a path in the tree)
    using the head element. *)
 let equal_tree a b = match a,b with
   | Leaf(a), Leaf(b) -> equal_id a b
@@ -111,10 +111,10 @@ let uncons = function
    So, cons is more expensive, but nth is more lightweight, more suitable for a disk database
    for instance.
 
-   Also, we might not use physiqual equality for lca, we need a unique identifier. 
+   Also, we might not use physiqual equality for lca, we need a unique identifier.
    Which works here if what we cons uniquely identifies an element in the tree.
 
-   And finally, because we consume memory when we reconstruct lcas, we consume more space 
+   And finally, because we consume memory when we reconstruct lcas, we consume more space
    (logically identical lcas may require to be stored twice in memory). So, for long-lived objects this is not ideal.
 
    The log2(log2(n)) factor is probably not very problematic: log2(log2(65536)) = 4, log2(log2(2^32))=5, log2(log2(2^64))=6. So in practice, it is almost equivalent as being constant.
@@ -172,7 +172,7 @@ let lca a b =
   if sizea < sizeb then lca' a (keep sizea b)
   else if sizeb < sizea then lca' (keep sizeb a) b
   else lca' a b
-        
+
 
 (* lca' :: Path -> Path -> Path *)
 (* lca' h@(Cons _ w x xs) (Cons _ _ y ys) *)
@@ -197,7 +197,7 @@ let lca a b =
 (*  where *)
 (*   nxs = size xs *)
 (*   nys = size ys *)
-  
+
 (* fromList :: [Int] -> Path *)
 (* fromList = foldr cons Nil *)
 

@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of the Codex semantics library.                     *)
 (*                                                                        *)
-(*  Copyright (C) 2013-2024                                               *)
+(*  Copyright (C) 2013-2025                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -33,4 +33,4 @@ type 'a printf = ('a, Format.formatter, unit) format -> 'a
 
 type 'a log =  'a printf -> unit;;
 
-exception Fatal
+exception Fatal of string 

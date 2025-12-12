@@ -1,0 +1,12 @@
+region struct message(len) = struct {
+  struct message(len)+ next;
+  char[len]+ buffer;
+};
+
+region struct message_box = ∃ mlen:integer with self > 0.
+struct {
+  integer with self = mlen length;
+  struct message(mlen)+ first;
+};
+
+void zeros_buffer(struct message_box+ box)

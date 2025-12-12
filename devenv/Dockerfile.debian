@@ -1,0 +1,91 @@
+##########################################################################
+#  This file is part of the Codex semantics library.                     #
+#                                                                        #
+#  Copyright (C) 2013-2025                                               #
+#    CEA (Commissariat à l'énergie atomique et aux énergies              #
+#         alternatives)                                                  #
+#                                                                        #
+#  you can redistribute it and/or modify it under the terms of the GNU   #
+#  Lesser General Public License as published by the Free Software       #
+#  Foundation, version 2.1.                                              #
+#                                                                        #
+#  It is distributed in the hope that it will be useful,                 #
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of        #
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         #
+#  GNU Lesser General Public License for more details.                   #
+#                                                                        #
+#  See the GNU Lesser General Public License version 2.1                 #
+#  for more details (enclosed in the file LICENSE).                      #
+#                                                                        #
+##########################################################################
+
+# Build with:
+# $ docker build -f devenv/Dockerfile.debian -t codex:debian .
+
+# Run with:
+# $ docker run -it --rm --name codex_debian codex:debian
+
+# When a container runs:
+# Get frama_c_codex.exe with
+# $ docker cp codex_debian:/home/opam/.opam/4.14/bin/frama_c_codex .
+# Note that frama-c also needs files in '/home/opam/.opam/4.14/share' to run.
+#
+# Get binsec_codex.exe with
+# $ docker cp container:/home/opam/.opam/4.14/bin/binsec_codex .
+
+
+FROM ocaml/opam:debian-12-ocaml-4.14 as build
+# Installs system dependencies
+RUN sudo apt-get update && \
+    sudo apt-get install -y --no-install-recommends bc libgmp-dev liblmdb-dev \
+        pkg-config autoconf graphviz libexpat1-dev zlib1g-dev libcairo2-dev \
+        libexpat1-dev  libgtk-3-dev libgtksourceview-3.0-dev libgnomecanvas2-dev \
+        cmake time z3 gcc-multilib libev-dev libssl-dev npm curl && \
+    sudo apt-get clean
+
+# Install opam dependencies. This avoids re-specifying the dependencies (already
+# present in the dune-project and .opam files. Only copying .opam before the rest
+# of codex allows caching (i.e. not reinstalling all dependencies each time a
+# file in codex changes)
+COPY --chown=opam:opam ./*.opam /home/opam/codex/
+RUN opam update && \
+    opam install ./codex/ --deps-only && \
+    opam clean -a -c -s --logs && \
+    rm -rf opam-repository .opam/repo
+
+# Build codex
+# RUN mkdir codex2
+COPY --chown=opam:opam . /home/opam/codex
+RUN cd codex && eval $(opam env) && dune build && dune install
+RUN echo 'eval $(opam env)' >> .bashrc
+
+# Optional: this further slims down the new image, which becomes kind of binary-only.
+# Works and allows a substantial gain in space, but currently the script for binsec call dune exec binsec_codex.exe, which tries to rebuild the binary and remove it.
+# Shrinks from ~6.5GB to ~4GB or 0.5GB
+RUN find .opam -regex '.*\.cm\(o\|i\|t\|ti\)' -delete
+
+# To shrink the image size significantly, we use a slim debian image and copy
+# the built binaries inside. The downside is that the new image can't be used
+# to rebuilt codex. If you need that, comment everything below and just use the
+# 'build' image.
+FROM debian:12-slim AS slim
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends graphviz time z3 make opam liblmdb0 sudo && \
+    apt-get clean && \
+    useradd --create-home --shell /bin/bash --groups sudo opam -p "$(openssl passwd -6 IamRoot)"
+WORKDIR /home/opam
+USER opam
+
+# Option 1 : Copy entire home directory, including binaries and codex source code, image size: ~4GB
+# COPY --from=build /home/opam /home/opam
+
+# Option 2 : Only copy binaries, image size: ~0.5GB
+COPY --from=build \
+  /home/opam/.opam/4.14/bin/frama_c_codex \
+  /home/opam/.opam/4.14/bin/binsec_codex \
+  /home/opam/
+COPY --from=build /home/opam/.opam/4.14/share /home/opam/.opam/4.14/share
+
+# Local Variables:
+# mode: shell-script
+# End:

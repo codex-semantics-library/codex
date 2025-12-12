@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of the Codex semantics library.                     *)
 (*                                                                        *)
-(*  Copyright (C) 2013-2024                                               *)
+(*  Copyright (C) 2013-2025                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -95,7 +95,7 @@ module Make(G:Graph)(D:AbstractDomain with type transition = G.transition) = str
      it. *)
   let rec fixpoint_component acc = function
     | Wto.Node n -> update n (pre n acc) acc
-    | Wto.Component(head,part) as c ->
+    | Wto.Component(head,part) ->
       (* We start over from save_acc everytime, otherwise we have
          spurious values when joining that come from the end of
          previous iterations. This strategy is described in [Lemerre,

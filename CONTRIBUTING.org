@@ -1,0 +1,186 @@
+- Do not hesitate to try! The architecture is setup so that it is easy to start writing code into Codex. We try not to have too many strict rules or code conventions as they decourage contributions, especially from people not used to developping in a shared environment. Here are just some general guidelines:
+
+  - Try to provide a commented mli for your new modules. The mli should describe what the functions in the module do. In the ml, the most important thing is to comment the meaning of the data structure, and its invariants if there are some; also comment code that would not be obvious. Don't hesitate to comment the code of others that was not easy to understand! For long we did not use the odoc documentation format (so you should open mli to read the comments), but this is going to change (you can access the documentation by typing make doc). For quick reference, odoc comments start by a double asterisk:
+  #+begin_src ocaml
+    (* non odoc *)
+    (** odoc *)
+    (*** also non odoc *)
+  #+end_src
+  For supported syntax, see this [[https://ocaml.github.io/odoc/odoc/cheatsheet.html][cheatsheet]].
+
+  - The continuous integration is here to help. If it passes the test, the hardest is done! If you add new features, try to provide C tests that you can execute, so that we can check if things still work in the future. The best way to start is to develop a minimal module, with assert falses/unimplemented everywhere to comply with the required signatures if needed. The goal is to integrate your code at the right spot. Then, start implementing basic C code (start with minimal straight-line code), and more and more complex code that will test your module capabilities, and implement all the "not implemented" failures of the code. That way, you will have tests that you can provide, and you know that your code is useful and has been tested at least once. This makes the code much more reliable than writing the code and then do the tests, and makes it easy to do things incrementally.
+
+- It is OK if some functions are not yet implemented. Many modules require more things than necessary (doing so simplifies the functor signature). The goal is not to implement everything, but to pass a reasonable share of the code!
+
+- Make it simple. Write your code in a ways that it will be easy to maintain in the future. When submitting merge requests, the goal is that the reviewer should be able to understand how the code works, so that it is easy to maintain in the future.
+
+* Testing locally
+
+** Single-file test
+
+Codex has a special makefile target to run a test quickly (run either from the root
+or in the [[./frontends/frama-c]] folder) :
+#+begin_src bash
+  make test.opt
+#+end_src
+It will rebuild codex if needed and run it on [[./frontends/frama-c/test.c]] using the types specified by [[./frontends/frama-c/test.types]].
+You can customize these files as you like, by redefining the =main= function.
+You can customize the flags passed by editing the =TEST_FLAGS= variable in the [[./frontends/frama-c/Makefile]].
+
+Running the test will generate a few things:
+- A detailed log printed to the terminal, which you can inspect. There is an emacs mode to inspect and fold the trace format of the log (tracelog-mode.el).
+- A dump file [[./frontends/frama-c/main.dump]] which shows line-by-line the value inferred by codex for each expression, as well as any alarms raised. The dump file follows the output format used by GCC, so if you open it using Emacs compilation-mode (M-x compilation-mode), you can click on it to go to the corresponding portion of the C file.
+- A HTML dump [[./frontends/frama-c/main.webapp.html]] which has the same information, but printed with HTML to be viewed in a browser (e.g. see expression values on mouseover)
+
+** Multi-file test
+
+You can run the equivalent of the CI target =framac:codex:test:general= with the following target:
+#+begin_src bash
+  make tests.opt
+#+end_src
+To check the results, use =git= to see if any of the files in [[./frontends/frama-c/tests]] have changed.
+If they haven't, you're good! If they have, I'd recommend copying the offender into
+[[./frontends/frama-c/test.c]] and running single-tests to see what's going on.
+
+As a small tip, since running test can modify a lot of files, I tend to =git add=
+any modified source files I don't want to commit right away, so I can =git revert=
+to reset the tests without losing my changes, or having to select them one at a time.
+
+If your changes lead to (expected) precision increases, you can commit the new values
+of these test files.
+
+Also, feel free to add new tests here if you encounter new errors or behaviors.
+Just commit the C file (ideally with comments explaining what the test showcases) along
+with the =.exp_dump= and =.result=.
+
+** Other CI tests
+
+The CI has a few other targets you can run locally (they correspond to the alltests target in the Makefile)
+- =codex:unit_test= is simply run by =dune test=.
+- For the =bench:c:XXX= tests, you should have the [[https://git.frama-c.com/codex/types-benchmarks][types-benchmarks]]
+  submodule:
+  #+begin_src bash
+    git submodule update --init
+  #+end_src
+  Then to run the test, first build and install codex (with =dune build && dune install=), then
+  =cd= into [[./benchmarks/types]] and call the
+  appropriate Makefile target (See =make help= for targets, but generally,
+  their name is easy to figure out, e.g. =make c_Olden/bisort= for =bench:c:olden_bisort=).
+
+  Once again, you can check the test output with =git= (ignore =.calarms= files, and any new file).
+  If your changes lead to precision improvements here, commit them to the types-benchmarks repo
+  on a branch with the same name as your codex branch. This way, the CI will use
+  your new commits for the tests. Make merging, make sure to merge types-benchmarks first.
+- For the =tests:c:small-types= target, build and install codex and then go to
+  [[./tests/types]] and run =make c_analysis=. Once again use =git= to check for changes in the results.
+
+** Minimizing tests with creduce
+
+Some tests on the CI are rather large. Using [[https://github.com/csmith-project/creduce][creduce]]
+helps shrink them to minimal examples. Here how to set it up:
+1. Copy the offending code to [[./frontends/frama-c/tests/creduce/reduce.c]]
+2. =creduce= requires a custom script to test whether a smaller C file is valid or not, we have one setup
+  in [[./frontends/frama-c/reduce.sh]] with three possible tests
+  - =infiniteloop= tests if codex takes too long to finish, for test that trigger infinite loops (change timeout value as needed).
+  - =greperror= checks for a string in the output using grep (feel free to customize the string to match your error message).
+  - =compare= runs two versions of codex and diffs their outputs (having two versions is a bit finicky, I usually do it by installing the reference version via =dune build && dune install=, (so it is run when calling =frama-c ...=), For the current branch, I only use =dune build= and =dune exec -- frama-c ...= to run it).
+
+  Select whichever suits you need by commenting the line you want at the end of the script, then run =creduce=
+  with =make creduce= (from inside the [[./frontends/frama-c]] folder).
+
+On some recent ubuntu versions, =creduce= depends on an obsolete LLVM. You can usually fix it by locating
+the script (=whereis creduce=) and editing it to remove the passes that cause problems.
+
+* Coding in Codex
+
+** Testing
+
+- Having thorough tests is what allows newcomers to contribute code, and more experecienced developers to start large refactorings, without fearing of breaking everything.
+- Most new developments should do something, so should come with a test.
+- A good way of organizing developments for new features is to do the test first:
+  - First, make your code compile, using "assert false" or "failwith "Unimplemented" for the missing functions.
+  - Then, start with something easy that is not yet working, and implement a test for that.
+  - Implement the missing functions as you need them. This ensures that all of your functions have been tested.
+  - Once it is working, create a new test that exercises the missing functionalitie, until everything is implemented.
+
+** Making code simple to understand
+
+"There are two ways of writing code: so simple that there are obviously no mistakes, or so complicated that there are no obvious mistakes."
+
+- The most important way to fight code complexity is to split the code in parts (modules) with a clear interface (mli file).
+- The goal of the interface is to hide as much code, and complexity of the code, as possible.
+  - Thus, mli files must be minimal in size, i.e., expose as few functions as possible.
+  - If possible, make types opaques, to avoid exposing their implementation.
+  - In general, avoid implementing functions in case they might be useful later (means they are not tested, need to be maintained, and may not be useful at all); implement functions when it is clear that they will be useful (ideally, because you need them to pass a test).
+    - If the rest of the module is simple, these functions will be easy to implement when they are needed.
+- The interface should be simple to use:
+  - Functions with visible side-effects are more complex than purely functional code as you need to understand how to sequence effects.
+  - (Functions with hidden side-effects, like caches, are OK).
+  - The user of a module should not have to understand a complex invariant about the code to use it
+    - If this cannot be avoided, make this invariant explicit, and use assertions to test it.
+- The interface should be consistent
+  - In Codex, this means that many signatures are the same or derive from other signatures.
+  - For instance, all AADTs, Domains,  single-value abstractions, etc. have the same interface.
+  - This also helps reducing the size of mli files.
+- The interface of a module is its documentation
+  - Include, at the start of a mli file, a general description of what the module provides and how it can be used, before commenting each function.
+  - Include, at the start of a ml file, a general description of how the module works, and then reserve documentation for the complicated parts of the code (that you could not simplify).
+    - In code, you don't need to comment obvious things.
+- Invariants that are local to a module should be documented, and we should have assertions.
+  - Try to defend your module against future misuses of the code.
+  - It is especially important to understand the data structures being used. Comment types and field definitions.
+- Avoid being smart in the code: try to have code which is simple to understand.
+  
+** Easing maintenance
+
+- Try to make your code defensive, using these techniques (by order of priority):
+  - 1. Make your code impossible to misuse.
+  - 2. Use the type system to detect misuses at compile time.
+  - 3. Use assertions to detect misuses at runtime
+- Misuses include failure to meet a precondition or an invariant. Document these, and test them if possible.
+- Include tests, in the CI, for your feature, so that it continues working as it should.
+- Avoid introducing dependencies on other tools and libraries, as they can break things when we update them. Especially if the dependency can be replaced by <200 lines of code that will rarely change.
+
+** Organizing developments
+
+When your goal is to work on a feature:
+- Try to find simple intermediate steps that:
+  - Needs to be implemented for your feature
+  - The code compiles and passes all the tests.
+- If an intermediate step can be tested
+  - Implement a test
+  - Do a merge request
+- If the intermediate step needs further development to be tested
+  - Leave the merge request as draft
+  - Ideally, the new development should have been proved to work (used by some other part of the code, and ideally tested) before being merged.
+- If you discover that your intermediate step depends on something else
+  - Create a new branch, do that other thing, and merge it
+
+** Code reviews
+
+"The purpose of code review is not for the reviewer to find bugs, and certainly not for them to ensure that the code is bug-free [...]. The primary purpose of code review is to find code that will be _hard to maintain_.  The reviewer looks at the code and tries to understand what it is doing and how. If they can't, that means it will be hard to maintain in the future, and should be fixed now, while the original author is still familiar with it." -- Mark Dominus
+
+Merge requests should be done in such a way that it is easy to understand what the code does.
+
+- The following are ideal goals for your merge request. Do not hesitate to contribute even if you don't know how to meet all these recommendations.
+
+- First: knowing how to use git is very valuable for software development. There are many resources available to learn how to use it. There are also very good interfaces that help interfacing with git, such as magit (part of emacs).
+
+- The first step of reviewing is self-review. Git makes it easy with the notion of staging:
+  - Try to create logical commits that group things that belong together in a single commit.
+  - Staging allows you to decide if you want to keep the change, or if it was something done temporarily, or is unrelated, or is not clean enough, in which case you do not commit it, or at least not yet.
+
+- The CI is here to help. If not all tests passes, there is likely a problem in your code, and something has to be done (maybe not by you).
+- You can open merge requests early, put them as draft. Discuss what you want to do early, especially if not sure.
+- A review is a conversation; the goal is to have an agreement on how the code is best structured and the feature best implemented.
+
+- There are several common types of merge requests
+  - Big refactorings / change of test output :: these changes are simple but modify a lot of code, which makes reviewing them difficult, especially if you mix this with other changes. Thus, they should be standalone merge requests.
+  - Fixing a new bug :: if the bug is new, it is probably not in the CI. in this case, try to organize the history so that you first commit the new test first with the old results, and then the fix with the modifications of the test updates. This makes it easy to know what bug is fixed.
+  - Adding a new feature :: it should normally come with a test checking that the feature works (sometimes testing is not obvious, for instance for the GUI).
+  - Code refactorings :: It is better to have smaller merge requests, as it is simpler to understand what the code does.
+
+
+
+
+  

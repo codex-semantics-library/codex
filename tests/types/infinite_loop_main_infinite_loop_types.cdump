@@ -1,9 +1,0 @@
-infinite_loop.c:14.9-15: `f->elt' -> [--..--]
-infinite_loop.c:14.9-10: `f' -> ([1..0xFFFFFFFF] : ({self : Name(struct intlist)[{0}].(0)* | (self != 0)}))
-infinite_loop.c:15.8-15: `f->next' -> ([1..0xFFFFFFFF] : ({self : Name(struct intlist)[{0}].(0)* | (self != 0)}))
-infinite_loop.c:15.8-9: `f' -> ([1..0xFFFFFFFB] : ({self : Name(struct intlist)[{0}].(0)* | (self != 0)}))
-Unproved regular alarms:
-Unproved additional alarms:
-Proved 2/2 regular alarms
-Unproved 0 regular alarms and 0 additional alarms.
-Solved 0/0 user assertions, proved 0

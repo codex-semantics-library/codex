@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of the Codex semantics library.                     *)
 (*                                                                        *)
-(*  Copyright (C) 2013-2024                                               *)
+(*  Copyright (C) 2013-2025                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -22,7 +22,7 @@
 (* Standard abstraction for booleans; powerset of {true;false} *)
 
 (* TODO: Should become Quadrivalent_Lattice. And should go into lattice? *)
-type boolean =
+type boolean = Boolean_standard.Quadrivalent.t = 
   | Bottom
   | True
   | False
@@ -30,7 +30,6 @@ type boolean =
 
 module BooleanDT = (struct
   type t = boolean
-  let name = "Quadrivalent_Basis"
   let pretty fmt t =
     let string = match t with
       | Bottom -> "{}"
@@ -39,7 +38,7 @@ module BooleanDT = (struct
       | Top -> "{true;false}"
     in Format.fprintf fmt "%s" string
 
-  let equal = (==)
+  let _equal = (==)
 
   let compare (a:boolean) (b:boolean) = Stdlib.compare a b
   let hash = function
@@ -52,25 +51,17 @@ end)
 
 module Boolean_Lattice = struct
   include BooleanDT
-  let bottom = Bottom
-  let boolean_bottom = bottom
+  let bottom () = Bottom
+  let boolean_bottom = bottom ()
   let is_bottom x = (x = Bottom)
-  let boolean_is_bottom _ = is_bottom
-  let boolean_pretty _ = pretty
 
-  let top = Top
-  let is_top x = (x = top)
+  let top () = Top
 
   let singleton = function
     | true -> True
     | false -> False
   
   let truth_value x = x
-
-  (* Useful helper function. *)
-  let of_bool = function
-    | true -> True
-    | false -> False
 
   let of_bools ~may_be_false ~may_be_true =
     match (may_be_false,may_be_true) with
@@ -93,12 +84,6 @@ module Boolean_Lattice = struct
     | True, False | False, True -> Top
     | Top, _ | _, Top -> Top
 
-  let is_included a b = match (a,b) with
-    | Bottom, _ -> true
-    | _, Top -> true
-    | True, True | False, False -> true
-    | _ -> false
-
   let includes a b = match a,b with
     | Top,_ -> true
     | _, Bottom -> true
@@ -109,10 +94,6 @@ module Boolean_Lattice = struct
 
   let includes_or_widen ~previous b =
     if includes previous b then (true,b) else (false,join previous b)
-  ;;
-      
-  let join_and_is_included a b =
-    let ab = join a b in (ab, ab = b)
 
   let inter a b = match (a,b) with
     | Bottom, _ | _, Bottom -> Bottom
@@ -124,10 +105,7 @@ module Boolean_Lattice = struct
 
 end
 
-let convert_to_quadrivalent x = x
-let boolean_bottom = Boolean_Lattice.bottom
-let of_bools = Boolean_Lattice.of_bools
-
+let to_quadrivalent x = x
 
 include Boolean_Lattice
 

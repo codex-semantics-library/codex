@@ -1,8 +1,29 @@
+(**************************************************************************)
+(*  This file is part of the Codex semantics library.                     *)
+(*                                                                        *)
+(*  Copyright (C) 2013-2025                                               *)
+(*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
+(*         alternatives)                                                  *)
+(*                                                                        *)
+(*  you can redistribute it and/or modify it under the terms of the GNU   *)
+(*  Lesser General Public License as published by the Free Software       *)
+(*  Foundation, version 2.1.                                              *)
+(*                                                                        *)
+(*  It is distributed in the hope that it will be useful,                 *)
+(*  but WITHOUT ANY WARRANTY; without even the implied warranty of        *)
+(*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *)
+(*  GNU Lesser General Public License for more details.                   *)
+(*                                                                        *)
+(*  See the GNU Lesser General Public License version 2.1                 *)
+(*  for more details (enclosed in the file LICENSE).                      *)
+(*                                                                        *)
+(**************************************************************************)
+
 module Int_builtins_zarith = struct
 
   (* Does not work for negative or null numbers. *)
   let log2 x = Z.log2 @@ Z.of_int x
-  
+
   let highest_bit x =
     1 lsl (Z.log2 @@ Z.of_int x)
 
@@ -10,7 +31,7 @@ module Int_builtins_zarith = struct
 
   let ctz x = Z.trailing_zeros @@ Z.of_int x;;
 
-  let ffs x = if x = 0 then 0 else 1 + (Z.trailing_zeros @@ Z.of_int x);;  
+  let ffs x = if x = 0 then 0 else 1 + (Z.trailing_zeros @@ Z.of_int x);;
 end;;
 
 (* Log2 should be the position of the highest bit set,
@@ -20,7 +41,7 @@ let check_log2 x log2x =
   if(x > 0) then assert(log2x = Int_builtins_zarith.log2 x);
   if x = 0 then assert(log2x = -1)
   else begin
-  let u = (1 lsl log2x) in  
+  let _ = (1 lsl log2x) in
   assert(x lsr log2x = 1)
 end
 
@@ -32,7 +53,7 @@ let check_log2_untaggued x log2x =
   if x = 0 then assert(log2x = 1)
   else begin
     let log2x = if x < 0 then log2x - 1  else log2x in
-    let u = (1 lsl log2x) in  
+    let _ = (1 lsl log2x) in
     assert(x lsr log2x = 1)
   end
 ;;
@@ -122,8 +143,8 @@ let%test_module "Int_builtins" = (module struct
   (for i = 0 to 64; do let x = 1 lsl i in check_ffs x (Int_builtins.ffs_untaggued x); done);;
   (let rec loop x = if(x != 0) then (check_ffs x (Int_builtins.ffs_untaggued x); loop (x * 2)) in loop (-1));;
 
-  
-  
-  
+
+
+
 
 end)

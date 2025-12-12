@@ -1,0 +1,313 @@
+{0 Overview: The While Language}
+
+{{!page-index.tutorials}Back to main} --
+{{!page-"While tutorial - chapter 2"}Next chapter: Lattices and Single value abstractions}
+
+This tutorial presents a simple imperative {b While} language, and demonstrates
+how to statically analyze programs written in it using Codex, a modular library
+for static analysis of C programs. The language is defined with variables,
+arithmetic and boolean expressions, and control structures (e.g., [if] and
+[while]). The aim is to build an analysis that computes abstract behavior of a
+program without executing them.
+
+{1 Syntax}
+
+The syntax is defined in {!While_ast}, we present a simple overview here:
+
+{2 Variables}
+
+Before we can analyze programs, we need a way to refer to named storage
+locations. The [Var] module ensures that each variable of type [t] is a record
+with a name and a unique internal identifier to prevent any clashes.
+
+{@ocaml[
+module Var = struct
+  type t = { name:string; id:int }
+  let compare x y = Int.compare x.id y.id
+end
+]}
+
+{2 Arithmetic Expressions ([aexp])}
+
+Arithmetic expressions form the numeric backbone of While programs. The [aexp]
+type models integer constants, variables, and numerical operations. Its
+recursive definition lets you build expressions of arbitrary complexity.
+
+{@ocaml file=while_ast.ml,part=aexpressions[
+type aexp =
+  | Int of int          (* integer constant *)
+  | Var of Var.t        (* variable *)
+  | Add of aexp * aexp  (* addition *)
+  | Sub of aexp * aexp  (* subtraction *)
+  | Mul of aexp * aexp  (* multiplication *)
+]}
+
+The type includes literal constants ([Int of int]), variables ([Var of Var.t]),
+and the three basic binary operations: addition ([Add]), subtraction ([Sub]),
+and multiplication ([Mul]). Each constructor takes two sub-expressions of
+type [aexp], allowing arbitrarily nested arithmetic trees (for example, [(x + 2)
+* (y - 1)]). In execution or analysis, each node is evaluated by recursively
+computing or abstracting its children and then applying the corresponding
+arithmetic operation.
+
+
+{2 Boolean Expressions ([bexp])}
+
+Control flow decisions in While programs are governed by boolean tests. The [bexp]
+type captures these tests via literals, comparisons of arithmetic expressions,
+and logical connectives. You can combine these constructors to express any
+boolean predicate.
+
+{@ocaml file=while_ast.ml,part=bexpressions[
+type bexp =
+  | True
+  | False
+  | Eq of aexp * aexp   (* equality *)
+  | Le of aexp * aexp   (* less than or equal *)
+  | Gt of aexp * aexp   (* strictly greater than *)
+  | Not of bexp         (* negation *)
+  | And of bexp * bexp  (* conjunction *)
+]}
+
+The type provides the Boolean constants ([True], [False]), comparison operators over
+arithmetic expressions -- equality ([Eq]), less-than-or-equal ([Le]), and
+greater-than ([Gt]) -- as well as logical negation ([Not]) and conjunction
+([And]). By nesting these constructors you can form complex tests such as
+[(v <= 5 && !(v == 0))].
+
+{2 Statements ([stmt])}
+
+Finally, the [stmt] type defines the statements that make up a While program.
+[Skip] is a no operation; [Assign] updates a variable from an arithmetic
+expression; [Seq] composes two commands sequentially; [If] chooses one of two
+branches based on a boolean test; and [While] repeatedly executes its body while
+a condition holds. These constructors form the core control flow of the
+language. In the following, we will how to define transfer functions that map an
+incoming abstract state to output state according to each command’s semantics.
+
+{@ocaml file=while_ast.ml,part=statements[
+type stmt =
+  | Skip                      (* do nothing *)
+  | Assign of Var.t * aexp    (* assignment *)
+  | Seq of stmt * stmt        (* sequence of statements *)
+  | If of bexp * stmt * stmt  (* conditional *)
+  | While of bexp * stmt      (* while loop *)
+]}
+
+{1:cinterpreter Concrete Interpreter for the While Language}
+
+In the following, we define the concrete interpreter for the while language.
+It can be found in the {{!Whilelib.Cinterpreter}[Cinterpreter]} module.
+
+Firstly, a {b program state} {m \sigma} is a total map from variables [v] to
+integers {m \mathbb{Z}}. We write {m \sigma[v\mapsto n]} for the state just like
+{m \sigma} except that [v] now holds value [n]. This is simply represented using
+an OCaml map:
+{@ocaml[
+  module State = Map.Make(Var)
+]}
+
+We can now interpret arithmetic expressions, boolean expressions, and while
+statements. Each expression or a command takes an input program state and
+interprets the corresponding AST in the given program state.
+
+{2:aexp_interp Arithmetic Expressions}
+
+The arithmetic-expression interpreter is a straightforward recursive traversal
+of the [aexp] AST that computes an integer result in a given program state. Its
+OCaml implementation is given in {{!Whilelib.Cinterpreter.interp_aexp}[Cinterpreter.interp_aexp]}. Ignore the
+[Log.trace] call for now, we'll get to that {{!tracelog}later}.
+
+{@ocaml file=cinterpreter.ml,part=interp_aexp[
+let rec interp_aexp : aexp -> State.t -> Z.t
+  = fun exp state -> Log.trace (fun p -> p "interp_aexp: %a" pp_aexp exp) ~pp_ret:Z.pp_print @@ fun () ->
+  match exp with
+  | Int i -> Z.of_int i
+  | Var v -> State.find v state
+  | Add (e1, e2) -> Z.add (interp_aexp e1 state) (interp_aexp e2 state)
+  | Sub (e1, e2) -> Z.sub (interp_aexp e1 state) (interp_aexp e2 state)
+  | Mul (e1, e2) -> Z.mul (interp_aexp e1 state) (interp_aexp e2 state)
+]}
+
+
+{2 Boolean Expressions}
+
+The boolean-expression interpreter is also recursive traversal of the [bexp]
+boolean expression AST that outputs a boolean value in a given program state.
+Its OCaml implementation is given in {{!Whilelib.Cinterpreter.interp_bexp}[Cinterpreter.interp_bexp]}.
+
+{@ocaml file=cinterpreter.ml,part=interp_bexp[
+let rec interp_bexp : bexp -> State.t -> bool
+  = fun bexp state -> Log.trace (fun p -> p "interp_bexp: %a" pp_bexp bexp) ~pp_ret:Format.pp_print_bool @@ fun () ->
+  match bexp with
+  | True -> true
+  | False -> false
+  | Eq (e1, e2) -> (interp_aexp e1 state) = (interp_aexp e2 state)
+  | Le (e1, e2) -> (interp_aexp e1 state) <= (interp_aexp e2 state)
+  | Gt (e1, e2) -> (interp_aexp e1 state) > (interp_aexp e2 state)
+  | Not e -> interp_bexp e state
+  | And (e1, e2) -> (interp_bexp e1 state) && (interp_bexp e2 state)
+]}
+
+{2 Commands}
+
+In the While language, each statement represents a state-transforming operation
+on the program’s state. We capture these transformations in a single recursive
+function, {{!Whilelib.Cinterpreter.interp_stmt}[Cinterpreter.interp_stmt]}, which takes a command and an initial
+state and returns the updated state after executing that command.
+
+{@ocaml file=cinterpreter.ml,part=interp_while[
+let rec interp_stmt : stmt -> State.t -> State.t
+  = fun stmt state -> Log.trace (fun p -> p "interp_stmt: %a" pp_stmt stmt) ~pp_ret:State.pp @@ fun () ->
+  match stmt with
+  | Skip -> state
+  | Assign (v, e) -> State.add v (interp_aexp e state) state
+  | Seq (e1, e2) -> state |> interp_stmt e1 |> interp_stmt e2
+  | If (b, e1, e2) -> if interp_bexp b state then interp_stmt e1 state else interp_stmt e2 state
+  | While (b, e) ->
+      if interp_bexp b state then
+        let state' = interp_stmt e state in
+        interp_stmt stmt state'
+      else state
+]}
+
+
+{1 Testing the Concrete Interpreter}
+
+We can now execute the While program concretely using the interpreter we've
+defined. This lets us evaluate a program on a specific initial state and observe
+how the state evolves. Below, we run the interpreter on a simple program:
+
+{v
+x := x+1;
+if (x <= 10) then skip else x := x - 1;
+v}
+
+In Ocaml, this program can be written as:
+{@ocaml[
+# #require "codex.whilelib";;
+# #require "codex.ppx_while";;
+# open Whilelib;;
+# open While_ast;;
+]}
+{@ocaml[
+let x = Var.{ name="x"; id=1 }
+
+(* Defining with constructors *)
+let program = Seq(
+    Assign(x, Add(Var x, Int 1)),
+    If(
+      (Le(Var x, Int 10)),
+      Skip,
+      Assign(x, Add(Var x, Int (-1)))
+    )
+  )
+
+(* Since the above is a bit impractical, we provide a ppx that simplifies this *)
+let program = [%while_lang
+  x := 5;
+  x := x + 1;
+  if x <= 10 then skip else x := x - 1;
+]
+]}
+
+We can then execute the concrete interpreter as follows:
+
+{@ocaml[
+# open Cinterpreter;;
+# #install_printer State.pp;;
+# let init = State.of_list [ ("x",5) ];;
+val init : Cinterpreter.State.t = {x -> 5}
+# let final = interp_stmt program init;;
+val final : Cinterpreter.State.t = {x -> 6}
+]}
+
+As expected, the final result is the simple store {m \{x \mapsto 6\}}.
+
+{1:tracelog Tracelog Debugging in Codex}
+
+{!Tracelog} is a lightweight logging system in Codex used for observing and
+debugging execution traces. It helps track the flow and intermediate states of
+interpretation steps, with fine-grained control over what gets logged.
+
+{2 Initializing Tracelog}
+
+To begin using {!Tracelog}, you initialize a logger with a category and set the desired verbosity level:
+
+{@ocaml[
+module Log = Tracelog.Make(struct let category = "While_analyzer" end);;
+
+let () = Tracelog.set_verbosity_level `Debug
+]}
+
+Once it is initialized, each module that should emit trace logs must define its own logger. For instance, it is defined in [Cinterpreter] module as shown below.
+
+{@ocaml file=cinterpreter.ml,part=tracelog[
+module Log = Tracelog.Make(struct let category = "CInterpreter" end)
+]}
+
+To suppress logging from a module, override the logger definition as follows. This prevents
+any log output from that module, regardless of the global verbosity level.
+{@ocaml skip[
+module Log = Tracelog.Dummy
+]}
+
+{2 Basic log printers}
+
+The provided log module contains various functions for log calls. For simple prints,
+you can use functions {{!Tracelog.S.error}[Log.error]}, {{!Tracelog.S.error}[Log.warning]},
+{{!Tracelog.S.notice}[Log.notice]}, {{!Tracelog.S.info}[Log.info]} and {{!Tracelog.S.debug}[Log.debug]} (in decreasing order of verbosity level: by default, info and debug are not printed). There is also a
+{{!Tracelog.S.fatal}[Log.fatal]} function, which is similar to error but also raises an expection.
+They work similarly to [Format.printf] function:
+{@ocaml[
+# Log.notice (fun p -> p "a format string: @[%d + %s@]" 5 "hello");;
+[While_analyzer] a format string: 5 + hello
+- : unit = ()
+]}
+
+{2 Trace printer}
+
+The {{!Tracelog.S.trace}[Log.trace]} function is used to trace the evaluation of
+expressions and commands. It takes a tag (label), an input, and two
+pretty-printers -- one for the input and one for the return value. It first logs
+the tag and input, then executes the function [f], and finally logs the result
+using the return pretty-printer. This structure makes it easier to track both
+the call hierarchy and the values being passed through the interpreter.
+
+For example, you can see our calls to {{!Tracelog.S.trace}[Log.trace]} in the concrete
+interpreter functions such as {{!aexp_interp}[interp_aexp]}.
+
+While running the program on our example, you see the following output:
+
+{@bash[
+$ while_codex --example chapter1
+[CInterpreter] interp_stmt: Seq
+├─[CInterpreter] interp_stmt: x := 5
+│ ├─[CInterpreter] interp_aexp: 5
+│ │ └─[CInterpreter] Result: 5
+│ └─[CInterpreter] Result: {x -> 5}
+├─[CInterpreter] interp_stmt: Seq
+│ ├─[CInterpreter] interp_stmt: x := x + 1
+│ │ ├─[CInterpreter] interp_aexp: x + 1
+│ │ │ ├─[CInterpreter] interp_aexp: 1
+│ │ │ │ └─[CInterpreter] Result: 1
+│ │ │ ├─[CInterpreter] interp_aexp: x
+│ │ │ │ └─[CInterpreter] Result: 5
+│ │ │ └─[CInterpreter] Result: 6
+│ │ └─[CInterpreter] Result: {x -> 6}
+│ ├─[CInterpreter] interp_stmt: If x <= 10
+│ │ ├─[CInterpreter] interp_bexp: x <= 10
+│ │ │ ├─[CInterpreter] interp_aexp: 10
+│ │ │ │ └─[CInterpreter] Result: 10
+│ │ │ ├─[CInterpreter] interp_aexp: x
+│ │ │ │ └─[CInterpreter] Result: 6
+│ │ │ └─[CInterpreter] Result: true
+│ │ ├─[CInterpreter] interp_stmt: Skip
+│ │ │ └─[CInterpreter] Result: {x -> 6}
+│ │ └─[CInterpreter] Result: {x -> 6}
+│ └─[CInterpreter] Result: {x -> 6}
+└─[CInterpreter] Result: {x -> 6}
+]}
+
+{{!page-index.tutorials}Back to main} --
+{{!page-"While tutorial - chapter 2"}Next chapter: Lattices and Single value abstractions}

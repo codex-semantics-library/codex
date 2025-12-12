@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of the Codex semantics library.                     *)
 (*                                                                        *)
-(*  Copyright (C) 2013-2024                                               *)
+(*  Copyright (C) 2013-2025                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -32,7 +32,7 @@ type 'node edge =
   | Edge of 'node * 'node         (* Normal edge. *)
   | Exit of 'node                 (* Function Exit. *)
 
-module type Node = sig
+module type NODE = sig
   type node
 
   val equal: node -> node -> bool

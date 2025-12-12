@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of the Codex semantics library.                     *)
 (*                                                                        *)
-(*  Copyright (C) 2013-2024                                               *)
+(*  Copyright (C) 2013-2025                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -829,7 +829,8 @@ let array_truncate r i =
   else if i = 1
   then inject_singleton r.(0)
   else begin
-      (Obj.truncate (Obj.repr r) i);
+      let r = Array.sub r 0 i in 
+      (* (Obj.truncate (Obj.repr r) i); *)
       assert (Array.length r = i);
       Set r
     end

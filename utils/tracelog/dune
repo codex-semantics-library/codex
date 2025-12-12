@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;  This file is part of the Codex semantics library.                     ;;
 ;;                                                                        ;;
-;;  Copyright (C) 2013-2024                                               ;;
+;;  Copyright (C) 2013-2025                                               ;;
 ;;    CEA (Commissariat à l'énergie atomique et aux énergies              ;;
 ;;         alternatives)                                                  ;;
 ;;                                                                        ;;
@@ -23,9 +23,13 @@
  (public_name "codex.tracelog")
  (name tracelog)
  (modules Common Terminal Tracelog)
- (libraries unix)
+ (libraries unix binarytrace codex.syntax_tree)
 )
-
+(library
+ (public_name "codex.binarytrace")
+ (name binarytrace)
+ (modules Binarytrace)
+ (libraries codex.syntax_tree))
 (install
  (package codex)
  (section share_root)

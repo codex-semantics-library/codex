@@ -1,0 +1,71 @@
+{0 The Codex static analysis library }
+
+Codex is a library of reusable components that are needed to implement a new static analyzer. The main component of any static analysis based on abstract interpretation are:
+- {!Single_value_abstraction} which abstract unbounded integers {m \mathbb Z},
+  fixed sized bitvectors (of any arbitrary size), and booleans ({!Lattices.Quadrivalent});
+- Abstract {!Domains}, that perform the basic analysis operations. In the case of non-relational domains, domains are built using {!Single_value_abstraction}.
+- A {!Fixpoint} engine, that iterates analysis operations until everything was computed;
+- A frontend, that parses the source code and drive the analysis by calling the {!Fixpoint} engine and translating instructions and expressions to {!Domains} operations. This depends on the language to be analyzed, so this is not provided by the Codex library; but see {!analysers} for analyzers that use the library.
+
+The Codex repository is decomposed in several sub-parts (that are in different directories), whose dependency graph is as follows:
+{image:https://codex.top/assets/img/dependency_graph.png}
+
+{1:analysers Analyzers}
+
+ Each analyzer must set up its stack of abstract domain, then translate the analysis of instructions and expressions in calls to abstract domains. See for instance:
+
+- {%html:<a href="../frama_c_codex/index.html">Frama-C/Codex</a>%}: C code analysis implemented as a Codex-based Frama-C plugin. There, check {%html:<a href="../frama_c_codex/Core/Codex_register/index.html">Codex_register</a>%} which builds the stack of domain (that you can also observe dynamically using {!Tracelog}), and {%html:<a href="../frama_c_codex/Core/C2Codex/index.html">C2Codex</a>%} which interprets the C AST using the {!Operator} implemented inside the abstract {!Domains}.
+- {%html:<a href="../binsec_codex/index.html">BINSEC/Codex</a>%}: Binary code analysis implemented as a Codex-based BINSEC plugin. There, the {%html:<a href="../binsec_codex/Binsec_codex_lib/Dba2Codex/index.html">Dba2Codex</a>%} module which instantiates a stack of {!Domains}, and handles the translation form BINSEC's DBA intermediate language to Codex {!Operator}.
+- the {{!page-"While tutorial"}While tutorial} builds a complete analyzer for a simple while language.
+
+Note that using {!Tracelog} you can observe the recursive calls to the different domains, i.e. trace how the analysis of a source expression is handled by Codex.
+
+{1 Core static analysis modules }
+
+- {!Operator} : Definition of the concrete semantics of base objects like booleans, integers, bitvectors; and utilities around them (like function symbols).
+- {!Lattices} : Abstraction of a set; lattices representing abstraction of a single value the main way to exchange information in Codex.
+- {!Single_value_abstraction} : Combination of {!Lattices} abstracting a single value by {!Operator}.
+- {!Terms} : is the symbolic terms that is the target of our SSA-translation by abstract interpretation.
+- {!Types} : AST and parser used by the type-based analysis.
+- {!Domains} : The SSA/value-based domains, as well as the memory domains.
+
+{1 Optional static analysis modules}
+
+- {!Fixpoint} : A library that helps perform fixpoint computation.
+- {!Smtbackend} : Operates a translation of Terms to an SMT formula.
+
+
+{1 Utilities}
+
+- {!Codex_config} : Contains knobs allowing to change the behavior of some abstract domains. We generally avoid doing this, but it is useful for benchmarking.
+- {!Tracelog} The logger. Instantiate it on top of your module, then use [Log.debug(fun p -> p ...)] where p behaves like [Format.printf].
+- {!PatriciaTree} : Now a stand-alone submodule, but works specially well for abstract interpretation purposes.
+- {!Codex_log} is the old, deprecated, logger.
+
+
+{1:tutorials Tutorials}
+
+{2 Extending Codex to a simple while language}
+
+We present a tutorial on a simple imperative [while] language, and demonstrates
+how to statically analyze programs written in it using Codex, a modular abstract
+interpretation library. This also serves as a nice introduction to various codex
+components ({!Lattices}, {!Single_value_abstraction}, {!Domains}...). It is mostly
+meant for developers who wish to use and extend Codex.
+- {{!page-"While tutorial - chapter 1"}Chapter 1}: Contains the syntax which is defined with variables, arithmetic, boolean expressions, and control structures (e.g., [if] and [while]). It also provides a concrete interpreter for the [while] language;
+- {{!page-"While tutorial - chapter 2"}Chapter 2}: Describes {!Lattices} and {!Single_value_abstraction} with simpler implementations;
+- {{!page-"While tutorial - chapter 3"}Chapter 3}: Contains simple interval abstract domain which is then used to run the analysis on simple while programs;
+- {{!page-"While tutorial - chapter 4"}Chapter 4}: Shows how one can use Codex building blocks to recreate the interval domain from chapter 3.
+
+{2 Using the Codex type system for C and binary analysis}
+
+{{!page-"Types tutorial"}This tutorial} provides a user guide for the static analysis based on the
+dependent nominal type system presented in the
+{{: https://codex.top/papers/2024-oopsla-typedc-dependent-nominal-physical-type-system.html}OOPLSA 2024 paper}
+and implemented using Codex. It covers all the steps necessary to
+use our tool to check if a C or machine code program is exempt of spatial memory
+safety errors, such as null pointer dereferences, buffer overflows, or type
+confusion errors. It covers in particular:
+- How to run the analysis on a C program, how to configure the C analysis, and how to inspect the results.
+- How to run the analysis on a binary executable, how to configure the machine code analysis, and how to inspect the results.
+- How to specify the types used in a C programs to refine the results of the analysis (which is generally a necessary step to obtain memory safety).

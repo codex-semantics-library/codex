@@ -12,7 +12,7 @@ Codex has notably been used for automated verification of security properties of
 
 * Seeing it in action
 
-The repository example contains the results of a simple program (computing the absolute value of an integer) in both C and machine code analysis.  The results of the analysis can be presented as a standalone html file, that you can find for the C analysis [[./examples/abs.c.html][here]]. The binary analysis example ([[./examples/abs.exe.html][here]]) analyses the machine code version of same file, but is also given a type specification (which can be found [[./examples/abs.types][here]]) that restricts the possible values at the start of the program to be in some interval.
+The repository example contains the results of a simple program (computing the absolute value of an integer) in both C and machine code analysis.  The results of the analysis can be presented as a standalone html file, that you can find for the C analysis [[./examples/abs/abs.c.html][here]]. The binary analysis example ([[./examples/abs/abs.exe.html][here]]) analyses the machine code version of same file, but is also given a type specification (which can be found [[./examples/abs/abs.types][here]]) that restricts the possible values at the start of the program to be in some interval.
 
 Codex is capable of handling much more than these simple examples! We will soon provide tutorials to help you perform your own analyses, but you can already try Codex by replacing these examples by your own code.
 
@@ -26,39 +26,72 @@ Additionally, with this release, we aim to initiate the exportation of abstract 
 
 * Installation
 
-The installation instructions is summarized in the Dockerfile (that you can use to build with docker).
-
 ** Release binaries
 
-The simplest way to try Binsec/Codex and Frama-C/Codex is to download the compiled version.  It should work on any platform supporting the execution of x86-64bit linux executables (including WSL)
+The simplest way to try Binsec/Codex and Frama-C/Codex is to download the compiled version.  It should work on any platform supporting the execution of x86-64bit linux executables (including WSL).
+
+Codex should build without any issues on macOS, both x86 and ARM; however, macOS builds are not part of our continuous integration, and thus feature parity with Linux is not guaranteed.
+
 
 (note that framac_codex.exe is a stripped version of Frama-C, with no plugins and support for compiler builtins removed)
 
 ** Install from source
 
-The easiest way is to use opam ( https://opam.ocaml.org/ ).
+1. Install [[https://opam.ocaml.org/doc/Install.html][opam]], OCaml's package manager.
+    #+begin_src shell
+    $ apt install unzip bubblewrap git build-essential # opam dependencies
+    $ bash -c "sh <(curl -fsSL https://opam.ocaml.org/install.sh)"
+    $ opam init --bare
+    #+end_src
+    I recommend answering =y= to all questions opam asks.
 
-Just locally pin the package with:
+2. Install Codex's external dependencies
+    #+begin_src shell
+    $ apt install bc libgmp-dev liblmdb-dev \
+        pkg-config autoconf graphviz libexpat1-dev zlib1g-dev libcairo2-dev \
+        libexpat1-dev libgtk-3-dev libgtksourceview-3.0-dev libgnomecanvas2-dev \
+        cmake time z3 gcc-multilib libev-dev libssl-dev \
+        npm curl
+    #+end_src
+
+3. Create a new opam switch with OCaml 4.14.2 for codex
+    #+begin_src shell
+    $ opam switch create codex ocaml-base-compiler.4.14.2
+    $ eval $(opam env --switch=codex)
+    #+end_src
+
+4. If you simply want to use codex, simply run
+    #+begin_src shell
+    $ opam install .
+    #+end_src
+    which will install all dependencies and the packages. You can now use
+    Codex using the following commands
+    #+begin_src shell
+    $ frama-c -codex # Frama-C/Codex, use -codex-h to display CLI options
+    $ binsec_codex # Binsec/Codex, use -codex-h to display CLI options
+    #+end_src
+
+    However, if you also want to be able to change the code, you should instead run
+    #+begin_src shell
+    $ opam install . --with-test --deps-only # install dependencies
+    $ dune build # Build codex, re-run after any change
+    #+end_src
+    You can then run Codex with
+    #+begin_src shell
+    $ dune exec -- frama-c -codex # Frama-C/Codex, use -codex-h to display CLI options
+    $ dune exec -- binsec_codex # Binsec/Codex, use -codex-h to display CLI options
+    #+end_src
+    (Or, run =dune install= and then access them directly with =frama-c -codex=).
+
+** Using Nix
+
+Nix users can obtain a fully-fledged development environment with
 
 #+begin_src shell
-$ opam pin . -n
+$ nix develop ./devenv --impure
 #+end_src
 
-You can then install the different packages:
-
-#+begin_src shell
-$ opam install codex # For the codex library
-$ opam install binsec_codex # For the binsec_codex executable
-$ opam install frama_c_codex # For the frama_c_codex executable.
-#+end_src
-
-You can also install the Frama-c/Codex plugin if you already have a version of Frama-C installed.
-
-#+begin_src shell
-$ opam install frama_c_codex_plugin
-#+end_src
-
-*** Testing your frama_c_codex installation
+** Testing your frama_c_codex installation
 
 You can test that frama_c_codex is working by typing:
 
@@ -68,67 +101,24 @@ frama_c_codex -no-plugin-autoload -machdep x86_32 -codex test.c -codex-use-type-
 
 This should output an output.html with the results of the analysis, that you can inspect using your browser.
 
-** Working from source code locally
-
-*** Prerequisites
-
-Install opam:
-
-#+begin_src shell
-  sudo apt install opam # For debian
-  opam init --compiler 4.14.1 # Takes a while
-  eval $(opam env)
-#+end_src
-
-Install the dependencies:
-
-#+begin_src shell
-opam install frama-c binsec lmdb qcheck-core ppx_inline_test sexplib mlcuddidl bheap pacomb
-#+end_src
-
-Note: there is a bug in Frama-C >= 28.0 that breaks some of the testsg, so stick to 27.1 if this matters to you (e.g. if you develop new Codex features).
-
-*** Building the codex library
-
-#+begin_src shell
-dune build
-#+end_src
-
-*** Building Binsec/Codex
-
-#+begin_src shell
-  opam install binsec
-  dune build binsec/binsec_codex.exe
-#+end_src
-
-*** Installing Frama-C/Codex
-
-We need a patched version of Frama-C to link statically with cudd,
-that cannot be loaded dynamically.
-
-You can do it manually by adding "cudd" in the "libraries" field for
-the "frama_c_kernel" target in the file src/dune in Frama-C, which you
-should do if you otherwise use Frama-C.
-
-Otherwise, you can install a stripped-down version of Frama-C using this command:
-
-#+begin_src shell
-  make opam-install-frama-c-with-cudd
-#+end_src
-
-** Building a Docker image
+** Building and running Docker image
 
 You can build the docker image with
 
-	docker build -t codex -f Dockerfile.debian .
-
+#+begin_src shell
+$ docker build -t codex -f devenv/Dockerfile.debian .
+#+end_src
 (replace with Dockerfile.alpine for the alpine version).
-        
+
 You can then run the docker image with
+#+begin_src shell
+$ docker run -it --rm --name codex_debian codex:debian
+#+end_src
 
-        docker run -ti --network host codex bash
+Additionally, one can use docker to build the binaries and them extract them out
+of the docker image (using =docker copy=) and use them locally.
 
-* Structure of the source code        
+* Structure of the source code
 
 We describe the structure of the library top-down:
 
@@ -143,11 +133,11 @@ We describe the structure of the library top-down:
 - codex.fixpoint :: Fixpoint engines (for forward flow-sensitive analyses).
 - codex.domains :: Memory and numerical domains of Codex.
 - codex.types :: Code used by the type-based abstract domains , e.g. parser or types
-- codex.single_value_abstraction :: Abstraction of scalar values (e.g. interval, congruence, tristate/bitwise abstraction, etc.) including transfer functions.
+- codex.single_value_abstraction :: Non-relational abstraction of scalar values (e.g. interval, congruence, tristate/bitwise abstraction, etc.) including transfer functions.
 - codex.lattices ::  Lattices used in single_value_abstraction.
-- codex.constraints :: Symbolic expressions; this corresponds to the SSA expressions described in the "SSA Translation Is an Abstract Interpretation" POPL 2023 paper.
-- codex.smtbackend :: Translating the SSA/Symbolic constraints into a SMT formula for symbolic model-checking.
-- codex.transfer_functions :: Definitions of function symbols, syntax and semantics and their implementation in the concrete. The main file is Transfer_functions_sig.ml. Transfer_functions/term allows building terms containing Codex expressions.
+- codex.terms :: Symbolic expressions; this corresponds to the SSA expressions described in the "SSA Translation Is an Abstract Interpretation" POPL 2023 paper.
+- codex.smtbackend :: Translating the SSA/Symbolic terms into a SMT formula for symbolic model-checking.
+- codex.operator :: Definitions of basic operators (boolean operators like &&, arithmetic operators like +, etc.), syntax and semantics and their implementation in the concrete. The main module is Operator.Sig. Operator.Function_symbol allows building terms containing Codex expressions.
 - codex.codex_log  :: Logging facilities.
 - codex.codex_config  :: Compile-time configuration options.
 - utils ::  a collection of reusable datastructures and algorithms suitable to abstract interpretation, such as maps, sets etc.

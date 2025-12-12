@@ -1,7 +1,7 @@
 /**************************************************************************/
 /*  This file is part of the Codex semantics library.                     */
 /*                                                                        */
-/*  Copyright (C) 2013-2024                                               */
+/*  Copyright (C) 2013-2025                                               */
 /*    CEA (Commissariat à l'énergie atomique et aux énergies              */
 /*         alternatives)                                                  */
 /*                                                                        */
@@ -41,14 +41,14 @@ static inline uintnat clz(uintnat v){
   #endif
 #endif
 #ifdef _MSC_VER
-    int res = 0;     
-  #ifdef ARCH_SIXTYFOUR  
+    int res = 0;
+  #ifdef ARCH_SIXTYFOUR
     _BitScanReverse64(&res,v);
   #else
     _BitScanReverse(&res,v);
   #endif
     return res;
-#endif    
+#endif
 }
 
 /**************** Log2 (with rounding to the floor). ****************/
@@ -64,7 +64,7 @@ CAMLprim uintnat caml_int_builtin_log2 (value i){
 }
 
 CAMLprim uintnat caml_int_builtin_log2_untagged_unsafe (uintnat i){
-  return (8*sizeof(value) - 1 - clz(i));    
+  return (8*sizeof(value) - 1 - clz(i));
 }
 
 CAMLprim value caml_int_builtin_log2_byte (value i){
@@ -96,12 +96,12 @@ CAMLprim value caml_int_builtin_highest_bit_byte (value i){
 /**************** Find first set ****************/
 
 __attribute__((__always_inline__))
-static inline uintnat ffs(uintnat v){
+static inline uintnat myffs(uintnat v){
   /* Note: on a 64 bit platform, GCC's _builtin_ffs will perform a 32
      bit operation (even if the argument has type int). We have to use
      _builtin_ffsll instead. */
 #if __GNUC__
-  #ifdef ARCH_SIXTYFOUR  
+  #ifdef ARCH_SIXTYFOUR
     return __builtin_ffsll(v);
   #else
     return __builtin_ffs(v)
@@ -109,25 +109,25 @@ static inline uintnat ffs(uintnat v){
 #endif
 #ifdef _MSC_VER
 #error Not done. Maybe using BitScanReverse.
-#endif    
+#endif
 }
 
 
 CAMLprim uintnat caml_int_builtin_ffs (uintnat i){
   /* printf("FFS in C: %lx %lx %d\n", i, i >> 1, ffs(i >> 1)); */
   /* fflush(stdout);   */
-  return ffs(i >> 1);
+  return myffs(i >> 1);
 }
 
 
 CAMLprim uintnat caml_int_builtin_ffs_untagged (uintnat i){
   /* printf("FFS_UNTAGGUED in C: %lx %d\n", i, ffs(i)); */
   /* fflush(stdout);   */
-  return ffs(i);
+  return myffs(i);
 }
 
 CAMLprim value caml_int_builtin_ffs_byte (value i){
-  return Val_int(ffs(Int_val(i)));
+  return Val_int(myffs(Int_val(i)));
 }
 
 
@@ -135,21 +135,21 @@ CAMLprim value caml_int_builtin_ffs_byte (value i){
 __attribute__((__always_inline__))
 static inline uintnat ctz(uintnat v){
 #if __GNUC__
-  #ifdef ARCH_SIXTYFOUR  
+  #ifdef ARCH_SIXTYFOUR
     return __builtin_ctzll(v);
   #else
     return __builtin_ctz(v)
   #endif
 #endif
 #ifdef _MSC_VER
-    int res = 0;     
-  #ifdef ARCH_SIXTYFOUR  
+    int res = 0;
+  #ifdef ARCH_SIXTYFOUR
     _BitScanForward64(&res,v);
   #else
     _BitScanForward(&res,v);
   #endif
     return res;
-#endif    
+#endif
 }
 
 CAMLprim uintnat caml_int_builtin_ctz (value i){
@@ -168,7 +168,7 @@ CAMLprim value caml_int_builtin_ctz_byte (value i){
 __attribute__((__always_inline__))
 static inline uintnat popcount(uintnat v){
 #if __GNUC__
-  #ifdef ARCH_SIXTYFOUR  
+  #ifdef ARCH_SIXTYFOUR
     return __builtin_popcountll(v);
   #else
     return __builtin_popcount(v)
@@ -176,7 +176,7 @@ static inline uintnat popcount(uintnat v){
 #endif
 #ifdef _MSC_VER
   TODO
-#endif    
+#endif
 }
 
 CAMLprim uintnat caml_int_builtin_popcount_untagged (uintnat i){
@@ -184,7 +184,7 @@ CAMLprim uintnat caml_int_builtin_popcount_untagged (uintnat i){
   /* fflush(stdout); */
   /* On negative value, the highest bit in OCaml is duplicated when
      passed as a C value, and thus the popcount is too large by one.
-     We avoid a test by removing the value. */  
+     We avoid a test by removing the value. */
   return popcount(i << 1);
 }
 
@@ -197,5 +197,3 @@ CAMLprim uintnat caml_int_builtin_popcount (uintnat i){
 CAMLprim value caml_int_builtin_popcount_byte (value i){
   return Val_int(popcount(Int_val(i)));
 }
-
-

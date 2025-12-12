@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of the Codex semantics library.                     *)
 (*                                                                        *)
-(*  Copyright (C) 2013-2024                                               *)
+(*  Copyright (C) 2013-2025                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -21,14 +21,14 @@
 
 open Wto
 
-module type Node = sig
+module type NODE = sig
   type t
   val equal: t -> t -> bool
   val hash: t -> int
   val pretty: Format.formatter -> t -> unit
 end
 
-module Make(N : Node) = struct
+module Make(N : NODE) = struct
 
   let rec map_aux f acc = function
     | [] -> acc

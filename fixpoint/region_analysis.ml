@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of the Codex semantics library.                     *)
 (*                                                                        *)
-(*  Copyright (C) 2013-2024                                               *)
+(*  Copyright (C) 2013-2025                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -49,7 +49,7 @@
 
 include Region_analysis_sig;;
 
-module Make(N:Node):sig
+module Make(N:NODE):sig
   (* Function computing from an entry abstracat value the "after"
      state, which is a map from each outgoing edge to its respective
      value. *)

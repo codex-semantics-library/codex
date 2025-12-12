@@ -1,0 +1,42 @@
+{0 Tutorials}
+
+{%html:
+<!--parent=""-->
+<!--nav_order=1-->
+%}
+
+We have written a few tutorials to show how codex can be used and extended.
+
+{1 Quick start}
+
+There is a short {{!page-"Quick start"}quick start} tutorial that shows the
+steps needed to run Frama-C/codex on a simple C file. For a more in depth look
+at the interface, check out the {{!page-"Types tutorial"}types tutorial}.
+
+{1 Using Codex on a custom language}
+
+The {{!page-"While tutorial"}while tutorial} describes how Codex's components can be used to build
+an analyzer for a simple imperative [while] language. Along the way, it introduces
+many of the core components of codex. It is mostly intended for developers who
+want to use or extend the codex library.
+
+{1:tt Analyzing C or binary using Codex types}
+
+The {{!page-"Types tutorial"}types tutorial} presents Codex's refinement type system and how it
+can be used to precisely specify memory layouts.
+It was written to accompany the
+{{: https://codex.top/papers/2024-oopsla-typedc-dependent-nominal-physical-type-system.html}OOPLSA 2024} paper.
+It also describes the Frama-C/Codex
+and Binsec/Codex interfaces (command line arguments, terminal and HTML outputs...).
+
+It covers in particular:
+
+- How to run the analysis on a C program, how to configure the C
+  analysis, and how to inspect the results.
+- How to run the analysis on a binary executable, how to configure
+  the machine code analysis, and how to inspect the results.
+- How to specify the types used in a C programs to refine the results
+  of the analysis (which is generally a necessary step to obtain
+  memory safety).
+
+This one is more targeted to users wishing to use Codex to verify C or binary code.

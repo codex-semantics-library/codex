@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of the Codex semantics library.                     *)
 (*                                                                        *)
-(*  Copyright (C) 2013-2024                                               *)
+(*  Copyright (C) 2013-2025                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,13 +19,17 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(* A mutable dynamic array. Accept any positive index, and will grow as required. 
-   Trying to get an element that was not previously set, returns Not_found. *)
+(** A mutable dynamic array. Accept any positive index, and will grow as required.
+    Trying to get an element that was not previously set, returns Not_found. *)
 
 type 'a t
 
 val empty: unit -> 'a t        (* Maybe: initial capacity? *)
 val get: 'a t -> int -> 'a
 val set: 'a t -> int -> 'a -> unit
-val length: 'a t -> int         (* The length is the max of the indices used by set. *)
-val append: 'a t -> 'a -> unit  (* Appends according to the length. *)
+val length: 'a t -> int
+(** The length is the max of the indices used by set. Note that some elements
+    below length may not be set. *)
+
+val append: 'a t -> 'a -> unit
+(** Appends according to the length. *)

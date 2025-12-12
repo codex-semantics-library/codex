@@ -1,7 +1,0 @@
-fun_ptr.c:6.33-34: `a' -> {10}
-fun_ptr.c:16.6-12: `funptr' -> ([--..--] -> &fun}
-Unproved regular alarms:
-Unproved additional alarms:
-Proved 0/0 regular alarms
-Unproved 0 regular alarms and 0 additional alarms.
-Solved 0/0 user assertions, proved 0

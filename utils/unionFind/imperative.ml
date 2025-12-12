@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of the Codex semantics library.                     *)
 (*                                                                        *)
-(*  Copyright (C) 2013-2024                                               *)
+(*  Copyright (C) 2013-2025                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -22,7 +22,7 @@
 (** {1 Nodes} *)
 (** {2 Nodes without values (simple nodes)} *)
 
-module MakeSimpleNode
+module MakeNode
     (Elt : Parameters.SIMPLE_GENERIC_ELT)
     (Relation : Parameters.GENERIC_GROUP) =
 struct
@@ -42,32 +42,31 @@ struct
   let make_node payload = { payload; parent = Root }
 end
 
-module MakeSimpleNumberedNode
-    (Elt : PatriciaTree.HETEROGENEOUS_KEY)
-    (Relation : Parameters.GENERIC_GROUP) =
+module MakeNumberedNode
+    (Elt : HetHashtbl.HETEROGENEOUS_HASHED_TYPE)
+    (Relation : Parameters.GENERIC_GROUP)
+    () =
 struct
-  include MakeSimpleNode(Elt)(Relation)
+  include MakeNode(Elt)(Relation)
 
-  (** We could also use a [Hashmap] here (although it would require existential types) *)
-  module BuiltNodes = PatriciaTree.MakeHeterogeneousMap
-    (Elt)(struct type nonrec ('a, _) t = 'a t end)
+  module H = HetHashtbl.Make(Elt)(struct type nonrec ('a, _) t = 'a t end)
 
-  let nodes : unit BuiltNodes.t ref = ref BuiltNodes.empty
+  let nodes : unit H.t = H.create 100
   let make_node payload =
     let nd = make_node payload in
-    nodes := BuiltNodes.add payload nd !nodes;
+    H.add nodes payload nd;
     nd
 
-  let get_node payload = BuiltNodes.find_opt payload !nodes
+  let get_node payload = H.find_opt nodes payload
 
   let get_or_make_node payload = match get_node payload with
-  | Some t -> t
-  | None -> make_node payload
+    | Some t -> t
+    | None -> make_node payload
 end
 
 (** {2 Nodes with values} *)
 
-module MakeNode
+module MakeValuedNode
     (Elt : Parameters.SIMPLE_GENERIC_ELT)
     (Relation : Parameters.GENERIC_GROUP)
     (Value : Parameters.SIMPLE_GENERIC_VALUE with type ('a,'b) relation = ('a,'b) Relation.t) =
@@ -90,33 +89,58 @@ struct
   let make_node payload value = { payload; parent = Root { value; size = 1 } }
 end
 
-module MakeNumberedNode
-    (Elt : PatriciaTree.HETEROGENEOUS_KEY)
+module MakeValuedNumberedNode
+    (Elt : HetHashtbl.HETEROGENEOUS_HASHED_TYPE)
     (Relation : Parameters.GENERIC_GROUP)
-    (Value : Parameters.SIMPLE_GENERIC_VALUE with type ('a,'b) relation = ('a,'b) Relation.t) =
+    (Value : Parameters.SIMPLE_GENERIC_VALUE with type ('a,'b) relation = ('a,'b) Relation.t)
+    () =
 struct
-  include MakeNode(Elt)(Relation)(Value)
+  include MakeValuedNode(Elt)(Relation)(Value)
 
-  (** We could also use a [Hashmap] here (although it would require existential types) *)
-  module BuiltNodes = PatriciaTree.MakeHeterogeneousMap
-      (Elt)(struct type nonrec ('a, _) t = 'a t end)
+  module H = HetHashtbl.Make(Elt)(struct type nonrec ('a, _) t = 'a t end)
 
-  let nodes : unit BuiltNodes.t ref = ref BuiltNodes.empty
+  let nodes : unit H.t = H.create 100
   let make_node payload value =
     let nd = make_node payload value in
-    nodes := BuiltNodes.add payload nd !nodes;
+    H.add nodes payload nd;
     nd
 
-  let get_node payload = BuiltNodes.find_opt payload !nodes
+  let get_node payload = H.find_opt nodes payload
 
   let get_or_make_node payload value = match get_node payload with
     | Some t -> t
     | None -> make_node payload value
 end
 
+module HashtblSimpleNode
+  (Elt: HetHashtbl.HETEROGENEOUS_HASHED_TYPE)
+  (Relation: Parameters.GENERIC_GROUP)
+= struct
+  type 'a t = 'a Elt.t
+  type 'a parent =
+    | Node: 'b t * ('a, 'b) Relation.t -> 'a parent
+    | Root
+
+  let polyeq = Elt.polyeq
+
+  module H = HetHashtbl.Make(Elt)(struct type ('a, _) t = 'a parent end)
+
+  let table: unit H.t = H.create 125
+
+  let get_parent x = match H.find table x with
+    | x -> x
+    | exception Not_found -> Root
+
+  let set_parent x = function
+    | Root -> H.remove table x
+    | n -> H.replace table x n
+
+  module Relation = Relation
+end
+
 (** {1 Union find structures} *)
 
-module GenericRelationalValued(Node: Parameters.UF_NODE) =
+module GenericRelationalValued(Node: Parameters.UF_NODE_WITH_VALUE) =
 struct
   open Node
   type 'a t = 'a Node.t
@@ -208,7 +232,7 @@ struct
         Ok ()
 end
 
-module GenericRelational (Node : Parameters.SIMPLE_UF_NODE) =
+module GenericRelational (Node : Parameters.UF_NODE) =
 struct
   open Node
   type 'a t = 'a Node.t

@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of the Codex semantics library.                     *)
 (*                                                                        *)
-(*  Copyright (C) 2013-2024                                               *)
+(*  Copyright (C) 2013-2025                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,7 +19,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-module type Letter = sig
+module type LETTER = sig
   type t
   val equal : t -> t -> bool
   val pretty : Format.formatter -> t -> unit
@@ -53,7 +53,7 @@ type 'l tagged_regex =
   | Append of int * 'l tagged_regex * 'l
   | AppendStar of int * 'l tagged_regex * 'l tagged_regex
 
-module Make (L : Letter) : S
+module Make (L : LETTER) : S
     with type letter = L.t
     and type t = L.t tagged_regex
 = struct

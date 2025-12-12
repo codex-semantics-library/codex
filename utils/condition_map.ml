@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of the Codex semantics library.                     *)
 (*                                                                        *)
-(*  Copyright (C) 2013-2024                                               *)
+(*  Copyright (C) 2013-2025                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,6 +19,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
+[@@@warning "-32-34"]
+
 exception Never_refined
 
 module type L = sig
@@ -28,7 +30,7 @@ module type L = sig
   val hash: t -> int
 end  
 
-module type Condition = sig
+module type CONDITION = sig
   type t
   val pretty: Format.formatter -> t -> unit
   val all: t
@@ -48,7 +50,7 @@ end
 
 module type LConditionMapCommon = sig
   module L:L
-  module Cond:Condition
+  module Cond:CONDITION
   type t
   val pretty: (Format.formatter -> L.t -> unit) -> Format.formatter -> t -> unit
   val find: join:(L.t -> L.t -> L.t) -> bottom:L.t -> t -> Cond.t -> L.t
@@ -58,7 +60,6 @@ end
 
 module type LConditionMapNoPartial = sig
   include LConditionMapCommon
-  val create: L.t -> t
 end
 
 module type LConditionMap = sig
@@ -106,8 +107,8 @@ module FakeTop(L:L)(* :L with type t = L.t option *) = struct
   
 end
 
-module type TransferFunctions = sig
-  module Cond:Condition
+module type TRANSFER_FUNCTIONS = sig
+  module Cond:CONDITION
 
   type 'a t
 
@@ -155,7 +156,7 @@ module type TransferFunctions = sig
 
 end
 
-module ConditionMapTree(BDD:Condition) = struct
+module ConditionMapTree(BDD:CONDITION) = struct
 
   type 'a node_ =
     | Interior of 'a i * 'a i
@@ -226,7 +227,6 @@ module ConditionMapTree(BDD:Condition) = struct
     module Orig = Orig_(FL);;
     
     let pretty pp fmt x = Orig.pretty (FL.pretty pp) fmt x;;
-    let create _ = assert false
     
     let create_partial = Orig.create None
     
@@ -249,7 +249,7 @@ end
    cases. Merging partitions using lists is also not very
    efficient. So this structure should be used only for testing
    purpose, or expereminting changes in the interface. *)
-module ConditionMapPartitionList(BDD:Condition) = struct
+module ConditionMapPartitionList(BDD:CONDITION) = struct
 
   type 'a i = ('a * BDD.t) list
   (* type 'a i = Cons of ('a * BDD.t * 'a i option) *)
@@ -345,7 +345,7 @@ module ConditionMapPartitionList(BDD:Condition) = struct
 end
 
 (* Old version of ConditionMap where we use a fake top on the lattice. *)
-module ConditionMapPartitionOld(BDD:Condition) = struct
+module ConditionMapPartitionOld(BDD:CONDITION) = struct
 
   module MakeReal(L:L):LConditionMapFold
     with module L = L
@@ -519,7 +519,7 @@ module ConditionMapPartitionOld(BDD:Condition) = struct
 
 end
 
-module ConditionMapPartition(BDD:Condition) = struct
+module ConditionMapPartition(BDD:CONDITION) = struct
 
   module MakeReal(L:L):LConditionMapFold
     with module L = L
@@ -774,9 +774,9 @@ end
 
 (* Generic implementation. *)
 module MakePathInsensitive
-    (BDD:Condition)
+    (BDD:CONDITION)
     (M:sig type 'a t end)
-  :TransferFunctions with module Cond = BDD and type 'a t = 'a M.t                           
+  :TRANSFER_FUNCTIONS with module Cond = BDD and type 'a t = 'a M.t                           
 = struct
   module Cond =  BDD
 
@@ -866,9 +866,9 @@ end
 
 
 module MakePathSensitive
-    (BDD:Condition)
+    (BDD:CONDITION)
     (M:sig type 'a t end)
-  (* :TransferFunctions with module Cond = BDD and type 'a t = 'a M.t                            *)
+  (* :TRANSFER_FUNCTIONS with module Cond = BDD and type 'a t = 'a M.t                            *)
 = struct
   module Cond =  BDD
 

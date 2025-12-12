@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of the Codex semantics library.                     *)
 (*                                                                        *)
-(*  Copyright (C) 2013-2024                                               *)
+(*  Copyright (C) 2013-2025                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -59,6 +59,8 @@ let%test_module "TestUnionFind" = (module struct
     let pretty fmt (type a b) (x: (a, b) t) = match x with
       | Equal -> Format.fprintf fmt "Equal"
       | Add x -> Format.fprintf fmt "Add(%a)" Z.pp_print x
+
+    let pretty_with_terms _ _ _ _ _ _ = assert false
   end
 
   module Value (*: Parameters.GENERIC_VALUE*) = struct
@@ -130,7 +132,7 @@ let%test_module "TestUnionFind" = (module struct
     let top = Interval (None, None)
   end
 
-  module ImpNode = Imperative.MakeNode(Elt)(Relation)(Value)
+  module ImpNode = Imperative.MakeValuedNode(Elt)(Relation)(Value)
   module Imp = Imperative.GenericRelationalValued(ImpNode)
   module Fun = Functional.GenericRelationalValued(Elt)(Relation)(Value)
 

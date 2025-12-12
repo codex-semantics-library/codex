@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of the Codex semantics library.                     *)
 (*                                                                        *)
-(*  Copyright (C) 2013-2024                                               *)
+(*  Copyright (C) 2013-2025                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -21,14 +21,14 @@
 
 open Wto
 
-module type Node = sig
+module type NODE = sig
   type t
   val equal: t -> t -> bool
   val hash: t -> int
   val pretty: Format.formatter -> t -> unit
 end
 
-module Make(N : Node) : sig
+module Make(N : NODE) : sig
   (** [map f wto] applies [f] to every element of [wto] while conserving the
       w.t.o. structure. The second argument of [f] is [true] if the argument of
       [f] is a head. *)

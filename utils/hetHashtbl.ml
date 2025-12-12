@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of the Codex semantics library.                     *)
 (*                                                                        *)
-(*  Copyright (C) 2013-2024                                               *)
+(*  Copyright (C) 2013-2025                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -152,8 +152,6 @@ module MakeSeeded(Key: HETEROGENEOUS_SEEDED_HASHED_TYPE)(Value: PatriciaTree.HET
         r
 
   let copy h = { h with data = Array.map copy_bucketlist h.data }
-
-  let length h = h.size
 
   let key_index h key = (Key.hash h.seed key) land (Array.length h.data - 1)
 

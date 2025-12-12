@@ -1,1 +1,0 @@
-void test(int+ ptr);

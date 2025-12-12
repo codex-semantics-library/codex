@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of the Codex semantics library.                     *)
 (*                                                                        *)
-(*  Copyright (C) 2013-2024                                               *)
+(*  Copyright (C) 2013-2025                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -27,7 +27,6 @@ val printf : string -> last:bool -> ('a, Format.formatter, unit) format -> 'a
 
 val open_nesting: unit -> unit
 val close_nesting: unit -> unit
-
 
 (** Whether to use unicode.
     - Yes: directly display unicode character.

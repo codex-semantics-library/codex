@@ -1,0 +1,4 @@
+- Improve support for trace: handle more things in the read-only
+  portion of trace, by building some packed data structure which is a
+  map from continuously-increasing trace ids, to the correct position
+  in the file.

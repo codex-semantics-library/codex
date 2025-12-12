@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;  This file is part of the Codex semantics library.                     ;;
 ;;                                                                        ;;
-;;  Copyright (C) 2013-2024                                               ;;
+;;  Copyright (C) 2013-2025                                               ;;
 ;;    CEA (Commissariat à l'énergie atomique et aux énergies              ;;
 ;;         alternatives)                                                  ;;
 ;;                                                                        ;;
@@ -19,52 +19,64 @@
 ;;                                                                        ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(dirs :standard \ cfg tests bench benchmarks unused )
+(dirs :standard \ cfg bench benchmarks unused)
+
 (vendored_dirs odvtk)
 
 (env
- (dev 
-  (flags (:standard -warn-error -a+31 -w -16-32-26-9-27-34-20-67-70)))
- (staticrelease 
-  (flags (:standard -ccopt -static -warn-error -a+31 -w -16-32-26-9-27-34-20-67-70)))  
- (release
-;   (flags (:standard ))) 
-    (ocamlopt_flags (:standard -O3)))
- )
+ (dev
+  (flags
+    ; -9: missing record field pattern, forces us to write {field;_}, disabled and very annoying
+    ; -27: unused variable, quite annoying during development, but can lead to dead code discovery, should be disabled and we should regurarly inspects the errors it yields 
+    ;  -67: unused fonctor parameter; this one is odd, as it can leads to discovering modules being unused, but it is also applied to .mli files where we often dont use the module arguments of a functor in the resulting signature, but the name of the argument itself convey meaning about what the functor does
+    ;  -70, an .mli file is specified without its implementation. This is actually very usefull during development
 
+    ; +31: a module is linked twice with the same executable, should be left as fatal
+   (:standard -warn-error -a+31 -w -9-27-67-70)))
+ (staticrelease
+  (flags
+   (:standard -ccopt -static -warn-error -a+31 -w -16-32-26-9-27-34-20-67-70)))
+ (release
+  ;   (flags (:standard )))
+  (ocamlopt_flags
+   (:standard -O3))))
 
 (library
  (public_name "codex.codex_log")
  (name codex_log)
- (libraries tracelog)
- (modules codex_log)
-)
-
+ (libraries tracelog operator)
+ (modules codex_log))
 
 (library
  (public_name "codex.codex_config")
  (name codex_config)
  (modules codex_config)
- (libraries zarith)
-)
+ (libraries codex.units tracelog zarith))
 
 (library
  (public_name "codex")
  (name codex)
  (modules codex)
- (libraries (re_export codex.transfer_functions)
-	    (re_export codex.fixpoint)
-	    (re_export codex.codex_config)
-	    (re_export codex.datatype_sig)
-	    (re_export codex.extstdlib)
-	    (re_export codex.framac_ival)	    
-	    (re_export codex.constraints)	    
-	    (re_export codex.lattices)
-	    (re_export codex.single_value_abstraction)
-	    (re_export codex.smtbackend)
-	    (re_export codex.codex_log)
-	    (re_export tracelog)
-	    (re_export codex.types)
-	    (re_export codex.utils.mutable_radix_trie)
-	    (re_export codex.domains)))
+ (libraries
+  (re_export codex.hook)
+  (re_export codex.interval_map)
+  (re_export codex.operator)
+  (re_export codex.fixpoint)
+  (re_export codex.codex_config)
+  (re_export codex.datatype_sig)
+  (re_export codex.extstdlib)
+  (re_export codex.framac_ival)
+  (re_export codex.terms)
+  (re_export codex.lattices)
+  (re_export codex.single_value_abstraction)
+  (re_export codex.smtbackend)
+  (re_export codex.codex_log)
+  (re_export tracelog)
+  (re_export codex.types)
+  (re_export codex.union_find)
+  (re_export codex.domains)
+  (re_export codex.gui)
+))
 
+(documentation
+ (package codex))

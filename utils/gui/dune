@@ -1,0 +1,88 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;  This file is part of the Codex semantics library.                     ;;
+;;                                                                        ;;
+;;  Copyright (C) 2013-2025                                               ;;
+;;    CEA (Commissariat à l'énergie atomique et aux énergies              ;;
+;;         alternatives)                                                  ;;
+;;                                                                        ;;
+;;  you can redistribute it and/or modify it under the terms of the GNU   ;;
+;;  Lesser General Public License as published by the Free Software       ;;
+;;  Foundation, version 2.1.                                              ;;
+;;                                                                        ;;
+;;  It is distributed in the hope that it will be useful,                 ;;
+;;  but WITHOUT ANY WARRANTY; without even the implied warranty of        ;;
+;;  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         ;;
+;;  GNU Lesser General Public License for more details.                   ;;
+;;                                                                        ;;
+;;  See the GNU Lesser General Public License version 2.1                 ;;
+;;  for more details (enclosed in the file LICENSE).                      ;;
+;;                                                                        ;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule
+  (targets binsec_webapp_string.ml binsec_webapp_string.mli)
+  (deps js/binsec_webapp.bc.js)
+  (action
+    (run ocaml-embed-file %{deps} -output binsec_webapp_string)))
+
+(rule
+  (targets tailwindcss_string.ml tailwindcss_string.mli)
+  (deps deps/tailwind4.1.5.css)
+  (action
+    (run ocaml-embed-file %{deps} -output tailwindcss_string)))
+
+(rule
+  (targets graphviz_string.ml graphviz_string.mli)
+  (deps deps/graphviz.umd.js)
+  (action
+    (run ocaml-embed-file %{deps} -output graphviz_string)))
+
+; (rule
+;   (targets d3_string.ml d3_string.mli)
+;   (deps deps/d3.v7.min.js)
+;   (action
+;     (run ocaml-embed-file %{deps} -output d3_string)))
+
+; (rule
+;   (targets d3_graphviz_string.ml d3_graphviz_string.mli)
+;   (deps deps/d3-graphviz.min.js)
+;   (action
+;     (run ocaml-embed-file %{deps} -output d3_graphviz_string)))
+
+
+
+(rule
+  (targets bundle_string.ml bundle_string.mli)
+  (deps deps/js/bundle-output.js)
+  (action
+    (run ocaml-embed-file %{deps} -output bundle_string)))
+
+
+; (rule
+;   (targets clusterizecss_string.ml clusterizecss_string.mli)
+;   (deps deps/clusterize.css)
+;   (action
+;     (run ocaml-embed-file %{deps} -output clusterizecss_string)))
+
+; (rule
+;   (targets clusterizeminjs_string.ml clusterizeminjs_string.mli)
+;   (deps deps/clusterize.min.js)
+;   (action
+;     (run ocaml-embed-file %{deps} -output clusterizeminjs_string)))
+
+(library 
+  (name interface)
+  (public_name codex.gui.interface)
+  (libraries codex.syntax_tree codex.binarytrace)
+  (modules interface))
+
+
+(library 
+  (name gui)
+  (public_name codex.gui)
+  (libraries codex.file_to_html unix base64 (re_export codex.gui.interface)
+  	     codex.syntax_tree)
+  (modules :standard \ interface))
+
+(documentation
+  (package codex))

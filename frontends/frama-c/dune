@@ -1,0 +1,67 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;  This file is part of the Codex semantics library.                     ;;
+;;                                                                        ;;
+;;  Copyright (C) 2013-2025                                               ;;
+;;    CEA (Commissariat à l'énergie atomique et aux énergies              ;;
+;;         alternatives)                                                  ;;
+;;                                                                        ;;
+;;  you can redistribute it and/or modify it under the terms of the GNU   ;;
+;;  Lesser General Public License as published by the Free Software       ;;
+;;  Foundation, version 2.1.                                              ;;
+;;                                                                        ;;
+;;  It is distributed in the hope that it will be useful,                 ;;
+;;  but WITHOUT ANY WARRANTY; without even the implied warranty of        ;;
+;;  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         ;;
+;;  GNU Lesser General Public License for more details.                   ;;
+;;                                                                        ;;
+;;  See the GNU Lesser General Public License version 2.1                 ;;
+;;  for more details (enclosed in the file LICENSE).                      ;;
+;;                                                                        ;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule
+  (alias frama-c-configure)
+  (deps (universe))
+  (action ( progn
+            (echo "Codex:" %{lib-available:frama_c_codex.core} "\n")
+            (echo " - Frama-C:" %{lib-available:frama-c.kernel} "\n"))))
+
+(env
+ (dev
+  (flags (:standard -warn-error -a+31 -w -16-32-26-9-27-34-20-67-70)))
+ (release
+  (ocamlopt_flags (:standard -O3))
+  )
+ )
+
+(library
+  (name core)
+  (public_name frama_c_codex.core)
+  (modules :standard \ frama_c_codex)
+  (libraries fmt codex frama-c.kernel zarith patricia-tree codex.union_find codex.hashing codex.emit_alarm codex.binarytrace codex.units))
+
+(plugin
+  (name frama_c_codex_plugin)
+  (package frama_c_codex)
+  (libraries frama_c_codex.core)
+  (site (frama-c plugins)))
+
+
+;; The standalone frama_c_codex.exe executable can be executed without
+;; having to use dune exec, which is useful e.g. to run tests in
+;; parallel or to compare two versions of codex. This is the prefered
+;; method to do tests with codex.
+(executable
+ (name frama_c_codex)
+ (public_name frama_c_codex)
+ (package frama_c_codex)
+ (modules frama_c_codex)
+ (flags :standard -open Frama_c_kernel -linkall)
+ (libraries frama-c.kernel frama-c.init.cmdline frama_c_codex.core codex ))
+
+(documentation
+ (package frama_c_codex))
+
+;; Local Variables:
+;; mode: lisp
+;; End:

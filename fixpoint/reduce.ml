@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of the Codex semantics library.                     *)
 (*                                                                        *)
-(*  Copyright (C) 2013-2024                                               *)
+(*  Copyright (C) 2013-2025                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -26,7 +26,7 @@
  * NOTE: This algorithm's complexity and correctness has only been established
  * if there is at most one edge between two nodes (as should be the case in a
  * CFG)! *)
-module type GraphI = sig
+module type GRAPHI = sig
   type t
 
   module V : sig
@@ -48,7 +48,7 @@ module type GraphI = sig
   val fold_pred_e : (E.t -> 'a -> 'a) -> t -> V.t -> 'a -> 'a
 end
 
-module Make (G : GraphI) (R : Regex.S with type letter = G.E.t) = struct
+module Make (G : GRAPHI) (R : Regex.S with type letter = G.E.t) = struct
 
   type state = (G.V.t, R.t) Hashtbl.t
 

@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;  This file is part of the Codex semantics library.                     ;;
 ;;                                                                        ;;
-;;  Copyright (C) 2013-2024                                               ;;
+;;  Copyright (C) 2013-2025                                               ;;
 ;;    CEA (Commissariat à l'énergie atomique et aux énergies              ;;
 ;;         alternatives)                                                  ;;
 ;;                                                                        ;;
@@ -22,9 +22,18 @@
 (library
  (public_name codex.single_value_abstraction)
  (name Single_value_abstraction)
- (libraries zarith tracelog codex.transfer_functions codex.lattices
-	    codex.datatype_sig
-	    codex.framac_ival)
-; (modules :standard \ bitwise_basis binary_test)
-; (modules :standard \  binary_test) 
- )	
+ (libraries
+  zarith
+  tracelog
+  codex.hook
+  codex.operator
+  codex.lattices
+  codex.datatype_sig
+  codex.framac_ival
+  codex.hashing
+  codex.record_time
+  codex.units
+  codex.stats)
+ ; (modules :standard \ bitwise_basis binary_test)
+ ; (modules :standard \  binary_test)
+ )

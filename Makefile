@@ -1,7 +1,7 @@
 ##########################################################################
 #  This file is part of the Codex semantics library.                     #
 #                                                                        #
-#  Copyright (C) 2013-2024                                               #
+#  Copyright (C) 2013-2025                                               #
 #    CEA (Commissariat à l'énergie atomique et aux énergies              #
 #         alternatives)                                                  #
 #                                                                        #
@@ -19,62 +19,98 @@
 #                                                                        #
 ##########################################################################
 
-# See "make help" for a list of targets and brief documentation
+include Makefile.common
 
-# set to ON/OFF to toggle ANSI escape sequences
-COLOR = ON
+.PHONY: help
+help:: ## Show this help
+	$(call PRINT_HELP,)
+	@make -C frontends/frama-c help
+	@make -C frontends/binsec help
 
-# padding for help on targets
-# should be > than the longest target
-HELP_PADDING = 20
 
-ifeq ($(COLOR),ON)
-	color_yellow = \033[93;1m
-	color_orange = \033[33m
-	color_red    = \033[31m
-	color_green  = \033[32m
-	color_blue   = \033[34;1m
-	color_reset  = \033[0m
+################ Stage 1: get dependencies. ################
+
+
+.PHONY: deps
+deps:	## Download and build all the non-ocaml dependencies
+# including for the submodules if they are present.
+	make -C utils/gui/deps
+ifneq ($(wildcard utils/cudd.ml/.git),)
+	make -C utils/cudd.ml deps
 endif
 
-test.opt:  ## Build and run frama-c/codex on root/test.c
-	cd frama-c && make test.opt
-.PHONY: test.opt
+################ Stage 2: build. ################
 
-tests.opt:  ## Build and run frama-c/codex on all tests
-	cd frama-c && make tests.opt
-.PHONY: tests.opt
-
-test.diff:  ## Same as test.opt, but shows a diff with installed version of codex
-	cd frama-c && make test.diff
-.PHONY: test.diff
-
-dune: ## Build the project with dune
+build: ## Build the codex library
 	dune build
-.PHONY: dune
+.PHONY: build
 
-binsec: ## Build binsec_codex.exe
-	dune build binsec/binsec_codex.exe
-.PHONY: binsec
+frontends: frontends/frama-c frontends/binsec ## Builds every frontend
 
-frama_c_codex: ## Build frama_c_codex.exe
-	dune build frama-c/frama_c_codex.exe
-	dune build -p codex,frama_c_codex
-.PHONY: frama_c_codex
+frontends/frama-c: ## Builds frama_c_codex.exe and the Codex plugin for Frama-C.
+	make -C frontends/frama-c build
 
-frama_c_codex_plugin: ## Build the codex frama-c plugin
-	dune build frama-c/frama_c_codex.exe
-	dune build -p codex,frama_c_codex,frama_c_codex_plugin
-.PHONY: frama_c_codex_plugin
+frontends/binsec: ## Builds the Codex plugin for Binsec.
+	make -C frontends/binsec build
+
+.PHONY: frontends/frama-c frontends/binsec frontends
 
 clean: ## Remove build files and executable
 	dune clean
 .PHONY: clean
 
 doc: ## Build the documentation (accessible at _build/default/_doc/_html)
-	dune build --display short @doc-private
+	dune build @doc
+#	dune build --display short @doc-private
 	@echo "$(color_yellow)Browse doc at _build/default/_doc/_html/index.html$(color_reset)"
 .PHONY: doc
+
+################ Stage 3: tests and benchmarks ################
+
+unit_tests:  ## Unit tests (run with dune test)
+	dune test
+
+
+
+benchmarks/types-benchmarks:
+	git submodule update --init -- benchmarks/types-benchmarks
+.PHONY: benchmarks/types-benchmarks
+
+c_types_Olden_%: benchmarks/types-benchmarks
+	cd benchmarks/types-benchmarks && make c_Olden/$*
+c_types_%: benchmarks/types-benchmarks
+	cd benchmarks/types-benchmarks && make c_$*
+c_types: $(addprefix c_types_, contiki_list linux_rbtree vmcai2022 \
+	   $(addprefix Olden_, bh bisort em3d health mst perimeter \
+			 	power treeadd tsp voronoi))
+binsec_vmcai2022: benchmarks/types-benchmarks
+	cd tests/vmcai2022/liSemanticDirected2017 && make regression
+
+c_small_types:  ## CI target for 'tests:c:small-types'
+	cd tests/types && make c_analysis
+
+
+alltests: unit_tests c_types binsec_vmcai2022 c_small_types  ## Run most of the CI's jobs
+
+
+simplebin:
+	cd tests/vmcai2022/liSemanticDirected2017 && dune exec binsec_codex -- -codex -codex-debug-level 0 kennedy-O0.exe -entrypoint merge -codex-type-file kennedy_types.c -codex-output-html out.html
+
+
+test.opt:  ## Build and run frama-c/codex on root/test.c
+	cd frontends/frama-c && make test.opt
+.PHONY: test.opt
+
+frama_c_codex:
+	dune build frama-c/frama_c_codex.exe
+	dune build -p codex,frama_c_codex
+.PHONY: frama_c_codex
+
+frama_c_codex_plugin:
+	dune build frama-c/frama_c_codex.exe
+	dune build -p codex,frama_c_codex,frama_c_codex_plugin
+.PHONY: frama_c_codex_plugin
+
 
 docker:
 	docker build -t codex .
@@ -88,11 +124,10 @@ binsec_codex.exe frama_c_codex.exe: Dockerfile.alpine ## Build static version of
 install-opam:
 	opam init --compiler 4.14.1
 
-# We need a patched version of Frama-C. If you have opam,
-# just type make opam-install-frama-c-with-cudd.
-opam-install-frama-c-with-cudd: ## Install patched version of frama-c for codex
+# Install patched version of frama-c for codex
+install-frama-c:
 	cd ext/frama_c_with_cudd && make
-.PHONY: opam-install-frama-c-with-cudd
+.PHONY: install-frama-c
 
 .PHONY: dependency_graph.png
 dependency_graph.png: ## Generate the library dependency graph
@@ -104,20 +139,24 @@ FIND_EXCLUDE = -not -path './_build/*'
 FIND_EXCLUDE += -not -path './ext/frama_c_with_cudd/frama-c*'
 FIND_EXCLUDE += -not -path './.git/*'
 FIND_EXCLUDE += -not -path './tests/*'
-FIND_EXCLUDE += -not -path './frama-c/tests/*'
+FIND_EXCLUDE += -not -path './frontends/frama-c/tests/*'
 FIND_EXCLUDE += -not -path './benchmarks/*'
+FIND_EXCLUDE += -not -path './doc/types-tutorial/*.c'
+FIND_EXCLUDE += -not -path './doc/getting-started/test.c'
 
-UPDATED_EXTENSIONS = mli ml c h
+UPDATED_EXTENSIONS = *.mli *.ml *.mll *.mly *.c *.h dune dune-project Dockerfile* *.ini *.el
 
 .PHONY: update_headers
 update_headers: ## Update file headers using headache
-	echo '$(patsubst %, -o -name "%", $(UPDATED_EXTENSIONS))'
+	which headache && echo $(patsubst %, -o -name "%", $(UPDATED_EXTENSIONS))
 	find . $(FIND_EXCLUDE) -type f \
-	\( -name "*.ml" -o -name "*.mli" -o -name "*.mll" -o -name "*.mly" \
-	-o -name "*.c" -o -name "*.h" \
-	-o -name "dune" -o -name "dune-project" -o -name "Makefile" \
-	-o -name "Dockerfile.*" -o -name "*.ini" -o -name "*.el" \) \
-	-exec headache -c headers/headache_config.txt -h headers/CEA_LGPL21 {} \;
+	\( -name Makefile $(patsubst %, -o -name "%", $(UPDATED_EXTENSIONS)) \) \
+	-exec headache -c devenv/headers/headache_config.txt -h devenv/headers/CEA_LGPL21 {} \;
+	find utils/patricia-tree -type f \
+	$(patsubst %, -not -path 'utils/patricia-tree/%', .git* *.md *.mld LICENSE *.opam) \
+	-exec headache -c devenv/headers/headache_config.txt -h devenv/headers/CEA_LGPL21_patricia-tree {} \;
+
+
 
 
 
@@ -144,7 +183,7 @@ EXTRA_EXCLUDE += -not -path './*.orig'
 EXTRA_EXCLUDE += -not -path './*.patch'
 
 .PHONY: check_missing_files
-check_missing_files: ## Check for files not update by update_headers
+update_headers_missing_files: ## Check for files not update by update_headers
 	@echo "Generating the list of files whose headers we do not maintain"
 	find . -type f $(EXTRA_EXCLUDE) -print
 
@@ -157,8 +196,3 @@ source-distrib:
 	rm -Rf codex-$$CUR/frama-c/tests && \
 	tar czf codex-$$CUR.tar.gz codex-$$CUR && \
 	echo "Created file "`pwd`"/codex-"$$CUR".tar.gz"
-
-.PHONY: help
-help:: ## Show this help
-	@echo "$(color_yellow)make codex:$(color_reset) list of useful targets :"
-	@egrep -h '\s##\s' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(color_blue)%-$(HELP_PADDING)s$(color_reset) %s\n", $$1, $$2}'

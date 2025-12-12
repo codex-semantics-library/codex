@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of the Codex semantics library.                     *)
 (*                                                                        *)
-(*  Copyright (C) 2013-2024                                               *)
+(*  Copyright (C) 2013-2025                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,7 +19,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-module type AbstractDomain = sig
+module type ABSTRACTDOMAIN = sig
 
   (* An abstract domain is a lattice... *)
   type t
@@ -43,25 +43,21 @@ module type AbstractDomain = sig
 
 end
 
-
-(* Helper for hash functions. *)
-let sdbm x y = y + (x lsl 16) + (x lsl 6) - x;;
-
 (* This module defines functions for fixpoint computation over Bourdoncle's weak topological ordering.
      The recursive and iterative strategies are defined by Bourdoncle (we only have a small trick
      in the iterative strategy, to avoid recomputations at the nodes at the beginning of a component
      if things are already propagated.) *)
-module WTOFixpoint(L:AbstractDomain) = struct
+module WTOFixpoint(L:ABSTRACTDOMAIN) = struct
 
 
-  module CLMap = Okasakimap.Make(L.ControlLocation)
+  module CLMap = PatriciaTree.MakeMap(L.ControlLocation)
 
   (* We store the values on the edges between cls. *)
   module CLPair = Datatype_sig.Prod2(L.ControlLocation)(L.ControlLocation);;
 
   (* Note: maps are faster than hashtbls here. Okasakimaps and regular maps are almost equally fast, with a small advantage to Okasaki maps. *)
   (* module CLPairMap = Map.Make(CLPair);; *)
-  module CLPairMap = Okasakimap.Make(struct
+  module CLPairMap = PatriciaTree.MakeMap(struct
       include CLPair
       let to_int (a,b) =
         assert(L.ControlLocation.to_int a < 1 lsl 32);
@@ -70,8 +66,6 @@ module WTOFixpoint(L:AbstractDomain) = struct
     end);;
 
   module CLPairHash = Hashtbl.Make(CLPair);;
-
-  let hashtbl:L.t CLPairHash.t = CLPairHash.create 1000;;
 
   let reduce = function
     | [] -> L.bottom
@@ -93,7 +87,7 @@ module WTOFixpoint(L:AbstractDomain) = struct
   ;;
 
   let update prestate node (edgemap,clmap) =
-    let clmap = CLMap.add node prestate clmap in 
+    let clmap = CLMap.add node prestate clmap in
     (* Self.feedback "Update cl %d %a %a\n" node.Cil_types.sid Cil_datatype.Cl.pretty node L.pp prestate; *)
     (* let l = pre init node acc in *)
     let result = L.transfer node prestate in
@@ -113,7 +107,7 @@ module WTOFixpoint(L:AbstractDomain) = struct
       | Wto.Node n ->
         let prestate = pre init n acc in
         update prestate n acc
-      | Wto.Component(head,part) as c ->
+      | Wto.Component(head,part) ->
         let head_prestate = pre init head acc in
         (* Note: if we don't pass acc here and start from the old acc for every loop,
            it works but is much slower. Check why and see the algorithm in the paper. *)
@@ -141,7 +135,7 @@ module WTOFixpoint(L:AbstractDomain) = struct
       let rec loop_update_component c acc =
         (* Printf.printf "Loop update component\n"; *)
         match c with
-        | Wto.Node n -> 
+        | Wto.Node n ->
           let prestate = pre init n acc in
           update prestate n acc
         | Wto.Component(head,part) ->
@@ -155,7 +149,7 @@ module WTOFixpoint(L:AbstractDomain) = struct
           in loop_update_partition tl acc
       in
 
-      (* We don't know if we have to redo one iteration: we check and do not update 
+      (* We don't know if we have to redo one iteration: we check and do not update
          as long as we can.  We return true while the fixpoint is reached. *)
       let rec loop_check_component c ((edgemap,clmap) as acc) =
         (* Printf.printf "Loop check component\n"; *)
@@ -203,7 +197,7 @@ module WTOFixpoint(L:AbstractDomain) = struct
                not the ones that do only checks. So we update numiter
                here (fp_reached false => we did some updates) *)
             let numiter = numiter + 1 in
-            max_iterations := max numiter !max_iterations; 
+            max_iterations := max numiter !max_iterations;
             loop numiter acc
           end
         in loop 1 acc

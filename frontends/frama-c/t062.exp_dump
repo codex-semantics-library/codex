@@ -1,0 +1,13 @@
+reduce.c:7.28-29: `m' -> [0..0x7FFFFFFD],0%5
+reduce.c:10.15-16: `j' -> [0..0x7FFFFFFD],0%5
+reduce.c:10.18-19: `k' -> [0..0x7FFFFFFD],0%5
+reduce.c:11.8-13: `b + 5' -> [5..0x7FFFFFFD],0%5
+reduce.c:11.8-9: `b' -> [0..0x7FFFFFFD],0%5
+reduce.c:12.8-9: `j' -> [0..0x7FFFFFFD],0%5
+reduce.c:13.8-9: `i' -> [5..0x7FFFFFFD],0%5
+reduce.c:14.8-9: `g' -> {0; 5}
+Unproved alarms:
+Additional alarms:
+Proved 0/0 alarms
+Unproved 0 regular alarms and 0 additional alarms.
+Solved 0/0 user assertions, proved 0

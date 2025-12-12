@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of the Codex semantics library.                     *)
 (*                                                                        *)
-(*  Copyright (C) 2013-2024                                               *)
+(*  Copyright (C) 2013-2025                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,16 +19,18 @@
 (*                                                                        *)
 (**************************************************************************)
 
-let name = "Collecting";;
+let _name = "Collecting";;
 
-include Quadrivalent_basis;;
+include Sva_quadrivalent;;
+
+module In_bits = Units.In_bits
 
 (* Quadrivalent viewed as a set. *)
 module Quadrivalent = struct
   include Boolean_Lattice;;
 
   let empty = Bottom
-  
+
   let add bool x = match x,bool with
     | Top, _ -> Top
     | True, true -> True
@@ -39,41 +41,36 @@ module Quadrivalent = struct
     | Bottom, true -> True
   ;;
 
-  
+
 end
 
-module ZSet = Lattices.BVSet.ZSet;;                    
-module Binary_Lattice = struct
+module ZSet = Lattices.BVSet.ZSet;;
+module Bitvector_Lattice = struct
+  include Lattices.Unimplemented.Bitvector_Lattice(struct
+      type t = Lattices.BVSet.t
+      let loc = __LOC__
+    end)
   include Lattices.BVSet;;
   let widen ~size ~previous x = join ~size previous x
-  let includes_or_widen ~size ~previous x = assert false
-  let includes ~size _ = assert false
   let is_bottom ~size x = x = ZSet.empty
 end
 
-module Concrete = Transfer_functions.Concrete.Bitvector_Interp
+module Concrete = Operator.Concrete.Bitvector_Interp
 
-type binary = Binary_Lattice.t
+type bitvector = Bitvector_Lattice.t
 
 [@@@ocaml.warning "-38"]
-exception Empty = Transfer_functions.Concrete.Empty
-[@@@ocaml.warning "+38"]                    
+exception Empty = Operator.Concrete.Empty
+[@@@ocaml.warning "+38"]
 
-let binary_is_empty ~size x = ZSet.is_empty x
-let binary_empty = 3
-let binary_fold_crop ~size _ ~inf ~sup = assert false
-let binary_is_singleton ~size = assert false
-let binary_to_known_bits ~size = assert false
-let binary_to_ival ~signed ~size = assert false
-                     
-module Binary_Forward = struct
+module Bitvector_Forward = struct
 
   let lift1 op a =
     ZSet.fold(fun a acc ->
         ZSet.add (op a) acc) a ZSet.empty
   ;;
 
-  
+
   let lift2 op a b =
     ZSet.fold (fun a acc ->
         ZSet.fold(fun b acc ->
@@ -89,67 +86,59 @@ module Binary_Forward = struct
   ;;
 
   let biconst ~size k = ZSet.singleton k
-  
-  
-  (* Note: this changes also the sign bit in Zarith, but we do not use it. *)
-  let bnot ~size = lift1 (fun x -> Z.extract ( Z.(~!) x) 0 size)
+
   let band ~size = lift2 (Z.(land));;
   let bor  ~size = lift2 (Z.(lor));;
   let bxor ~size = lift2 (Z.(lxor));;
-  let biadd ~size ~nsw ~nuw ~nusw = lift2 (Concrete.biadd ~size ~nsw ~nuw ~nusw);;
-  let bisub ~size ~nsw ~nuw ~nusw = lift2 (Concrete.bisub ~size ~nsw ~nuw ~nusw);;
-  let bimul ~size ~nsw ~nuw = lift2 (Concrete.bimul ~nsw ~nuw ~size);;
+  let biadd ~size ~flags = lift2 (Concrete.biadd ~size ~flags);;
+  let bisub ~size ~flags = lift2 (Concrete.bisub ~size ~flags);;
+  let bimul ~size ~flags = lift2 (Concrete.bimul ~flags ~size);;
+  let bimul_add ~size ~prod ~offset = lift1 (fun x -> Z.(prod * x + offset))
   let bisdiv ~size = lift2 (Concrete.bisdiv ~size);;
-  let biudiv ~size = lift2 (Concrete.biudiv ~size);;        
+  let biudiv ~size = lift2 (Concrete.biudiv ~size);;
   let bismod ~size = lift2 (Concrete.bismod ~size);;
-  let biumod ~size = lift2 (Concrete.biumod ~size);;        
+  let biumod ~size = lift2 (Concrete.biumod ~size);;
 
-  
+
 
   let buext ~size ~oldsize x = x
-                             
+
   let bsext ~size ~oldsize =
+    let size = In_bits.to_int size and oldsize = In_bits.to_int oldsize in
     lift1 (fun x -> Z.extract (Z.signed_extract x 0 oldsize) 0 size)
   ;;
 
-  let bshl ~size ~nsw ~nuw  = lift2 (Concrete.bshl ~size ~nsw ~nuw);;
+  let bshl ~size ~flags  = lift2 (Concrete.bshl ~size ~flags);;
 
   let blshr ~size = lift2 (Concrete.blshr ~size);;
   let bashr ~size = lift2 (Concrete.bashr ~size);;
 
   let bconcat ~size1 ~size2 = lift2 (Concrete.bconcat ~size1 ~size2);;
 
-  let bextract ~size ~index ~oldsize = 
+  let bextract ~size ~index ~oldsize =
     lift1 (Concrete.bextract ~index ~size ~oldsize);;
   ;;
-  
+
   let beq ~size = lift2_pred (Z.equal);;
   let biule ~size = lift2_pred (Z.leq);;
   let bisle ~size = lift2_pred (Concrete.bisle ~size);;
 
-  let pretty fmt x =
+  let _pretty fmt x =
     let l = ZSet.elements x |> List.map (Z.format "%b") in
     Format.fprintf fmt "[";
     (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ",") Format.pp_print_string) fmt l;
-    Format.fprintf fmt "]";    
-  ;;
+    Format.fprintf fmt "]"
 
-  let buninit ~size = assert false
-  let bchoose ~size _ = assert false
-  let bindex ~size _ = assert false
-  let bshift ~size ~offset ~max _ = assert false
-  let valid_ptr_arith ~size _ = assert false
-  let valid ~size _ = assert false
   let bofbool ~size = function
     | Bottom -> ZSet.empty
     | True -> biconst ~size Z.one
     | False -> biconst ~size Z.zero
-    | Top -> Binary_Lattice.join ~size (biconst ~size Z.zero) (biconst ~size Z.one)
+    | Top -> Bitvector_Lattice.join ~size (biconst ~size Z.zero) (biconst ~size Z.one)
 ;;
 
 
 end
 
-module Binary_Backward = struct
-  include Basis_Assert_False_Transfer_Functions.Binary_Backward
+module Bitvector_Backward = struct
+  include Sva_Assert_False_Transfer_Functions.Bitvector_Backward
 end

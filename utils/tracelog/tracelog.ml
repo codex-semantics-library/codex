@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of the Codex semantics library.                     *)
 (*                                                                        *)
-(*  Copyright (C) 2013-2024                                               *)
+(*  Copyright (C) 2013-2025                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -23,6 +23,9 @@
 
 include Common;;
 
+let log_binary_trace = ref false
+let print_backtraces = ref true
+let set_log_binary_trace bool = log_binary_trace := bool
 type 'a printf =  ('a, Format.formatter, unit) format -> 'a;;
 type 'a log = 'a printf -> unit;;
 type location = ..
@@ -31,20 +34,35 @@ module type S  = sig
   val error : 'a log -> unit
   val warning : 'a log -> unit
   val notice : 'a log -> unit
-  val info : 'a log -> unit    
+  val info : 'a log -> unit
   val debug : 'a log -> unit
   val fatal : 'a log -> 'b
   val not_yet_implemented : 'a log -> unit
-  val trace: 'a log -> ?loc:location -> ?pp_ret:(Format.formatter -> 'b -> unit) -> (unit -> 'b) -> 'b    
-  val fatal_handler: ('a -> 'b) -> ('a -> 'b)    
+  val trace: 'a log -> ?loc:location -> ?bintrace:_ Syntax_tree.Location_identifier.t -> ?pp_ret:(Format.formatter -> 'b -> unit) -> (unit -> 'b) -> 'b
+  val fatal_handler: ('a -> 'b) -> ('a -> 'b)
 end;;
 
+module Dummy: S = struct
+  let error _ = ()
+  let warning _ = ()
+  let notice _ = ()
+  let info _ = ()
+  let debug _ = ()
+  let fatal _ =
+    raise (Fatal "dummy")
+  let not_yet_implemented = fatal
+  let trace _ ?loc:_ ?bintrace:_ ?pp_ret:_ f = f ()
+  let fatal_handler f x =
+    try f x with
+    | Fatal _ -> exit 1
+    | _ -> exit 2
+end
 
 (* TODO: Use standard log levels, liike syslog
    debug; debug-level messages.
    info;  informational. Those are normally not displayed.
    notice; significant
-   warning; 
+   warning;
    error;
    critical;
 
@@ -65,20 +83,35 @@ end;;
 let current_level = ref Level.warning;; (* Print warnings but not feedback messages by default. *)
 
 let set_verbosity_level x =
-  let open Level in 
+  let open Level in
   let vb = match x with
-    | `Error -> error 
+    | `Critical -> critical
+    | `Error -> error
     | `Warning -> warning
     | `Info -> info
     | `Notice -> notice
     | `Debug -> debug
   in current_level := vb
+
+let get_verbosity_level() =
+  let open Level in
+  let current_level = !current_level in
+  if current_level == error then `Error
+  else if current_level == warning then `Warning
+  else if current_level == info then `Info
+  else if current_level == notice then `Notice
+  else if current_level == debug then `Debug
+  else assert false
 ;;
 
 let location_stack = ref [];;
+
+let reset_location_stack () = location_stack := []
+
 let current_location() = match !location_stack with
   | [] -> None
   | hd::_ -> Some hd
+let current_location_stack() = !location_stack
 
 let r_pp_location_stack = ref (fun fmt locstack ->
     match locstack with
@@ -100,10 +133,20 @@ module MakeGeneric
     (V:sig val get_verbosity_level: unit -> int end)
     (Category:sig val category:string end) = struct
 
+  let maybe_log_bintrace level log =
+    if !log_binary_trace then begin
+      (Binarytrace.add_trace_to_file (Category.category)
+         (Single {category=Category.category;
+                  severity = level;
+                  content= Format.asprintf "%t" (fun fmt -> log (Format.fprintf fmt))}))
+    end
+
+
   let print ?(last=false) f = f (Terminal.printf Category.category ~last)
 
+  (* Note: reusing the buffer is not faster. *)
   let string_of_log: type a. a log -> string = fun log ->
-    let buf = Buffer.create 300 in
+    let buf = Buffer.create 150 in
     let ppf = Format.formatter_of_buffer buf in
     log (Format.fprintf ppf);
     Format.pp_print_flush ppf ();
@@ -117,43 +160,46 @@ module MakeGeneric
     fun (m:'c printf) -> m "%t%t" (fun fmt -> log1 (Format.fprintf fmt)) (fun fmt -> log2 (Format.fprintf fmt))
   ;;
 
-  let print_at_level level f = 
+  let print_at_level level f =
     if V.get_verbosity_level() >= level
-    then print f
+    then (maybe_log_bintrace level f;
+          print f)
   ;;
 
   let notice f = print_at_level Level.notice f
   let info f = print_at_level Level.info f
 
-  let generic_error underlined_title log =
+  let generic_error level underlined_title log =
     if V.get_verbosity_level() >= Level.error
     then begin
+      maybe_log_bintrace level log;
       let colored_log fmt =
         Format.pp_open_stag fmt (Weight Bold);
         Format.pp_open_stag fmt (Color Red);
         pp_location_stack fmt !location_stack;
-        Format.pp_open_stag fmt (Underline true);        
+        Format.pp_open_stag fmt (Underline true);
         Format.fprintf fmt underlined_title ;
         Format.pp_close_stag fmt ();
-        Format.fprintf fmt ": %t" (fun fmt -> log (Format.fprintf fmt));        
+        Format.fprintf fmt ": %t" (fun fmt -> log (Format.fprintf fmt));
         Format.pp_close_stag fmt ();
         Format.pp_close_stag fmt ()
       in
       print (fun p -> p "%t" colored_log)
     end
   ;;
-  let error log = generic_error "Error" log;;
+  let error log = generic_error Level.error "Error" log;;
 
   let warning log =
     if V.get_verbosity_level() >= Level.error
     then begin
+      maybe_log_bintrace Level.warning log;
       let colored_log fmt =
         Format.pp_open_stag fmt (Color Red);
         pp_location_stack fmt !location_stack;
-        Format.pp_open_stag fmt (Underline true);        
+        Format.pp_open_stag fmt (Underline true);
         Format.fprintf fmt "Warning";
         Format.pp_close_stag fmt ();
-        Format.fprintf fmt ": %t" (fun fmt -> log (Format.fprintf fmt));        
+        Format.fprintf fmt ": %t" (fun fmt -> log (Format.fprintf fmt));
         Format.pp_close_stag fmt ();
       in
       print (fun p -> p "%t" colored_log)
@@ -163,13 +209,14 @@ module MakeGeneric
   let debug log =
     if V.get_verbosity_level() >= Level.debug
     then begin
+      maybe_log_bintrace Level.debug log;
       let colored_log fmt =
         Format.pp_open_stag fmt (Weight Faint);
         Format.pp_open_stag fmt (Color Cyan);
-        Format.pp_open_stag fmt (Italic true);        
-        log (Format.fprintf fmt);        
+        Format.pp_open_stag fmt (Italic true);
+        log (Format.fprintf fmt);
         Format.pp_close_stag fmt ();
-        Format.pp_close_stag fmt ();        
+        Format.pp_close_stag fmt ();
         Format.pp_close_stag fmt ()
       in
       print (fun p -> p "%t" colored_log)
@@ -177,15 +224,14 @@ module MakeGeneric
   ;;
 
   (** Fail, but reuse the message in the failwith argument.  *)
-  let fatal: type a. a log -> 'b =  fun l ->
-    generic_error "Fatal Error" l;
-    raise Fatal
-  ;;
+  let fatal: type a. a log -> 'b =  fun log ->
+    generic_error Level.critical "Fatal Error" log;
+    raise (Fatal (Format.asprintf "%s:%t" (Category.category) (fun fmt -> log (Format.fprintf fmt))))
 
   let fatal_handler f x =
     try f x
     with
-    | Fatal ->
+    | Fatal s ->
       (* The error message is already printed by fatal. *)
       let backtrace = (Printexc.get_backtrace()) in
       print (fun p -> p "%s" backtrace);
@@ -193,11 +239,11 @@ module MakeGeneric
     | e ->
       let exc_string = Printexc.to_string e in
       let backtrace = Printexc.get_backtrace() in
-      generic_error "Uncaught exception" (fun p -> p "%s" exc_string);
+      generic_error Level.critical "Uncaught exception" (fun p -> p "%s" exc_string);
       print (fun p -> p "The full backtrace is:\n%s" backtrace);
       exit 2
   ;;
-  
+
 
   let not_yet_implemented log =
     fatal (log_concat (log_of_string "Not yet implemented: ") log)
@@ -210,8 +256,18 @@ module MakeGeneric
       - TODO: Add a log level; default would be info (or trace).
 
   *)
-  let trace log ?loc ?(pp_ret=(fun fmt _ -> Format.fprintf fmt "<not printed>"))  f =
-    let pop_loc = 
+
+  (* TODO: Merge the two locations *)
+  let trace log ?(loc:location option) ?(bintrace: _ Syntax_tree.Location_identifier.t option) ?pp_ret f =
+    let open Binarytrace in
+    if !log_binary_trace then begin
+           (Binarytrace.add_trace_to_file (Category.category)
+              (Node {loc=bintrace;
+                     category=Category.category;
+                     content= string_of_log log}))
+    end;
+
+    let pop_loc =
       match loc with
         | None -> fun () -> ()
         | Some loc ->
@@ -219,56 +275,75 @@ module MakeGeneric
           fun () -> location_stack := List.tl !location_stack
     in
     (* Note: we do the try with only with if for performance purposes. *)
-    if V.get_verbosity_level() >= Level.trace
-    then begin try
+    let display_trace = V.get_verbosity_level() >= Level.trace in
+    begin try
         let with_color log = fun fmt ->
-          Format.pp_open_stag fmt (Color Green);          
+          Format.pp_open_stag fmt (Color Green);
           log (Format.fprintf fmt);
           Format.pp_close_stag fmt ()
         in
+      if display_trace then begin
         print ~last:false (fun p -> p "%t" @@ with_color log);
         Terminal.open_nesting ();
-        let res = f() in
-        let colored_log fmt =
-          log (Format.fprintf fmt);
-          Format.pp_close_stag fmt ()
-        in
-        print ~last:true (fun p -> p "%t" @@ with_color (fun p -> p "Result: %a" pp_ret res));
-        pop_loc();
-        Terminal.close_nesting ();    
-        res
-      with e ->     (* close nesting without returning, and raise with the same backtrace. *)
-        (*
-        print ~last:true (fun p -> p "No result (exception %s)" (Printexc.to_string e));
-        pop_loc();
+      end;
+      (* Binarytrace.open_nesting (); *)
+      let res = f() in
+      if display_trace then begin
+        (match pp_ret with
+          | Some pp_ret ->
+            print ~last:true (fun p -> p "%t" @@ with_color (fun p -> p "Result: %a" pp_ret res));
+          | None ->
+            print ~last:true (fun p -> p "%t" @@ with_color (fun p -> p "Result: <not printed>")););
         Terminal.close_nesting ();
-        Printexc.raise_with_backtrace e (Printexc.get_raw_backtrace ())
-        *)
-        raise e
-    end
-    else begin
-      try
-        let res = f() in
-        pop_loc(); res
-      with e ->
-        pop_loc();
-        Printexc.raise_with_backtrace e (Printexc.get_raw_backtrace ())
-    end
-  ;;
+      end;
+      if !log_binary_trace then begin
+        let result = match pp_ret with
+          | Some pp_ret ->
+            let resultstr = string_of_log (fun p -> p "%a" pp_ret res) in
+            Result (Some resultstr)
+          | None ->
+            Result None
+        in
+        Binarytrace.add_trace_to_file (Category.category) result;
+        (* Binarytrace.close_nesting (); *)
+      end;
+      pop_loc();
+      res
+    with e ->     (* close nesting without returning, and raise with the same backtrace. *)
+      let bt = Printexc.get_raw_backtrace () in
+      if display_trace then begin
+        print ~last:(not !print_backtraces) (fun p -> p "No result (exception %s)" (Printexc.to_string e));
+        if !print_backtraces then begin
+          print ~last:true (fun p -> p "%s" (Printexc.raw_backtrace_to_string bt));
+          print_backtraces := false (* avoid reprinting the same backtrace again *)
+        end;
+        Terminal.close_nesting ();
+      end;
+      pop_loc();
+        if !log_binary_trace then
+          Binarytrace.add_trace_to_file (Category.category) (Result None);
+        (* Binarytrace.close_nesting ();  *)
+      Printexc.raise_with_backtrace e bt
+  end
 
-  
+;;
+
+
+
+
 end;;
 
 
-module Make = MakeGeneric[@inlined hint](struct let get_verbosity_level() = !current_level end) 
-module MakeDebug = MakeGeneric(struct let get_verbosity_level() = Level.debug end)    
 
 
+module Make = MakeGeneric[@inlined hint](struct let get_verbosity_level() = !current_level end)
+module MakeDebug = MakeGeneric(struct let get_verbosity_level() = Level.debug end)
+module MakeSilent = MakeGeneric(struct let get_verbosity_level() = 1 end)
 module Test() = struct
   module Logs=Make(struct let category = "test" end);;
 
   set_verbosity_level `Debug;;
-  
+
   Logs.notice (fun m -> m "Test 0 message %s %a ads" "Hu" Format.pp_print_string "Ha");;
   Logs.notice (fun m -> m "Test simple message\n");;
   Logs.warning (fun m -> m "Test 1 warning with newline in middle %s %a@\nads" "Hu" Format.pp_print_string "Ha");;
@@ -280,7 +355,7 @@ module Test() = struct
   try Logs.fatal (fun m -> m "Test 5 fatal %s %a@\nad" "Hu" Format.pp_print_string "Ha") with _ -> ();;
 
 
-  let my_add a b = 
+  let my_add a b =
     Logs.trace (fun p -> p "Evaluating %d + %d" a b) ~pp_ret:Format.pp_print_int (fun () -> a + b)
   ;;
 
@@ -296,8 +371,8 @@ module Test() = struct
   let rec eval' = function
     | Cst i -> i
     | Add(e1,e2) ->
-      Logs.debug (fun p -> p "Before\n e1");      
-      let r1 = eval e1 in 
+      Logs.debug (fun p -> p "Before\n e1");
+      let r1 = eval e1 in
       Logs.debug (fun p -> p "Middle");
       let r2 = eval e2 in
       Logs.debug (fun p -> p "End");
@@ -312,8 +387,8 @@ module Test() = struct
     | Cst i when i == 5 -> raise Custom
     | Cst i -> i
     | Add(e1,e2) ->
-      Logs.debug (fun p -> p "Before\n e1");      
-      let r1 = eval e1 in 
+      Logs.debug (fun p -> p "Before\n e1");
+      let r1 = eval e1 in
       Logs.debug (fun p -> p "Middle");
       let r2 = eval e2 in
       Logs.debug (fun p -> p "End");
@@ -325,7 +400,7 @@ module Test() = struct
   with Custom -> 3;;
 
 
-  
+
 end;;
 
 (* module M = Test();; *)

@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of the Codex semantics library.                     *)
 (*                                                                        *)
-(*  Copyright (C) 2013-2024                                               *)
+(*  Copyright (C) 2013-2025                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -45,7 +45,7 @@ let rec highest_bit x =
 (* This computation does not work on values too high, depends on the
    int size, and is actually not the fastest on the benchmarks.. *)
 let _highest_bit v =
-  (* compute highest bit. 
+  (* compute highest bit.
      First, set all bits with weight less than
      the highest set bit *)
   let v1 = v lsr 1 in
@@ -101,7 +101,7 @@ type key = int
    construction, but the hash-consing allows faster comparison with
    fold_on_diff. Benchmarks indicates that hash-consing slows down the
    execution. *)
-module TNoHashCons:sig 
+module TNoHashCons:sig
   type 'a t = private
     | Leaf of {key:key; value:'a}            (* The entire key. *)
     | Branch of {prefix:key;branching_bit:mask;tree0:'a t;tree1:'a t}
@@ -120,6 +120,7 @@ end = struct
   let branch ~prefix ~branching_bit ~tree0 ~tree1 = Branch{prefix;branching_bit;tree0;tree1}
 end
 
+[@@@warning "-32"]
 module THashCons:sig
   type 'a t = private
     | Leaf of {id:int;key:key; value:'a }            (* The entire key. *)
@@ -128,7 +129,7 @@ module THashCons:sig
          set to zero. *)
   val leaf: key -> 'a -> 'a t
   val branch: prefix:key -> branching_bit:mask -> tree0:'a t -> tree1:'a t -> 'a t
-  
+
 end = struct
   let id_count = ref 0;;
   type 'a t =
@@ -146,16 +147,13 @@ end = struct
           prefixa == prefixb && branching_bita == branching_bitb && tree0a == tree0b && tree1a == tree1b
         | _ -> assert false
 
-      let sdbm x y = y + (x lsl 16) + (x lsl 6) - x;;
-
       let get_id = function
         | Leaf{id} -> id
         | Branch{id} -> id
-      
+
       let [@warning "-8"] hash (Branch{prefix;branching_bit;tree0;tree1}) =
-        sdbm (prefix lor branching_bit) @@ sdbm (get_id tree0) (get_id tree1)
-      ;;
-      
+        Hashing.hash3 (prefix lor branching_bit) (get_id tree0) (get_id tree1)
+
     end
     );;
 
@@ -174,8 +172,9 @@ end = struct
     if v == tentative then (Log.debug (fun p -> p "HASHCONS WORKS"); incr id_count);
     v
   ;;
-    
+
 end
+[@@@warning "+32"]
 
 include TNoHashCons;;
 (* include THashCons;;   *)
@@ -183,7 +182,7 @@ include TNoHashCons;;
 
 (* For debugging. *)
 let rec dump_tree fmt = function
-  | Leaf{key} -> Format.fprintf fmt "(leaf %x)" key 
+  | Leaf{key} -> Format.fprintf fmt "(leaf %x)" key
   | Branch{prefix;branching_bit;tree0;tree1} ->
     Format.fprintf fmt "@[<hov>(branch p:%x@ bb:%x@ %a@ %a)@]"
       prefix branching_bit dump_tree tree0 dump_tree tree1
@@ -247,8 +246,8 @@ module Iterator = struct
      - prev is the index corresponding to the beginning of the first interval of node.
      - node is the node to process
      - stack is the list of nodes yet to process. *)
-   type nonrec 'a t = int * 'a t * 'a t list
-  
+   type nonrec 'a t = Iterator of int * 'a t * 'a t list
+
    (* Return the iterator for the position starting at start.
 
       The algorithm is like a linear search, except that we can skip
@@ -256,10 +255,10 @@ module Iterator = struct
       sometimes have to backtrack. *)
    let start key node =
      let exception Not_in_this_tree in
-     let rec loop node stack=  
+     let rec loop node stack=
        match node with
        | Leaf{key=key'} when key' <= key -> raise Not_in_this_tree
-       | Leaf _ -> (key,node,stack)
+       | Leaf _ -> Iterator(key,node,stack)
        | Branch{branching_bit;prefix;tree0;tree1} ->
          if (prefix + (branching_bit lsl 1)) <= key
          (* All the boundaries in this subtree are smaller than key; skip it. *)
@@ -277,17 +276,17 @@ module Iterator = struct
    (* Fold on all intervals starting on iter, and stop when we reach
       key (not included). *)
    let fold_upto upto acc iter f =
-     let rec loop acc (prev,node,stack) =
+     let rec loop acc (Iterator(prev,node,stack)) =
        match node with
        | Leaf{key;value} ->
          (* Codex_log.feedback "calling f key %d upto %d %d %d" key upto prev ((min key upto)-prev); *)
          let acc = f ~size:((min key upto) - prev) prev value acc in
          begin match stack with
            | _ when key >= upto -> acc
-           | hd::tl -> loop acc (key,hd,tl)
+           | hd::tl -> loop acc (Iterator(key,hd,tl))
            | [] -> assert false     (* should not happen if upto is <= the size of the map. *)
          end
-       | Branch{tree0;tree1} -> loop acc (prev,tree0,tree1::stack)
+       | Branch{tree0;tree1} -> loop acc (Iterator(prev,tree0,tree1::stack))
      in loop acc iter
    ;;
 
@@ -347,7 +346,7 @@ let fold_on_diff (type a) (a:a t) b acc f =
     (* Codex_log.feedback "fa %d %d" starta enda; *)
     assert(backloga == [] || backlogb == []);
     let lastdone = Lazy.force_val lastdone in
-    assert(lastdone < enda);            
+    assert(lastdone < enda);
     let lastdone,acc = List.fold_right (fun {ival_end;value} (lastdone,acc) ->
         ival_end,f ~size:(ival_end - lastdone) lastdone va value acc) backlogb (lastdone,acc) in
     (Lazy.from_val lastdone,{ival_end=enda;value=va}::backloga,[],acc)
@@ -355,8 +354,8 @@ let fold_on_diff (type a) (a:a t) b acc f =
   (* We only have a boundary for b. Handle a backlog, and add to b backlog. *)
   let fb vb endb (lastdone,backloga,backlogb,acc) =
     assert(backloga == [] || backlogb == []);
-    let lastdone = Lazy.force_val lastdone in      
-    assert(lastdone < endb);      
+    let lastdone = Lazy.force_val lastdone in
+    assert(lastdone < endb);
     (* Codex_log.feedback "fb %d %d" startb endb;       *)
     let lastdone,acc = List.fold_right (fun {ival_end;value} (lastdone,acc) ->
         ival_end,f ~size:(ival_end - lastdone) lastdone value vb acc) backloga (lastdone,acc) in
@@ -364,7 +363,7 @@ let fold_on_diff (type a) (a:a t) b acc f =
   in
   (* We have a boundary for both. Handle both backlogs, and contintue with empty backlogs. *)
   let fab va vb endab (lastdone,backloga,backlogb,acc) =
-    let lastdone = Lazy.force_val lastdone in      
+    let lastdone = Lazy.force_val lastdone in
     assert(lastdone < endab);
     (* Codex_log.feedback "fab %d %d %d" starta startb endab;             *)
     assert(backloga == [] || backlogb == []);
@@ -397,7 +396,7 @@ let fold_on_diff (type a) (a:a t) b acc f =
 
      The current position is represented by a pair (nodex,stackx), where:
 
-     - nodex is the current node 
+     - nodex is the current node
      - stackx is the stack of nodes that remain to be traversed.
 
      In addition, lastdone represents the last boundary where
@@ -417,7 +416,7 @@ let fold_on_diff (type a) (a:a t) b acc f =
         then acc    (* Fast case: no backlog *)
         else begin
           (* We have to find the value to handle the backlog. *)
-          let vab = 
+          let vab =
             let rec leftmost = function
               | Branch{tree0} -> leftmost tree0
               | Leaf{value} -> value
@@ -473,8 +472,8 @@ let fold_on_diff (type a) (a:a t) b acc f =
       (* This code may seem complex, as we could just do
          loop acc (nodea,stacka) (t0b,t1b::stackb).
 
-         But it is optimised in two cases: 
-         - If we don't need to descend inside nodeb, then we gain some time 
+         But it is optimised in two cases:
+         - If we don't need to descend inside nodeb, then we gain some time
            (e.g. if we later find that nodeb and nodea are the same)
          - If the intervals do not overlap, we can just fold on the boundaries of b,
            and skip all the checks of this function.
@@ -527,7 +526,7 @@ let fold_on_diff (type a) (a:a t) b acc f =
   assert(backloga == []);
   assert(backlogb == []);
   acc
-;;  
+;;
 
 (**************** Zippers ****************)
 
@@ -571,7 +570,7 @@ type 'a zipper =
     | Branch1(Branch _,zipper) -> move_right_unmodified zipper
     | End -> raise Rightmost       (* Cannot go past the last boundary. *)
     | Branch1(Leaf _,_) -> assert false
-    | Branch0(Leaf _,_) -> assert false      
+    | Branch0(Leaf _,_) -> assert false
   ;;
 
   let rec rightmost_child node zipper =
@@ -584,13 +583,13 @@ type 'a zipper =
 
   (* Move from leaves to leaves; no need to update the nodes as they
      are unmodified. *)
-  let rec move_left_unmodified zipper =
+  let rec _move_left_unmodified zipper =
     match zipper with
     | Branch1(Branch{tree0} as node,zipper) -> rightmost_child tree0 (Branch0(node,zipper))
-    | Branch0(Branch _,zipper) -> move_left_unmodified zipper
+    | Branch0(Branch _,zipper) -> _move_left_unmodified zipper
     | End -> raise Leftmost       (* Cannot go past the last boundary. *)
     | Branch0(Leaf _,_) -> assert false
-    | Branch1(Leaf _,_) -> assert false      
+    | Branch1(Leaf _,_) -> assert false
   ;;
 
   (* Maybe: stitch intervals which contain the same value. *)
@@ -611,7 +610,7 @@ let rec move_right node zipper =
     | Branch1(Leaf _,_) -> assert false
     | Branch0(Leaf _,_) -> assert false
   ;;
-  
+
   let delete_and_move_right zipper =
     match zipper with
     | Branch1(Branch{tree0},zipper) -> move_right tree0 zipper
@@ -624,11 +623,11 @@ let rec move_right node zipper =
   (* Split and choose left. *)
   (* Unzip, then regular add. *)
   (* let rec split key node zipper = *)
-  
+
 
   (* Create a new interface boundary at key, and go to the left of this interval. *)
    let rec split_and_choose_left key node zipper =
-     let get_value zipper = 
+     let get_value zipper =
         match fst @@ move_right_unmodified zipper with
         | Branch _ -> assert false
         | Leaf{value} -> value
@@ -662,14 +661,14 @@ let rec move_right node zipper =
       else
         (* Get the value from the next interval; which depends on
            where we are going to be put. *)
-        let value = 
+        let value =
           if prefix + (branching_bit lsl 1) <= key
           then get_value zipper
           else
             let rec leftmost = function
               | Leaf{value} -> value
               | Branch{tree0} -> leftmost tree0
-            in leftmost tree0 
+            in leftmost tree0
         in
         let n = join key (leaf key value) prefix node in
         (match n with
@@ -710,7 +709,7 @@ let rec move_right node zipper =
         else
           try loop tree0 (Branch0(node,zipper))
           with Too_much_on_the_left -> loop tree1 (Branch1(node,zipper))
-   in 
+   in
    let (node,zipper) as res = loop node End in
    assert (match node with Leaf{key=key'} when key' > key -> true | _ -> false);
    res
@@ -834,8 +833,8 @@ let _old_fold_on_diff a b acc f =
           then (Log.warning (fun p -> p "fold_on_diff is inefficient: should skip entire trees"); acc)
           else f ~size:(idxb - prev) prev va vb acc
         in
-        let res = 
-          try 
+        let res =
+          try
             let nexta = move_right_unmodified zippera in
             let nextb = move_right_unmodified zipperb in
             Some(nexta,nextb)
@@ -851,7 +850,7 @@ let _old_fold_on_diff a b acc f =
         loop idxb (nodea,zippera) (move_right_unmodified zipperb) acc
     | _,_ -> assert false
 
-    
+
   in
   loop 0 (nodea, zippera) (nodeb, zipperb) acc
 ;;
@@ -859,7 +858,7 @@ let _old_fold_on_diff a b acc f =
 let fold_on_diff3 a b c acc f =
   let nodea,zippera = go_to_right_of 0 a in
   let nodeb,zipperb = go_to_right_of 0 b in
-  let nodec,zipperc = go_to_right_of 0 c in  
+  let nodec,zipperc = go_to_right_of 0 c in
   let rec loop prev (nodea, zippera) (nodeb, zipperb) (nodec, zipperc) acc =
     (* Advance the smallest boundary, or advance both. *)
     match nodea,nodeb,nodec with
@@ -872,11 +871,11 @@ let fold_on_diff3 a b c acc f =
           then (Log.notice (fun p -> p "fold_on_diff3 is inefficient: should skip entire trees"); acc)
           else f ~size:(idxb - prev) prev va vb vc acc
         in
-        let res = 
-          try 
+        let res =
+          try
             let nexta = move_right_unmodified zippera in
             let nextb = move_right_unmodified zipperb in
-            let nextc = move_right_unmodified zipperc in            
+            let nextc = move_right_unmodified zipperc in
             Some(nexta,nextb,nextc)
           with Rightmost -> None
         in (match res with
@@ -906,7 +905,7 @@ let fold_on_diff3 a b c acc f =
         else if idxc < idxa then c_smallest ()
         else ab_smallest ()
       else if idxa < idxb then
-        if idxc == idxa then ac_smallest ()        
+        if idxc == idxa then ac_smallest ()
         else if idxc < idxa then c_smallest ()
         else a_smallest ()      (* idxa < idxc *)
       else                      (* idxb < idxa *)
@@ -915,7 +914,7 @@ let fold_on_diff3 a b c acc f =
       else b_smallest ()
     | _ -> assert false
 
-    
+
   in
   loop 0 (nodea, zippera) (nodeb, zipperb) (nodec, zipperc) acc
 ;;
@@ -936,7 +935,7 @@ module With_Extract(Value:sig
   (* Note: this structure with three fields take four words, so is a small size for the GC?
   *)
   type wrapper = {
-    key: int;                   
+    key: int;
     size: int;
     value: Value.t;
   }
@@ -944,16 +943,16 @@ module With_Extract(Value:sig
   type 'a map = 'a t
   type t = wrapper map
 
-  let rec dump_tree fmt = function
+  let rec _dump_tree fmt = function
     | Leaf{key;value={key=key';size=size'}} -> Format.fprintf fmt "(leaf %x orig: %x-%x)" key key' (key'+size')
     | Branch{prefix;branching_bit;tree0;tree1} ->
       Format.fprintf fmt "@[<hov>(branch p:%x@ bb:%x@ %a@ %a)@]"
-        prefix branching_bit dump_tree tree0 dump_tree tree1
+        prefix branching_bit _dump_tree tree0 _dump_tree tree1
   ;;
 
-  
+
   let create ~size value = create ~size {size;key=0;value};;
-  let get_size = get_size 
+  let get_size = get_size
 
   (* The store is unchanged. *)
   let store  ~size key map value = store ~size key map {size;key;value};;
@@ -981,7 +980,7 @@ module With_Extract(Value:sig
       f ~size key (do_extract ~extract ~size key value) acc
     in fold_between ~size start map acc f'
   ;;
-  
+
   let fold_on_diff a b acc ~extracta ~extractb (* ~equal *) f =
     (* Codex_log.feedback "with_extract.fold on diff %a %a" dump_tree a dump_tree b;     *)
     let f' ~size key a b acc =
@@ -1004,7 +1003,7 @@ module With_Extract(Value:sig
     in
     fold_on_diff3 a b c acc f'
   ;;
-  
+
 
   let subst_between key ~size map ~extract f =
     let f' ~size key (v:wrapper) =
@@ -1016,5 +1015,5 @@ module With_Extract(Value:sig
     in
     subst_between key ~size map f'
   ;;
-  
+
 end

@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of the Codex semantics library.                     *)
 (*                                                                        *)
-(*  Copyright (C) 2013-2024                                               *)
+(*  Copyright (C) 2013-2025                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -21,16 +21,11 @@
 
 (* BDDs and MTBDDs. *)
 
-(* Hash computation combinators *)
-let sdbm x y = y + (x lsl 16) + (x lsl 6) - x;;
-let combine = sdbm ;;
-let combine2 acc n1 n2 = combine (combine acc n1) n2
-
 module HashtblPair(T:Hashtbl.HashedType) = struct
   module Pair = struct
     type t = T.t * T.t
     let equal (a1,a2) (b1,b2) = T.equal a1 b1 && T.equal a2 b2
-    let hash (a1,a2) = combine (T.hash a1) (T.hash a2)
+    let hash (a1,a2) = Hashing.hash2 (T.hash a1) (T.hash a2)
   end
 
   include Hashtbl.Make(Pair)
@@ -77,7 +72,9 @@ struct
          module. The private type + encapsulation suffices for outside
          of [Type]; uncomment "Interned of" just to check conformity
          inside [Type]. *)
+      [@@@ocaml.warning "-34"]
       type 'a interned = (* Interned of *) 'a
+      [@@@ocaml.warning "+34"]      
       type bdd(* _uninterned *) = Zero | One | If of tag * Var.t * bdd * bdd
       (* and bdd = bdd_uninterned interned *)
 
@@ -108,7 +105,7 @@ struct
           | Zero -> 0
           | One -> 1
           (* Note: uses [hash] for the hash-consed bdds; there is no recursive call to [hash]!. *)
-          | If(_,var,left,right) -> combine2 (Var.hash var) (hash left) (hash right)
+          | If(_,var,left,right) -> Hashing.hash3 (Var.hash var) (hash left) (hash right)
       end);;
 
       (* Tag of Zero and One are 0 and 1. *)
@@ -255,14 +252,14 @@ struct
     end
 
   type 'a mtbdd = Terminal of tag * 'a | If of tag * Var.t * 'a mtbdd * 'a mtbdd
-                                                 
+
   module type MTBDD = sig
     module Terminal:Terminal
     type t = Terminal.t mtbdd
     val equal: t -> t -> bool
     val hash: t -> int
     val pretty: Format.formatter -> t -> unit
-      
+
     val terminal: Terminal.t -> t
     val mk: Var.t -> t -> t -> t
   end
@@ -288,17 +285,17 @@ struct
     let equal (a1,a2) (b1,b2) = M1.equal a1 b1 && M2.equal a2 b2;;
     let hash (a1,a2) = 65533 * (M1.hash a1) + M2.hash a2
   end
-  
+
   let map2
       (type a) (module Ma:MTBDD with type Terminal.t = a)
-      (type b) (module Mb:MTBDD with type Terminal.t = b)      
+      (type b) (module Mb:MTBDD with type Terminal.t = b)
       (type res) (module Mres:MTBDD with type Terminal.t = res)
       f =
     let module Hash2 = Hashtbl.Make(Pair(Ma)(Mb)) in
     let map2_cache = Hash2.create 251 in
     (* Share cache between applications of map1 etc. *)
     let map1a = map1 (module Ma) (module Mres) in
-    let map1b = map1 (module Mb) (module Mres) in    
+    let map1b = map1 (module Mb) (module Mres) in
     let rec map2 ma mb =
       let mab = (ma,mb) in
       try Hash2.find map2_cache mab
@@ -321,18 +318,18 @@ struct
     let hash (a1,a2,a3) = 65533 * (M1.hash a1) + 257 * M2.hash a2 + M3.hash a3
   end
 
-  
+
   let map3
       (type a) (module Ma:MTBDD with type Terminal.t = a)
       (type b) (module Mb:MTBDD with type Terminal.t = b)
-      (type c) (module Mc:MTBDD with type Terminal.t = c)            
+      (type c) (module Mc:MTBDD with type Terminal.t = c)
       (type res) (module Mres:MTBDD with type Terminal.t = res)
       f =
     let module Hash3 = Hashtbl.Make(Triple(Ma)(Mb)(Mc)) in
     let map3_cache = Hash3.create 251 in
     let map2ab = map2 (module Ma) (module Mb) (module Mres)  in
     let map2ac = map2 (module Ma) (module Mc) (module Mres)  in
-    let map2bc = map2 (module Mb) (module Mc) (module Mres)  in        
+    let map2bc = map2 (module Mb) (module Mc) (module Mres)  in
     let rec map3 ma mb mc =
       let mabc = (ma,mb,mc) in
       try Hash3.find map3_cache mabc
@@ -367,7 +364,7 @@ struct
         Hash3.replace map3_cache mabc res; res
     in map3
   ;;
-  
+
   module MTBDD_Make(Terminal:Terminal) =
   struct
 
@@ -397,7 +394,7 @@ struct
 
       let compare a b = Stdlib.compare (hash a) (hash b);;
 
-      [@@@ warning "-8"]      
+      [@@@ warning "-8"]
       (* We use 2 different hashes for terminal and non-terminal
          terms; this avoids spurious collisions in the table. MAYBE:
          Use GADT to avoid testing the cases of the Sum. *)
@@ -413,9 +410,9 @@ struct
         let equal (If(_,var1,then1,else1)) (If(_,var2,then2,else2)) =
           Var.equal var1 var2 && then1 == then2 && else1 == else2
 
-        let hash (If(_,var,then_,else_)) = combine2 (Var.hash var) (hash then_) (hash else_);;
+        let hash (If(_,var,then_,else_)) = Hashing.hash3 (Var.hash var) (hash then_) (hash else_);;
       end)
-      [@@@ warning "+8"]          
+      [@@@ warning "+8"]
 
       let tag_ref = ref 1 ;;
       let terminal_table = TerminalHash.create weakhash_default_size;;
@@ -526,7 +523,7 @@ struct
       module Hash_MTBDD_BDD = Hashtbl.Make(struct
         type t = Terminal.t mtbdd * BDD.t
         let equal (a1,a2) (b1,b2) = Type.equal a1 b1 && BDD.equal a2 b2
-        let hash (a1,a2) = combine (Type.hash a1) (BDD.hash a2)
+        let hash (a1,a2) = Hashing.hash2 (Type.hash a1) (BDD.hash a2)
       end)
 
       (* Like in other places, this should maybe be a weak key hash. *)
@@ -695,9 +692,9 @@ struct
                and not the singleton. *)
         in update mtbdd bdd
       ;;
-      
 
-      
+
+
     end
   end
 end

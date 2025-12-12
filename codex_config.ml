@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of the Codex semantics library.                     *)
 (*                                                                        *)
-(*  Copyright (C) 2013-2024                                               *)
+(*  Copyright (C) 2013-2025                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,7 +19,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(* This file defines a set of static and dynamic parameters. 
+(* This file defines a set of static and dynamic parameters.
 
    Static parameters, if muted, are muted very early: this file should
    be the first executed, and it depends on nothing else. After that
@@ -37,27 +37,36 @@
 (* All parameters are function from unit to their result, in case they
    become dynamic later. *)
 
+module Log = Tracelog.Make(struct let category = "Codex_config" end);;
 
 (** Domains options *)
 
-let r_ptr_size = ref @@ -333;;
-let set_ptr_size x = r_ptr_size := x;;
+
+let r_ptr_size = ref @@ (Units.In_bits.of_int @@ -333);;
+let set_ptr_size (x:Units.In_bits.t) =
+  Log.notice (fun p-> p "Setting pointer size to %d" (x:>int));
+  r_ptr_size := x;;
 let ptr_size () = !r_ptr_size;;
 
 (* Dummy size when size of functions is required (e.g. allocation of a dummy base). *)
 let function_size () = 0;;
 
+(** Limit the number of backpropagations performed in non-relational domains *)
+let back_propagation_limit = ref 1000
+let set_back_propagation_limit x = back_propagation_limit := x
+let get_back_propagation_limit () = !back_propagation_limit
+
 
 (* If true, record the parents of a variable (i.e. set of variables
    whose defs immediately depends on the variable). Necessary for
-   re-forward constraint propagation. *)
-let constraints_register_parents() = false;;
+   re-forward term propagation. *)
+let terms_register_parents() = false;;
 
 (* Do we consider array elements individually, or do we squash all
    cells together. *)
 let array_expansion(): [`full_expansion|`full_squashing] = `full_expansion;;
 
-(** Constraints generation options.  *)
+(** Term generation options.  *)
 
 (* When true, we put an assume whenever there is an alarm. This makes
    the analysis more precise, but also slower; especially the set of
@@ -65,7 +74,7 @@ let array_expansion(): [`full_expansion|`full_squashing] = `full_expansion;;
    much larger. *)
 let assume_alarms() = true;;
 
-(* Translate binary constraints to integer constraints. Sound only if there is no
+(* Translate binary terms to integer terms. Sound only if there is no
    signed nor unsigned overflow, but works much better than bitvector reasoning. *)
 let translation_to_smt_use_integer () = true
 
@@ -75,12 +84,6 @@ let translation_to_smt_use_integer () = true
 let print_smt_input() = false (* true *)(* false *)
 
 (** Goal-oriented options *)
-
-(* Should we try to prove unproved alarms using goal-oriented procedures. *)
-let try_hard_on_alarms() = false;;
-
-(* Should we try to prove unproved user assertions using goal-oriented procedures. *)
-let try_hard_on_assertions() = true;;
 
 (* Should goal-oriented procedures attempt to perform deductive verification? *)
 let try_hard_with_deductive_verification() = true
@@ -94,7 +97,7 @@ let try_hard_with_muz() = true
 (* Which muz engine to use. Valid values include clp for symbolic
    execution, and pdr for property-directed reachability. *)
 (* Now it has spacer too. *)
-let muz_engine() = "pdr"
+(* let muz_engine() = "pdr" *)
 (* let muz_engine() = "clp" *)
 let muz_engine() = "spacer"
 
@@ -111,6 +114,7 @@ let term_group_inductive_variable_by_tuple = false
 (* None means: cannot write to an absolute address (default for C). *)
 let r_valid_absolute_addresses:(Z.t * Z.t) option ref = ref None;;
 let set_valid_absolute_addresses (min,max) =
+  Log.notice (fun p-> p "Setting absolute addresses to 0x%s-0x%s" (Z.format "%08x" min) (Z.format "%08x" max));
   assert(Z.geq min Z.zero);
   if(Z.equal min Z.zero) then Printf.eprintf "Warning: zero (nullptr) considered a valid address\n";
   (assert (Z.geq max Z.one));
@@ -151,8 +155,17 @@ let handle_malloc_as_unknown_typed_pointers() = (* false *)true
 (* If false, the behaviour is more predictable (e.g. garbage
    collection cannot interfere, so ids are better used).
    Moreover, it seems that this improves performances (probably because
-   more constraints are reused).
-   MAYBE: Use "ancient" and move these constraints there. 
+   more terms are reused).
+   MAYBE: Use "ancient" and move these terms there.
    This would also provide a unique id, using address_of.
  *)
-let hash_cons_constraints_with_weak_table() = false
+let hash_cons_terms_with_weak_table() = false
+
+
+
+(* When we don't want arithmetic operations to overflow, we perform
+   the operation using a larger size. For multiplication we have to
+   double the size; for addition/subtraction, a size + 1 suffice.
+   Should we minimize the size (do size + 1), or try to stick to
+   standard sizes (doubling the size)? *)
+let extend_size_for_additive_operations size = (* size + 1 *) Units.In_bits.double size

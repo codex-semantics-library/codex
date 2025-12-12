@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of the Codex semantics library.                     *)
 (*                                                                        *)
-(*  Copyright (C) 2013-2024                                               *)
+(*  Copyright (C) 2013-2025                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -30,8 +30,11 @@ type terminal_code_status = {
 let initial_state = { weight = Normal; color = None; underline = false; italic = false }
 
 let nesting_level = ref 0;;
-let open_nesting  () = incr nesting_level;;
-let close_nesting  () = decr nesting_level;;
+(* let file_nesting_level = ref 0
+let open_file_nesting () = incr file_nesting_level
+let close_file_nesting () = if !file_nesting_level > 0 then decr file_nesting_level *)
+let open_nesting () = incr nesting_level
+let close_nesting  () = decr nesting_level
 
 (* Sgr stands for Select Graphic Rendition *)
 module AnsiSgrCodes = struct
@@ -41,9 +44,9 @@ module AnsiSgrCodes = struct
   let bold = "\027[1m";;
 
 
-  let output_code outc str =
-    if outc == stdout && Unix.isatty Unix.stdout then
-      output_string outc str
+  let output_code str =
+    if Unix.isatty Unix.stdout then
+      output_string stdout str
     else ()
   ;;
 
@@ -118,15 +121,6 @@ let terminal_stag_functions prev =
   let print_open_stag _ = assert false in
   let print_close_stag _ = assert false in
   Format.{ mark_close_stag; mark_open_stag; print_open_stag; print_close_stag }
-;;
-
-let n_times_string n str =
-  let len = String.length str in
-  let result = Bytes.create (len * n) in
-  for i = 0 to n - 1 do
-    Bytes.blit_string str 0 result (i * len) len
-  done;
-  Bytes.unsafe_to_string result
 ;;
 
 type line_characters = {
@@ -205,60 +199,65 @@ let rec get_line_characters () =
     end
 ;;
 
-let print_initial_indentation ~last outc level =
+let print_initial_indentation ~last =
   (* output_string outc (string_of_int level); *)
-  match level with
+  match !nesting_level with
   | 0 -> ()
   | _ ->
-    AnsiSgrCodes.(output_code outc middle_gray);      
+    AnsiSgrCodes.(output_code middle_gray);      
     let lc = get_line_characters() in
-    output_string outc lc.prefix;
-    for _i = 0 to (level - 2) do
+    output_string stdout lc.prefix;
+    for _i = 0 to (!nesting_level - 2) do
       (* String.init (2 * (level - 1)) (fun i -> *)
-      output_string outc lc.vertical_bar;
-      output_char outc ' '
+      output_string stdout lc.vertical_bar;
+      output_char stdout ' '
     done;
-    output_string outc (if last then lc.up_right_corner else lc.right_tee);
-    output_string outc lc.horizontal_bar;
-    output_string outc lc.postfix;
-    AnsiSgrCodes.(output_code outc reset_code);      
+    output_string stdout (if last then lc.up_right_corner else lc.right_tee);
+    output_string stdout lc.horizontal_bar;
+    output_string stdout lc.postfix;
+    AnsiSgrCodes.(output_code reset_code);   
+    
+
+
+    
 ;;
 
-let print_normal_indentation ~last tc outc level =
-  (* AnsiSgrCodes.(output_code outc reset_code); *)
-  AnsiSgrCodes.(output_code outc middle_gray);  
+let print_normal_indentation ~last tc =
+  (* AnsiSgrCodes.(output_code stdout reset_code); *)
+  AnsiSgrCodes.(output_code middle_gray);  
   let lc = get_line_characters() in
-  output_string outc lc.prefix;        
+  output_string stdout lc.prefix;        
   if last then begin
-    assert (level >= 1);
-    for _i = 0 to level - 2 do
-      output_string outc lc.vertical_bar;
-      output_char outc ' '
+    assert (!nesting_level >= 1);
+    for _i = 0 to !nesting_level - 2 do
+      output_string stdout lc.vertical_bar;
+      output_char stdout ' '
     done;
-    output_string outc "    ";
+    output_string stdout "    ";
   end
   else begin
-    for _i = 0 to level do
-      output_string outc lc.vertical_bar;
-      output_char outc ' '
+    for _i = 0 to !nesting_level do
+      output_string stdout lc.vertical_bar;
+      output_char stdout ' '
     done
   end;
-  output_string outc lc.postfix;          
-  AnsiSgrCodes.(output_code outc tc);  
+  output_string stdout lc.postfix;          
+  AnsiSgrCodes.(output_code tc)
+
 ;;
 
 (* Print the buffer message, taking care of properly indenting
    everything, and of outputing a last newline if there was none. *)
 (* Note: I could have used a symbolc output buffer instead. *)
-let printf category ~last  formatstring =
+let printf category ~last formatstring =
+
   (* let givenk_:(Format.formatter -> unit) option = k in *)
   let buf = Format.make_symbolic_output_buffer () in (* Buffer.create 300 in *)
-  let nesting_level = !nesting_level in
   let tag = ("[" ^ category ^ "] ") in
   let indentation = String.length tag in
   let ppf = Format.formatter_of_symbolic_output_buffer buf in
   (* Do not print terminal codes when redirecting to a file. *)
-  if Unix.isatty Unix.stdout then begin
+  if (Unix.isatty Unix.stdout) then begin
     let formatter_tag_functions = terminal_stag_functions (Format.pp_get_formatter_stag_functions ppf ()) in
     Format.pp_set_formatter_stag_functions ppf formatter_tag_functions;
     Format.pp_set_mark_tags ppf true
@@ -268,12 +267,13 @@ let printf category ~last  formatstring =
     (* Get the list of things that we have to print. *)
     Format.pp_print_flush ppf ();
     let symbolic_item_list = Format.get_symbolic_output_buffer buf in
-
-    print_initial_indentation ~last stdout nesting_level;
-    (* Begin doing the real output. *)
-    AnsiSgrCodes.(output_code stdout bold);
+    
+    
+    print_initial_indentation ~last;
+    (* Begin doing the real output. *)   
+    AnsiSgrCodes.(output_code bold);
     output_string stdout tag;
-    AnsiSgrCodes.(output_code stdout normal);        
+    AnsiSgrCodes.(output_code normal);     
 
 
     (* We are folding on the list of symbolic items, and the
@@ -306,7 +306,7 @@ let printf category ~last  formatstring =
       | None -> ()
       | Some n ->
         output_string stdout "\n";
-        print_normal_indentation ~last terminal_command stdout nesting_level;
+        print_normal_indentation ~last terminal_command;
         output_string stdout (String.make (n + indentation - 2) ' ')
     in
 
@@ -392,6 +392,8 @@ let printf category ~last  formatstring =
     (* assert (snd terminal_command = AnsiSgrCodes.reset_code); *)
     let _ = output_terminal_command terminal_command in
     ()
-  in Format.kfprintf k ppf formatstring
+  in 
+  Format.kfprintf k ppf formatstring
+  
 ;;
 

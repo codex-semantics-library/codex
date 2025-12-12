@@ -1,0 +1,91 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;  This file is part of the Codex semantics library.                     ;;
+;;                                                                        ;;
+;;  Copyright (C) 2013-2025                                               ;;
+;;    CEA (Commissariat à l'énergie atomique et aux énergies              ;;
+;;         alternatives)                                                  ;;
+;;                                                                        ;;
+;;  you can redistribute it and/or modify it under the terms of the GNU   ;;
+;;  Lesser General Public License as published by the Free Software       ;;
+;;  Foundation, version 2.1.                                              ;;
+;;                                                                        ;;
+;;  It is distributed in the hope that it will be useful,                 ;;
+;;  but WITHOUT ANY WARRANTY; without even the implied warranty of        ;;
+;;  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         ;;
+;;  GNU Lesser General Public License for more details.                   ;;
+;;                                                                        ;;
+;;  See the GNU Lesser General Public License version 2.1                 ;;
+;;  for more details (enclosed in the file LICENSE).                      ;;
+;;                                                                        ;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(documentation
+  (package codex))
+
+(mdx
+  (files *.mld)
+  (deps (package codex) (package frama_c_codex) (package binsec_codex)))
+
+; Generate HTML files and compare them to the comitted ones
+; Frama-C generation. Also allows checking for CLI interface change
+(rule
+  (alias runtest)
+  (deps (package codex) (package frama_c_codex) example.c example.typedc)
+  (targets zeros_buffer.html zeros_buffer.webapp.html)
+  (action
+    (with-stdout-to frama-c.txt
+    (run
+      ; IN CASE OF CHANGES - please also modify the command and option doc in 'Types tutorial.mld'
+      frama_c_codex -codex
+      -codex-use-type-domain -codex-type-file %{dep:example.typedc}
+      %{dep:example.c} -main zeros_buffer -machdep gcc_x86_32
+      -codex-html-dump
+      ;-codex-output-prefix tst- TODO -codex-output-prefix ignored by HTML?
+      ))))
+
+; Frama-C comparisons - run with 'dune build @webapp'
+; These allow using 'dune promote' to update their values if the results change
+(rule
+  (alias webapp)
+  (action (diff output.html zeros_buffer.html)))
+
+(rule
+  (alias webapp)
+  (action (diff output.webapp.html zeros_buffer.webapp.html)))
+
+; Binsec generation: 1- Generate binary from example.
+; Disabled for now since it is not easily reproducible, Instead I've directly commited the binary
+;
+; NOTE: for 32-bit compilation on the CI, uncomment the 32-bit toolchain nativeBuildInputs
+; from 'shell.nix'
+;
+; (rule 
+;   (alias runtest)
+;   (deps example.c example_full.c)
+;   (target example.exe)
+;   (action (run gcc -O0 -o example.exe -m32 -fno-stack-protector %{dep:example_full.c})))
+
+; Run Binsec/codex on the example.exe, even if we don't compare the results, this
+; will fail if the CLI interface changes
+(rule
+  (alias runtest)
+  (deps (package codex) (package binsec_codex) example.exe example.typedc)
+  (targets bin_output.gen.html result_webapp.html)
+  (action 
+    (with-accepted-exit-codes 1 ; TODO why does binsec_codex return 1 and not 0?
+    (with-stdout-to binsec.txt
+    (with-stderr-to binsec.txt
+    (run
+      ; IN CASE OF CHANGES - please also modify the command and option doc in 'Types tutorial.mld'
+      binsec_codex -codex -codex-type-file %{dep:example.typedc} %{dep:example.exe}
+      -entrypoint zeros_buffer -codex-output-html bin_output.gen.html))))))
+
+; Binsec comparisons - run with 'dune build @webapp'
+; These allow using 'dune promote' to update their values if the results change
+(rule
+  (alias webapp)
+  (action (diff bin_output.html bin_output.gen.html)))
+
+(rule
+  (alias webapp)
+  (action (diff bin_output.webapp.html result_webapp.html)))

@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of the Codex semantics library.                     *)
 (*                                                                        *)
-(*  Copyright (C) 2013-2024                                               *)
+(*  Copyright (C) 2013-2025                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -80,12 +80,12 @@ type 'a parents = 'a array;;
 (* The functor is such that the helper "parents" structure can be easily embedded in another structure. *)
 module Make(Elt:sig
     type t
-    (* Distance from the root, where the root is 0. *)      
+    (* Distance from the root, where the root is 0. *)
     val depth: t -> int
 
     (* If the depth d is a multiple of 2^k, then the length of this
        array is at least k+1. parents.(i) points to the parent whose
-       depth is d - 2^i. *)    
+       depth is d - 2^i. *)
     val parents: t -> t parents
 
   end) = struct
@@ -100,7 +100,7 @@ module Make(Elt:sig
      n/2 elements have a pointer to 2 elements before;
      n/4 elements have a pointer to 4 elements before;
      etc.
-     Thus, the total number of cells in the array is \sum_{k=0}^{n} n/(2^k) which is asympotically equivalent to 2 * n. 
+     Thus, the total number of cells in the array is \sum_{k=0}^{n} n/(2^k) which is asympotically equivalent to 2 * n.
      In other words, the mean number of array cells in a list node is 2, and the mean complexity of cons is also 2.  *)
   let cons x =
     (* Printf.printf "in cons\n"; *)
@@ -110,7 +110,7 @@ module Make(Elt:sig
     let parents_length = trailing_zeroes + 1 in
 
     (* Printf.printf "deph' %d parent lengh %d\n" depth' parents_length; *)
-    (* MAYBE: The initialization could be lazy, to avoid the lookups.  
+    (* MAYBE: The initialization could be lazy, to avoid the lookups.
        Then, find could perform path compression, as in union-find structures. *)
     let parents : Elt.t parents = Array.make parents_length x in
     let rec loop i (pred: Elt.t) =
@@ -134,7 +134,7 @@ module Make(Elt:sig
      The worst case is log2(d - n), where d is the depth of the list.
 
      Indeed, moving from d to to a number multiple of log2(d - n) in the interval [d,n] takes log2(d - n) steps,
-     and similarly when moving to that multiple of log2(d-n) to n; 
+     and similarly when moving to that multiple of log2(d-n) to n;
      so we need at most 2*log2(d-n) calls to nth, each of constant time, to succeed.
 
      For instance, the worst case when moving from a list of size 15 is going to 1:
@@ -159,7 +159,7 @@ module Make(Elt:sig
       nth parents.(idx) v
   ;;
 
-  
+
 
   (* The binary search is log2(log2(depth)). The number of steps is log(depth-target). So we have log2(depth-target)*log2(log2(depth)) complexity. *)
   let rec nearest_common_ancestor_same_depth a b =
@@ -192,7 +192,7 @@ module Make(Elt:sig
     in
     let res = binary_search (-1) (length) in
     if res == -1
-    (* All the elements in the array are the same: we found our ancestor. *)       
+    (* All the elements in the array are the same: we found our ancestor. *)
     then begin
       assert(aparents.(0) == bparents.(0));
       aparents.(0)
@@ -216,7 +216,7 @@ module Make(Elt:sig
       let b'= nth b adepth in
       if b' == a then b'
       else nearest_common_ancestor_same_depth a b'
-    else 
+    else
     if a == b then a
     else nearest_common_ancestor_same_depth a b
   ;;
@@ -230,7 +230,7 @@ end
 module Test() = struct
   type node = {
     parents: node parents;
-    value:int;
+    (* value:int; *)
     depth:int;
   }
 
@@ -242,13 +242,13 @@ module Test() = struct
 
   module MakeElt = Make(T);;
 
-  let root = 
+  let root =
     let depth,parents = MakeElt.nil in
-    { parents; depth; value = 0 }
+    { parents; depth; (*value = 0*) }
 
   let cons value x =
     let depth,parents = MakeElt.cons x in
-    { parents; value; depth = x.depth + 1 }
+    { parents; (*value;*) depth = x.depth + 1 }
   ;;
 
   assert(MakeElt.nth root 0 == root);;
@@ -257,7 +257,7 @@ module Test() = struct
   let test_nth max =
     let array = Array.make max root in
     let rec loop x i =
-      Printf.printf "creating %d\n" i; 
+      Printf.printf "creating %d\n" i;
       array.(i) <- x;
       let i = i + 1 in
       if i == max then ()
@@ -265,7 +265,7 @@ module Test() = struct
     in loop root 0;
 
     for j = 0 to max - 1 do
-      for i = 0 to j do 
+      for i = 0 to j do
         Printf.printf "nth %d %d\n" j i;
         assert(MakeElt.nth array.(j) i == array.(i))
       done;

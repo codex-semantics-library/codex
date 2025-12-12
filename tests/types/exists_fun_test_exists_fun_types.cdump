@@ -1,9 +1,0 @@
-exists_fun.c:2.21-27: `a == b' -> {0x1}
-exists_fun.c:2.21-22: `a' -> [--..--]
-exists_fun.c:2.26-27: `b' -> [--..--]
-Unproved regular alarms:
-Unproved additional alarms:
-Proved 0/0 regular alarms
-Unproved 0 regular alarms and 0 additional alarms.
-exists_fun.c:2: assertion is TRUE (valid) (proved with abstract interpretation)
-Solved 1/1 user assertions, proved 1

@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of the Codex semantics library.                     *)
 (*                                                                        *)
-(*  Copyright (C) 2013-2024                                               *)
+(*  Copyright (C) 2013-2025                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,4 +19,4 @@
 (*                                                                        *)
 (**************************************************************************)
 
-include Basis_sig.Binary_Basis with type binary = Lattices.BVSet.t;;
+include Sva_sig.BITVECTOR with type bitvector = Lattices.BVSet.t;;

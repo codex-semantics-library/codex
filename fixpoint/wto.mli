@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of the Codex semantics library.                     *)
 (*                                                                        *)
-(*  Copyright (C) 2013-2024                                               *)
+(*  Copyright (C) 2013-2025                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -60,7 +60,7 @@ module Make(Node:sig
 
   (** Implements Bourdoncle "Efficient chaotic iteration strategies with 
   widenings" algorithm to compute a WTO. *)
-  val partition: ?pref:pref -> init:Node.t -> succs:(Node.t -> Node.t list) -> Node.t partition
+  val partition: pref:pref -> init:Node.t -> succs:(Node.t -> Node.t list) -> Node.t partition
 
   val pretty_partition: Format.formatter -> Node.t partition -> unit
   val pretty_component: Format.formatter -> Node.t component -> unit    

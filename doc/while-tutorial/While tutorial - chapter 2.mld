@@ -1,0 +1,328 @@
+{0 Lattices and Single Value Abstractions}
+
+{{!page-index.tutorials}Back to main} --
+{{!page-"While tutorial - chapter 1"}Previous chapter: While language} --
+{{!page-"While tutorial - chapter 3"}Next chapter: Interval analysis on the While language}
+
+A non-relational abstract interpreter approximates program behavior by tracking
+properties of individual variables independently, without encoding correlations
+between them. It stores facts like {m x \in V} where {m V} is some subset of {m \mathbb Z}.
+This is in contrast to relational abstractions, like polyhedra and octagon,
+which capture dependencies between variables (i.e. store facts like {m x + y \leqslant c}).
+
+In this chapter, we will discuss these core building blocks of the Codex library:
+- {!Lattices} provide the {b algebra}: how abstract values are ordered, joined, intersected, and widened.
+- {!Single_value_abstraction} (SVA): build on top of lattices to give the {b semantics} of operators (arithmetic, boolean, bitwise, etc.) behave in the abstract world.
+
+
+{1 Lattices}
+
+A {b lattice} ({{: https://en.wikipedia.org/wiki/Lattice_(order)}wikipedia}) is the backbone of abstract domains: it defines how to combine information (meet),
+compare precision (lattice order), and ensure loops converge (widening).
+The module {!Lattices.Sig} defines signatures for different kinds of lattices.
+Within Codex, one can find all the lattice implementations in {!Lattices} module.
+
+The core lattice operations are:
+  - {{!Lattices.Sig.LATTICE.includes}[includes: t -> t -> bool]} or {m \sqsubseteq} -
+      check if one value is more precise than another.
+      Smaller values are more precise (they concretize to a smaller set).
+      Note that [includes a b] is {m b \sqsubseteq a}.
+  - {{!Lattices.Sig.LATTICE.join}[join: t -> t -> t]} or {m \sqcup} -
+      merges information from two paths (e.g., after an [if], merge both branches).
+  - {{!Lattices.Sig.LATTICE.inter}[inter: t -> t -> t]} (meet) or {m \sqcap} -
+      refines information by keeping only what both values allow.
+  - {{!Lattices.Sig.LATTICE.widen}[widen: t -> t -> t]} or {m \nabla} -
+      ensures termination in loops by accelerating convergence when values keep
+      growing. Overapproximates join.
+
+In the following, we discuss two complete lattices. One which abstracts booleans,
+called {{!Lattices.Quadrivalent}quadrivalent}, and one which abstracts integers, called interval.
+
+
+{2 Quadrivalent Lattice}
+
+The quadrivalent lattice is a finite domain for booleans with four elements.
+It is the powerset of {m \{\text{true};\text{false}\}}. Its elements are named
+[Bottom] ({m \emptyset}, infeasible), [True], [False], and [Top] ({m \{\text{true};\text{false}\}}, unknown).
+Its definitions of {{!Lattices.Sig.LATTICE.join}[join]} ({m \sqcup}), and
+{{!Lattices.Sig.LATTICE.inter}[inter]} ({m \sqcap}) are simply set union/intersection.
+Since the lattice is finite, we do not need widening for termination.
+
+
+{@ocaml[
+module QuadrivalentLattice = struct
+    type t = Bottom | True | False | Top
+
+    let join a b = match (a,b) with
+      | Bottom, x | x, Bottom ->  x
+      | False, False -> False
+      | True, True -> True
+      | _ -> Top
+
+    let inter a b = match a,b with
+      | Bottom, _ | _, Bottom ->  Bottom
+      | Top, x | x, Top ->  x
+      | True, False | False, True ->  Bottom
+      | True, True -> True | False, False -> False
+
+    let includes a b = match a,b with
+      | Top, _ -> true
+      | _, Bottom -> true
+      | True, True -> true
+      | False, False -> true
+      | _ -> false
+
+    let widen ~previous b = join previous b
+  end
+]}
+
+Codex has a ready-made quadrivalent lattice implementation in {!Lattices.Quadrivalent}.
+
+{2 Interval Lattice}
+
+An interval is represented as a pair of values of type [Integer_Or_Inf.t]. Each
+bound can either be negative infinity, positive infinity, or a finite integer.
+This allows intervals to describe both finite ranges and unbounded ranges in a uniform way.
+
+First, we define the module [Integer_Or_Inf], which defined operations on our
+extended integer type {m \mathbb{Z} \cup \{+\infty, -\infty\}}:
+
+{@ocaml[
+module Integer_Or_Inf = struct
+    type t =
+        | Ninf (* Negative inﬁnity *)
+        | Pinf (* Positive inﬁnity . *)
+        | Finite of Z.t
+
+    let min a b = match a,b with
+      | Ninf, _ | _, Ninf -> Ninf
+      | x, Pinf | Pinf, x -> x
+      | Finite a, Finite b -> Finite(min a b)
+
+    let max a b = match a,b with
+      | Pinf, _ | _, Pinf -> Pinf
+      | x, Ninf | Ninf, x -> x
+      | Finite a, Finite b -> Finite(max a b)
+
+    let add a b = match a,b with
+      | Ninf, Pinf | Pinf, Ninf -> assert false
+      | Ninf, _ | _, Ninf -> Ninf
+      | Pinf, _ | _, Pinf -> Pinf
+      | Finite a, Finite b -> Finite(Z.add a b)
+
+    let neg = function
+      | Ninf -> Pinf
+      | Pinf -> Ninf
+      | Finite a -> Finite(Z.neg a)
+
+    let pp fmt = function
+      | Ninf -> Format.fprintf fmt "-∞"
+      | Pinf -> Format.fprintf fmt "+∞"
+      | Finite a -> Z.pp_print fmt a
+
+    let equal a b = match a, b with
+      | Ninf, Ninf | Pinf, Pinf -> true
+      | Finite a, Finite b -> Z.equal a b
+      | _ -> false
+
+    let leq a b = equal (min a b) a
+end
+]}
+
+
+Using this type, we can define our interval lattice in the [IntervalLattice] module:
+
+
+{@ocaml[
+module IntervalLattice = struct
+    (* Constraints: the min cannot be Pinf , the max cannot be Ninf. *)
+    type t = Integer_Or_Inf.t * Integer_Or_Inf.t
+
+    let pp fmt (min,max) = Format.fprintf fmt "[%a,%a]" Integer_Or_Inf.pp min Integer_Or_Inf.pp max
+    let equal (mina,maxa) (minb,maxb) =
+      Integer_Or_Inf.equal mina minb && (Integer_Or_Inf.equal maxa maxb)
+
+    let top = (Integer_Or_Inf.Ninf, Integer_Or_Inf.Pinf)
+
+    let singleton a = let ext = Integer_Or_Inf.Finite a in (ext,ext)
+
+    let join (mina,maxa) (minb,maxb) =
+      (Integer_Or_Inf.min mina minb, Integer_Or_Inf.max maxa maxb)
+
+    let inter (mina,maxa) (minb,maxb) =
+      (Integer_Or_Inf.max mina minb, Integer_Or_Inf.min maxa maxb)
+
+    let includes a b = equal (inter a b) b
+end
+]}
+
+In practice, Codex reuses Frama-C’s built-in interval library {{!Framac_ival.Ival}[Ival]},
+which offers a richer representation than this simple pair. In Ival, intervals are part of a more
+general type {{!Framac_ival.Ival.Top}[Top]} that can also capture congruence and
+modular information in addition to lower and upper bounds. There is also a
+{{!Framac_ival.Ival.Set}[Set]} constructor, so small sets of values can be stored exactly.
+
+
+{@ocaml file=../../ext/framac_ival/ival.mli,part=ival[
+type t = private
+  | Set of Int.t array
+  | Float of Fval.t
+  (** [Top(min, max, rem, modulo)] represents the interval between
+      [min] and [max], congruent to [rem] modulo [modulo]. A value of
+      [None] for [min] (resp. [max]) represents -infinity
+      (resp. +infinity). [modulo] is > 0, and [0 <= rem < modulo].
+
+      Actual [Top] is thus represented by Top(None,None,Int.zero,Int.one) *)
+  | Top of Int.t option * Int.t option * Int.t * Int.t
+]}
+
+This richer representation allows Codex to handle numeric domains more precisely
+than basic intervals.
+
+{1:sva Single Value Abstractions}
+
+Conceptually, a {i Single-Value Abstraction} (SVA) is an abstract domain for numeric values (integers, booleans, bitvectors...).
+Its elements are thus abstractions of sets of these values. An SVA packages:
+
+{ul
+{- {b A lattice implementation}, as seen in the previous section, which defines how to order, join, meet, and widen elements.}
+{- {b Transfer functions}: these are the abstract operations, they over-approximate
+    concrete program operations. In the case of SVA, these operations are
+    arithmetic ([+], [-], [*]), bitwise ([&], [|], [^], ...) and comparison ([==], [<=], ...) operators on
+    values.
+
+    We distinguish between {i forward} transfer function, which compute the results of an operation,
+    and {i backward} transfer functions, which refine inputs from known results.
+  {ul
+  {- {b forward transfer functions}: Given abstract values for the inputs, compute the abstract value of the output.
+     Example: from intervals [[0,5]] and [[2,3]], [iadd] gives [[2,8]].}
+  {- {b backward transfer functions}: Given the output and some information about the input, refine the possible values of the other input.
+     Example: if [x + y  ∈ [10,10]] and [y ∈ [2,3]], then we can refine [x] to [[7,8]].
+
+     In Codex, these return an option type for each argument, where [None] is used
+     to indicate no new information was learned. So in our example,
+     [iadd top [2,3] [10,10]] would return [Some [7,8], None] since no information is
+     learned on [y].
+     }
+  }}}
+This separation allows Lattices to supply the algebra, while SVAs define the
+semantics of operators (arithmetic, comparisons, bitwise, etc.).
+
+The {!Single_value_abstraction} library contains various implementations of SVAs within Codex.
+We provide simplified example implementations below.
+
+{2 Quadrivalent Abstraction}
+
+As the quadrivalent lattice exactly represents {m \mathcal{P}(\{\text{true}, \text{false}\})}, we can easily
+implement the best forward transfer functions as follows, which are sound and
+exact.
+
+{@ocaml[
+module SVA_Quadrivalent = struct
+  include QuadrivalentLattice
+
+  (** Forward transfer functions *)
+  module Boolean_Forward = struct
+    (** Boolean not operator *)
+    let neg = function
+      | Bottom -> Bottom | True -> False | False -> True | Top -> Top
+
+    (** Boolean and operator *)
+    let band a b = match a,b with
+      | Bottom, _ | _, Bottom -> Bottom
+      | False, _ | _, False -> False
+      | True,True ->  True
+      | Top,True | True, Top | Top,Top -> Top
+
+    (** Boolean or operator *)
+    let bor a b = match a,b with
+      | Bottom, _ | _, Bottom ->  Bottom
+      | True, _ | _, True ->  True
+      | False,False ->  False
+      | Top,False | False, Top | Top,Top -> Top
+  end
+
+  (** backward transfer functions *)
+  module Boolean_Backward = struct
+    let neg x result =
+      let notres = Boolean_Forward.neg result in (* neg is involutive, so we can reuse it here *)
+      let refined_x = inter x notres in
+      if includes refined_x x then None else Some refined_x
+
+    let band a b result = match result with
+      | Top -> (None, None)
+      | True -> (* a && b is true only when both are true *)
+          ((if includes True a then None else Some True), (if includes True b then None else Some True))
+      | False -> (* we only know that one of them has to be false *)
+          begin match a, b with
+          | Top, True -> (Some False, None)
+          | True, Top -> (None, Some False)
+          | _ -> (None, None)
+          end
+      | Bottom -> (None, None)
+
+    (* bor is similar to band ... *)
+  end
+end
+]}
+
+In Codex, the full implementation of is in {!Single_value_abstraction.Quadrivalent}.
+
+{2:sva_intv Interval Single-Value-Abstraction}
+
+To reason about programs abstractly, we need transfer functions that describe how
+arithmetic and boolean operations behave over intervals. Instead of showing the
+full implementation, we present a simplified [Interval_Forward] template.
+
+
+The template illustrates abstract versions of [Add], [Neg], [Sub], as well as
+boolean comparisons {m \leq} and {m =}. For booleans, results are returned using
+the quadrivalent lattice. The complete [Integer_Forward] implementation is available
+in Codex under {!Single_value_abstraction.Ival}.
+
+
+{@ocaml[
+module SVA_Interval = struct
+  include IntervalLattice
+
+  module Integer_Forward = struct
+    open Integer_Or_Inf
+
+    let add (mina,maxa) (minb,maxb) = (add mina minb, add maxa maxb)
+    let neg (min,max) = (neg max, neg min)
+    let sub itva itvb = add itva (neg itvb)
+
+    let leq (mina,maxa) (minb,maxb) = (* a <= b *)
+      let open QuadrivalentLattice in
+      match maxa,minb with
+      | Finite maxa, Finite minb when Z.leq maxa minb ->  True
+      | _ -> begin
+          match mina,maxb with
+          | Finite mina, Finite maxb when Z.gt mina maxb ->  False
+          | _ ->  Top
+      end
+
+    let eq (mina,maxa) (minb,maxb) =
+      let open QuadrivalentLattice in
+      match mina,maxa,minb,maxb with
+      | _, Finite maxa, Finite minb, _ when Z.lt maxa minb ->  False
+      | Finite mina, _, _, Finite maxb when Z.gt mina maxb ->  False
+      | Finite mina, Finite maxa, Finite minb, Finite maxb when
+        Z.equal mina maxa && (Z.equal mina minb) && (Z.equal mina maxb) ->  True
+      | _ ->  Top
+  end
+
+  module Integer_Backward = struct
+    let add a b result =
+      let refined_a = inter a (Integer_Forward.sub result b) in
+      let refined_b = inter b (Integer_Forward.sub result a) in
+      (if includes refined_a a then None else Some refined_a),
+      (if includes refined_b b then None else Some refined_b)
+    (* ... *)
+  end
+end
+]}
+
+{{!page-index.tutorials}Back to main} --
+{{!page-"While tutorial - chapter 1"}Previous chapter: While language} --
+{{!page-"While tutorial - chapter 3"}Next chapter: Interval analysis on the While language}

@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of the Codex semantics library.                     *)
 (*                                                                        *)
-(*  Copyright (C) 2013-2024                                               *)
+(*  Copyright (C) 2013-2025                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -20,28 +20,28 @@
 (**************************************************************************)
 
 
-(* This implement a map from keys that are in a tree relationship
+(** This implement a map from keys that are in a tree relationship
    (e.g. a sets of paths) to a lattice.
 
-   It is so that after n calls to "refine ki li", then a map k is
-   mapped to the intersection of all the li for which there was a
-   refine ki li call, and for which ki is a parent of k.
-*)
+   It is so that after n calls to [refine ki li], then a map [k] is
+   mapped to the intersection of all the [li] for which there was a
+   [refine ki li] call, and for which [ki] is a parent of [k]. *)
+
 module type Key =
 sig
   type t
 
-  (* Nearest common ancestor between two elements in the tree *)
+  (** Nearest common ancestor between two elements in the tree *)
   val nearest_common_ancestor : t -> t -> t
 
-  (* If a an ancestor of b  *)
+  (** [is_prefix a b] is true if [a] an ancestor of [b] *)
   val is_prefix : t -> t -> bool
   val equal : t -> t -> bool
   val pretty : Format.formatter -> t -> unit
 end
 
 
-(* More efficient veresion, but without empty. *)
+(** More efficient version, but without empty. *)
 module Make_no_empty(Key : Key):
 sig
   type 'a t

@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of the Codex semantics library.                     *)
 (*                                                                        *)
-(*  Copyright (C) 2013-2024                                               *)
+(*  Copyright (C) 2013-2025                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,13 +19,12 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(* A very simple benchmarking API. *)
+(** A very simple benchmarking API. *)
 
 
-(* By default OCaml uses floats to record dates, which makes me worry
-   about precision. This simple C API does not have this defect.
-   bench_return_time returns the number of microseconds since the last
-   call to  bench_record_time. *)
+(** By default OCaml uses floats to record dates, which makes me worry
+    about precision. This simple C API does not have this defect.
+    bench_return_time returns the number of microseconds since the last
+    call to  bench_record_time. *)
 external record_time: unit -> unit = "libase_record_time";;
-external return_time: unit -> int = "caml_libase_return_time";;  
-
+external return_time: unit -> int = "caml_libase_return_time";;

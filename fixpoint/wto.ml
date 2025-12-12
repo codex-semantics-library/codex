@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of the Codex semantics library.                     *)
 (*                                                                        *)
-(*  Copyright (C) 2013-2024                                               *)
+(*  Copyright (C) 2013-2025                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -194,7 +194,7 @@ module Make(N:sig
     ;;
 
 
-    let partition ~init ~succs =
+    let _partition ~init ~succs =
       let state = {dfn = DFN.create 17; num = 0; succs;
                    stack = Stack.create () } in
       snd @@ visit state init []
@@ -321,10 +321,10 @@ module Make(N:sig
 
     type pref = N.t -> N.t -> int
 
-    let partition ?pref ~init ~succs =
+    let partition ~pref ~init ~succs =
       let state = {dfn = DFN.create 17; num = 0; succs;
                    stack = Stack.create () } in
-      let loop,component = visit ~pref state init [] in
+      let loop,component = visit ~pref:(Some pref) state init [] in
       assert (loop = NoLoop);
       component
 

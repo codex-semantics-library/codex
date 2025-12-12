@@ -1,9 +1,0 @@
-assert.c:15.19-26: `*a == 4' -> {0; 1}
-assert.c:15.19-21: `*a' -> [--..--]
-assert.c:15.20-21: `a' -> ([1..0xFFFFFFFF] : ({self : int(4)[{0}].(0)* | (self != 0)}))
-Unproved regular alarms:
-Unproved additional alarms:
-Proved 1/1 regular alarms
-Unproved 0 regular alarms and 0 additional alarms.
-assert.c:15: assertion is FALSE (counter-example exists) (proved with smt solving)
-Solved 1/1 user assertions, proved 0

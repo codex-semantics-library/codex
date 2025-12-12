@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of the Codex semantics library.                     *)
 (*                                                                        *)
-(*  Copyright (C) 2013-2024                                               *)
+(*  Copyright (C) 2013-2025                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -24,9 +24,9 @@
    sub-process. *)
 include module type of Smtbackend_smtlib_sig
 
-module Make_Typed(P:Param_S):Typed_S
-module Make_Untyped(P:Param_S):Untyped_S
-module Make_Untyped_Muz(P:Param_S):Untyped_Muz
+module Make_Typed(P:PARAM_S):TYPED_S
+module Make_Untyped(P:PARAM_S):UNTYPED_S
+module Make_Untyped_Muz(P:PARAM_S):UNTYPED_MUZ
 
 
-val with_z3: ?executable:string -> ((module Untyped_Muz) -> 'a) -> 'a
+val with_z3: ?executable:string -> ((module UNTYPED_MUZ) -> 'a) -> 'a

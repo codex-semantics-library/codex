@@ -1,3 +1,13 @@
 _build
 ext/frama_c_with_cudd/frama-c*
+utils/patricia-tree
 .dockerignore
+
+.git
+.vscode
+.gitmodules
+.gitlab-ci.yml
+
+.mypy_cache
+.ruff_cache
+__pycache__

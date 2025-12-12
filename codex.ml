@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of the Codex semantics library.                     *)
 (*                                                                        *)
-(*  Copyright (C) 2013-2024                                               *)
+(*  Copyright (C) 2013-2025                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,19 +19,27 @@
 (*                                                                        *)
 (**************************************************************************)
 
-module Transfer_functions = Transfer_functions
+(** XXX: Entry poitn to our documentation? *)
+
+
+module Operator = Operator
 module Fixpoint = Fixpoint
 module Codex_config = Codex_config
 module Codex_log = Codex_log
+module Hook = Hook
 module Types = Types
 module Lattices = Lattices
+module Single_value_abstraction = Single_value_abstraction
 module Utils =  struct
-  module Mutable_radix_trie = Mutable_radix_trie
+  module Interval_map = Interval_map
   module Datatype_sig = Datatype_sig
 end
 
-module Domains = struct
-  include Domains
+module Ext = struct
+  module Framac_ival = Framac_ival (* Temporary *)
 end
-module Extstdlib = Extstdlib
 
+module Domains = Domains
+
+module Extstdlib = Extstdlib
+module Gui = Gui

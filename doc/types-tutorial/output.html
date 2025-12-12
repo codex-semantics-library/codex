@@ -1,0 +1,388 @@
+
+<!DOCTYPE HTML>
+<html lang="en">
+
+<head>
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+  <script type='text/javascript'>
+    clicked = [];
+    
+    $(document).ready(function () {
+ 
+      $(".expnest").mouseup(function () {
+        $(this).css({"background-color": $(this).css("background-color"), "color": "black"});
+        $("#eidinfo" + $(this).attr("data-eid")).show();
+        clicked.push($(this));
+      });
+      
+      $(".expnest").hover(
+          function () {
+            if (clicked.length == 0) {
+                $(this).css({"background-color": $(this).css("background-color"), "color": "black"});
+                $("#eidinfo" + $(this).attr("data-eid")).show();
+            }
+          }, 
+          function () {
+            if (clicked.length == 0) {
+                $(this).removeAttr('style');
+                $("#eidinfo" + $(this).attr("data-eid")).hide();
+            }
+      });
+      
+    $(".code-container").mousedown(function (e) {
+        if ((e.offsetX <= e.target.clientWidth && e.offsetY <= e.target.clientHeight) || 
+            (e.target.clientWidth == 0 && e.target.clientHeight == 0)) {
+          clicked.forEach(c => {c.removeAttr('style'); $("#eidinfo" + c.attr("data-eid")).hide();});
+          clicked = [];
+        }
+    });
+    
+    });
+  </script>
+  <style>
+
+    .def {
+      display: none;
+    }
+
+    .expnest:hover+.expinfo>.def {
+      display: inline-block;
+    }
+
+    .expinfo {
+      border: 1px solid black;
+      border-radius: 12px;
+    }
+
+    .expinfo>.eidinfo {
+      display: none;
+    }
+
+    .expnest0:hover {
+      background-color: #DDFFD6;
+      color: #000000;
+    }
+
+    .expnest1:hover {
+      background-color: #FFC2C2;
+      color: #000000;
+    }
+
+    .expnest2:hover {
+      background-color: #ADF8FF;
+      color: #000000;
+    }
+
+    .expnest3:hover {
+      background-color: #FEFFD6;
+      color: #000000;
+    }
+
+    .expnest4:hover {
+      background-color: #DCD6FF;
+      color: #000000;
+    }
+
+    .expnest5:hover {
+      background-color: #FFE3C2;
+      color: #000000;
+    }
+
+    .expnest6:hover {
+      background-color: #C2D9FF;
+      color: #000000;
+    }
+
+    .expnest7:hover {
+      background-color: #F9C8E0;
+      color: #000000;
+    }
+
+    .expnest8:hover {
+      background-color: #DCD6FF;
+      color: #000000;
+    }
+
+    .expnest9:hover {
+      background-color: #BDB2FF;
+      color: #000000;
+    }
+
+    .expnest10:hover {
+      background-color: #FFECD6;
+      color: #000000;
+    }
+
+    .expnest11:hover {
+      background-color: #FFD6A5;
+      color: #000000;
+    }
+
+    .expnest12:hover {
+      background-color: #D6E6FF;
+      color: #000000;
+    }
+
+    .expnest13:hover {
+      background-color: #A0C4FF;
+      color: #000000;
+    }
+
+    .expnest14:hover {
+      background-color: #FBDAEB;
+      color: #000000;
+    }
+
+    .expnest15:hover {
+      background-color: #F7B6D7;
+      color: #000000;
+    }
+
+    .expnest0 {
+      background-color: #f0f0f0;
+    }
+
+    .font-expnest0 {
+      background-color: #DDFFD6;
+    }
+
+    .font-expnest1 {
+      background-color: #FFC2C2;
+    }
+
+    .font-expnest2 {
+      background-color: #ADF8FF;
+    }
+
+    .font-expnest3 {
+      background-color: #FEFFD6;
+    }
+
+    .font-expnest4 {
+      background-color: #DCD6FF;
+    }
+
+    .font-expnest5 {
+      background-color: #FFE3C2;
+    }
+
+    .font-expnest6 {
+      background-color: #C2D9FF;
+    }
+
+    .font-expnest7 {
+      background-color: #F9C8E0;
+    }
+  
+    .font-expnest8 {
+      background-color: #DCD6FF;
+    }
+
+    .font-expnest9 {
+      background-color: #BDB2FF;
+    }
+
+    .font-expnest10 {
+      background-color: #FFECD6;
+    }
+
+    .font-expnest11 {
+      background-color: #FFD6A5;
+    }
+
+    .font-expnest12 {
+      background-color: #D6E6FF;
+    }
+
+    .font-expnest13 {
+      background-color: #A0C4FF;
+    }
+
+    .font-expnest14 {
+      background-color: #FBDAEB;
+    }
+
+    .font-expnest15 {
+      background-color: #F7B6D7;
+    }
+
+    body {
+      /* background-color: #001B2E; */
+    }
+
+    .code-container {
+      font-family: monospace;
+      line-height: 1.5;
+      color: /* #FFF8EB; */ #000000;
+      overflow: auto;
+      height: 92vh;
+    }
+
+    .expinfo {
+      /* background-color: #ADB6C4; */
+      background-color: #eeeeee;
+      padding: 10px;
+      font-family: monospace;
+      line-height: 1.5;
+      color: #000;
+    }
+
+    .column {
+      float: left;
+      overflow: auto;
+    }
+
+    .row:after {
+      content: "";
+      display: table;
+      clear: both;
+    }
+
+    /* Syntax highlighting for C keywords */
+    .code-container .keyword {
+      color: #800080 /* 579dd6; 
+      font-weight: bold; */
+    }
+
+    .code-container .type {
+      color: #228b22;
+    }
+
+    .code-container .vardecl {
+      color: #a0522d;
+    }
+
+    /* Syntax highlighting for C comments */
+    .code-container .comment {
+      color: #6a9955;
+      /* green */
+      font-style: italic;
+    }
+
+    /* Syntax highlighting for C strings */
+    .code-container .string {
+      color: #ce9079;
+      /* red */
+    }
+
+    /* Syntax highlighting for C numbers */
+    .code-container .number {
+      color: #b5cea8;
+      /* orange */
+    }
+
+    /* Syntax highlighting for C preprocessor directives */
+    .code-container .preprocessor {
+      color: #c586c0;
+      /* gray */
+    }
+
+    /* Syntax highlighting for C functions */
+    .code-container .function-name {
+      color: #0000ff;
+    }
+
+    .scrollbar::-webkit-scrollbar-track
+    {
+      border: 1px solid black;
+      background-color: #FFF8EB;
+    }
+
+    .scrollbar::-webkit-scrollbar
+    {
+      width: 10px;
+    }
+
+    .scrollbar::-webkit-scrollbar-thumb
+    {
+      background-color: #ADB6C4;	
+    }
+  </style>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+  <title>Frama-C/Codex Analysis results</title>
+</head>
+
+<body>
+  <div class="row">
+    <pre class="scrollbar column code-container" style="width: 45%; margin: 0px;">
+/* Generated by Frama-C */
+<span class="keyword">struct</span> <span class="type">message</span> {
+   <span class="type"><span class="type"><span class="keyword">struct</span> <span class="type">message</span> <span class="vardecl">*<span class="vardecl">next</span></span></span></span> ;
+   <span class="type"><span class="type"><span class="type">char</span> <span class="vardecl">*<span class="vardecl">buffer</span></span></span></span> ;
+};
+<span class="keyword">struct</span> <span class="type">message_box</span> {
+   <span class="type"><span class="type">int</span> <span class="vardecl">length</span></span> ;
+   <span class="type"><span class="type"><span class="keyword">struct</span> <span class="type">message</span> <span class="vardecl">*<span class="vardecl">first</span></span></span></span> ;
+};
+<a name="vi-global-zeros_buffer"></a><span class="type"><span class="type">void <span class="vardecl"><span class="vardecl"><a data-eid="0" href="#vi-global-zeros_buffer" class="expnest expnest0 function-name">zeros_buffer</a></span>(<span class="type"><span class="type"><span class="keyword">struct</span> <span class="type">message_box</span> <span class="vardecl">*<span class="vardecl">box</span></span></span></span>)</span></span></span>
+{
+  <span class="statement"><span class="type"><span class="type"><span class="keyword">struct</span> <span class="type">message</span> <span class="vardecl">*<span class="vardecl">first</span></span></span></span> = <span data-eid="1" class="expnest expnest0"><span data-eid="2" class="expnest expnest0"><span data-eid="3" class="expnest expnest1"><span data-eid="4" class="expnest expnest1">box</span></span>->first</span></span>;</span>
+  <span class="statement"><span class="type"><span class="type"><span class="keyword">struct</span> <span class="type">message</span> <span class="vardecl">*<span class="vardecl">current</span></span></span></span> = <span data-eid="5" class="expnest expnest0"><span data-eid="6" class="expnest expnest0">first</span></span>;</span>
+  <span class="statement"><span class="type"><span class="type">int</span> <span class="vardecl">length</span></span> = <span data-eid="7" class="expnest expnest0"><span data-eid="8" class="expnest expnest0"><span data-eid="9" class="expnest expnest1"><span data-eid="10" class="expnest expnest1">box</span></span>->length</span></span>;</span>
+  <span class="keyword">while</span> (1) {
+    {
+      <span class="statement"><span class="type"><span class="type">int</span> <span class="vardecl">i</span></span> = <span data-eid="11" class="expnest expnest0">0</span>;</span>
+      <span class="keyword">while</span> (<span data-eid="12" class="expnest expnest0"><span data-eid="13" class="expnest expnest1"><span data-eid="14" class="expnest expnest1">i</span></span> &lt; <span data-eid="15" class="expnest expnest1"><span data-eid="16" class="expnest expnest1">length</span></span></span>) {
+        <span class="statement"><span data-eid="17" class="expnest expnest0">*(<span data-eid="18" class="expnest expnest1"><span data-eid="19" class="expnest expnest2"><span data-eid="20" class="expnest expnest2"><span data-eid="21" class="expnest expnest3"><span data-eid="22" class="expnest expnest3">current</span></span>->buffer</span></span> + <span data-eid="23" class="expnest expnest2"><span data-eid="24" class="expnest expnest2">i</span></span></span>)</span> = <span data-eid="25" class="expnest expnest0">(<span class="type"><span class="type">char</span></span>)<span data-eid="26" class="expnest expnest1">0</span></span>;</span>
+        <span class="statement"><span data-eid="27" class="expnest expnest0">i</span> ++;</span>
+      }
+    }
+    <span class="statement"><span data-eid="28" class="expnest expnest0">current</span> = <span data-eid="29" class="expnest expnest0"><span data-eid="30" class="expnest expnest0"><span data-eid="31" class="expnest expnest1"><span data-eid="32" class="expnest expnest1">current</span></span>->next</span></span>;</span>
+    <span class="keyword">if</span> (<span data-eid="33" class="expnest expnest0">! (<span data-eid="34" class="expnest expnest1"><span data-eid="35" class="expnest expnest2"><span data-eid="36" class="expnest expnest2">current</span></span> != <span data-eid="37" class="expnest expnest2"><span data-eid="38" class="expnest expnest2">first</span></span></span>)</span>) <span class="keyword">break</span>;
+  }
+  <span class="keyword">return</span>;
+}
+
+
+</pre><div class="column expinfo" style="height: 92vh; width: 54%; padding: 0px;"><div class="scrollbar" style="padding: 10px; font-family: sans; background-color: #8C96A7; color: black; min-height: 5vh; max-height: 20vh; overflow: auto;">
+<div style="font-variant: small-caps">Unproved alarms:</div>
+<div style="font-family: monospace">example.c:12: Memory_access(box->first,
+read) {true;false}</div>
+<div style="font-family: monospace">example.c:19: Memory_access(current->buffer,
+read) {true;false}</div>
+<div style="font-family: monospace">example.c:19: Memory_access(*(current->buffer + i),
+write) {true;false}</div>
+<div style="font-family: monospace">example.c:21: Memory_access(current->next,
+read) {true;false}</div>
+<div style="font-variant: small-caps">Proved 1/5 alarms</div></div>
+<hr style="border: 1px solid black; margin: 0px;">
+<table style="width: 100%"> <tr> <th style="font-style: italic">/</th> <th>Name</th> <th>Type</th> <th>Value</th> </tr><tr class="font-expnest0 eidinfo" id="eidinfo1" style="display: none"><td>Expr</td> <td>box->first</td> <td>struct message *</td> <td>{0} or ([1..0xFFFFFFFF] : struct message*)</td></tr>
+<tr class="font-expnest0 eidinfo" id="eidinfo2" style="display: none"><td>Lval</td> <td>box->first</td> <td>struct message *</td></tr>
+<tr class="font-expnest1 eidinfo" id="eidinfo3" style="display: none"><td>Expr</td> <td>box</td> <td>struct message_box *</td> <td>{0} or ([1..0xFFFFFFFF] : struct message_box*)</td></tr>
+<tr class="font-expnest1 eidinfo" id="eidinfo4" style="display: none"><td>Lval</td> <td>box</td> <td>struct message_box *</td></tr>
+<tr class="font-expnest0 eidinfo" id="eidinfo5" style="display: none"><td>Expr</td> <td>first</td> <td>struct message *</td> <td>{0} or ([1..0xFFFFFFFF] : struct message*)</td></tr>
+<tr class="font-expnest0 eidinfo" id="eidinfo6" style="display: none"><td>Lval</td> <td>first</td> <td>struct message *</td></tr>
+<tr class="font-expnest0 eidinfo" id="eidinfo7" style="display: none"><td>Expr</td> <td>box->length</td> <td>int</td> <td>[--..--]</td></tr>
+<tr class="font-expnest0 eidinfo" id="eidinfo8" style="display: none"><td>Lval</td> <td>box->length</td> <td>int</td></tr>
+<tr class="font-expnest1 eidinfo" id="eidinfo9" style="display: none"><td>Expr</td> <td>box</td> <td>struct message_box *</td> <td>([1..0xFFFFFFFB] : struct message_box*)</td></tr>
+<tr class="font-expnest1 eidinfo" id="eidinfo10" style="display: none"><td>Lval</td> <td>box</td> <td>struct message_box *</td></tr>
+<tr class="font-expnest0 eidinfo" id="eidinfo11" style="display: none"><td>Expr</td> <td>0</td> <td>int</td> <td>{0x0}</td></tr>
+<tr class="font-expnest0 eidinfo" id="eidinfo12" style="display: none"><td>Expr</td> <td>i < length</td> <td>int</td> <td>{0; 1}</td></tr>
+<tr class="font-expnest1 eidinfo" id="eidinfo13" style="display: none"><td>Expr</td> <td>i</td> <td>int</td> <td>[0..0x7FFFFFFF]</td></tr>
+<tr class="font-expnest1 eidinfo" id="eidinfo14" style="display: none"><td>Lval</td> <td>i</td> <td>int</td></tr>
+<tr class="font-expnest1 eidinfo" id="eidinfo15" style="display: none"><td>Expr</td> <td>length</td> <td>int</td> <td>[--..--]</td></tr>
+<tr class="font-expnest1 eidinfo" id="eidinfo16" style="display: none"><td>Lval</td> <td>length</td> <td>int</td></tr>
+<tr class="font-expnest0 eidinfo" id="eidinfo17" style="display: none"><td>Lval</td> <td>*(current->buffer + i)</td> <td>char</td></tr>
+<tr class="font-expnest1 eidinfo" id="eidinfo18" style="display: none"><td>Expr</td> <td>current->buffer + i</td> <td>char *</td> <td>[0..0x7FFFFFFE] or ([1..0xFFFFFFFF] : buffer[{0}].[0..0x7FFFFFFE]*)</td></tr>
+<tr class="font-expnest2 eidinfo" id="eidinfo19" style="display: none"><td>Expr</td> <td>current->buffer</td> <td>char *</td> <td>{0} or ([1..0xFFFFFFFF] : buffer*)</td></tr>
+<tr class="font-expnest2 eidinfo" id="eidinfo20" style="display: none"><td>Lval</td> <td>current->buffer</td> <td>char *</td></tr>
+<tr class="font-expnest3 eidinfo" id="eidinfo21" style="display: none"><td>Expr</td> <td>current</td> <td>struct message *</td> <td>{0} or ([1..0xFFFFFFFF] : struct message*)</td></tr>
+<tr class="font-expnest3 eidinfo" id="eidinfo22" style="display: none"><td>Lval</td> <td>current</td> <td>struct message *</td></tr>
+<tr class="font-expnest2 eidinfo" id="eidinfo23" style="display: none"><td>Expr</td> <td>i</td> <td>int</td> <td>[0..0x7FFFFFFE]</td></tr>
+<tr class="font-expnest2 eidinfo" id="eidinfo24" style="display: none"><td>Lval</td> <td>i</td> <td>int</td></tr>
+<tr class="font-expnest0 eidinfo" id="eidinfo25" style="display: none"><td>Expr</td> <td>(char)0</td> <td>char</td> <td>{0}</td></tr>
+<tr class="font-expnest1 eidinfo" id="eidinfo26" style="display: none"><td>Expr</td> <td>0</td> <td>int</td> <td>{0x0}</td></tr>
+<tr class="font-expnest0 eidinfo" id="eidinfo27" style="display: none"><td>Lval</td> <td>i</td> <td>int</td></tr>
+<tr class="font-expnest0 eidinfo" id="eidinfo28" style="display: none"><td>Lval</td> <td>current</td> <td>struct message *</td></tr>
+<tr class="font-expnest0 eidinfo" id="eidinfo29" style="display: none"><td>Expr</td> <td>current->next</td> <td>struct message *</td> <td>{0} or ([1..0xFFFFFFFF] : struct message*)</td></tr>
+<tr class="font-expnest0 eidinfo" id="eidinfo30" style="display: none"><td>Lval</td> <td>current->next</td> <td>struct message *</td></tr>
+<tr class="font-expnest1 eidinfo" id="eidinfo31" style="display: none"><td>Expr</td> <td>current</td> <td>struct message *</td> <td>{0} or ([1..0xFFFFFFFF] : struct message*)</td></tr>
+<tr class="font-expnest1 eidinfo" id="eidinfo32" style="display: none"><td>Lval</td> <td>current</td> <td>struct message *</td></tr>
+<tr class="font-expnest0 eidinfo" id="eidinfo33" style="display: none"><td>Expr</td> <td>! (current != first)</td> <td>int</td> <td></td></tr>
+<tr class="font-expnest1 eidinfo" id="eidinfo34" style="display: none"><td>Expr</td> <td>current != first</td> <td>int</td> <td>{0; 1}</td></tr>
+<tr class="font-expnest2 eidinfo" id="eidinfo35" style="display: none"><td>Expr</td> <td>current</td> <td>struct message *</td> <td>{0} or ([1..0xFFFFFFFF] : struct message*)</td></tr>
+<tr class="font-expnest2 eidinfo" id="eidinfo36" style="display: none"><td>Lval</td> <td>current</td> <td>struct message *</td></tr>
+<tr class="font-expnest2 eidinfo" id="eidinfo37" style="display: none"><td>Expr</td> <td>first</td> <td>struct message *</td> <td>{0} or ([1..0xFFFFFFFF] : struct message*)</td></tr>
+<tr class="font-expnest2 eidinfo" id="eidinfo38" style="display: none"><td>Lval</td> <td>first</td> <td>struct message *</td></tr>
+<tr class="font-expnest0 eidinfo" id="eidinfo0" style="display: none"><td>Func</td> <td>zeros_buffer</td> <td>Name(function zeros_buffer)</td></tr>
+</table></div></body></html>

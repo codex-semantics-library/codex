@@ -3,7 +3,7 @@ opam-version: "2.0"
 synopsis: """
 The Frama-C/Codex plugin for modular static analysis of C.
 The package contains both a standalone frama_c_codex executable, as well
-as a plugin which works on patched versions of Frama_C."""
+as a plugin which works on patched versions of Frama_C"""
 maintainer: ["Matthieu Lemerre <matthieu.lemerre@cea.fr>"]
 authors: [
   "Matthieu Lemerre"
@@ -14,11 +14,12 @@ authors: [
   "Corentin Gendreau"
   "Guillaume Girol"
 ]
-license: "LGPL-2.1"
+license: "LGPL-2.1-or-later"
+homepage: "https://codex.top"
 bug-reports: "https://github.com/codex-semantics-library/codex/issues"
 depends: [
-  "dune" {>= "2.8"}
-  "frama-c" {>= "26.0" & < "28.0"}
+  "dune" {>= "3.14"}
+  "frama-c" {= "31.0"}
   "codex" {>= "1.0-rc1"}
   "odoc" {with-doc}
 ]
@@ -31,8 +32,11 @@ build: [
     name
     "-j"
     jobs
+    "--promote-install-files=false"
     "@install"
     "@runtest" {with-test}
     "@doc" {with-doc}
   ]
+  ["dune" "install" "-p" name "--create-install-files" name]
 ]
+dev-repo: "git+https://github.com/codex-semantics-library/codex.git"

@@ -1,0 +1,45 @@
+
+/* Every message takes two implicit parameters: the size of the
+   message, and the task that will receive the message.
+
+   These parameters guarantee that messages of different tasks or
+   adressed to different tasks will not be mixed up (non-interference
+   security property). */
+type message(msize,taskid) = struct {
+  message(msize,taskid)+ next;
+
+  /* XXX: Flexible array member ne marche pas ici. */
+  /* Flexible array member: the size of struct message is variable. */
+  char[msize]+ buffer;
+}
+
+/* The \exists constructs allows linking the size of the buffers in
+   all the messages with the integer holding the size of the message
+   (which is stored only once). */
+type message_box(taskid) = \exists msize:int. struct {
+  /* Size of the message. */
+  (int with self == msize) size;
+
+  /* Pointer to the list of messages to process. */
+  message(msize,taskid)* to_read;
+  message(msize,taskid)* free_list;  
+}
+
+/* A task structures takes a pointer to itself as unique identifier,
+   used to guaranteed non-interference between datastructures
+   corresponding to different tasks, ensuring confidentiality.  */
+type task(self) = struct{
+  /* The message box is part of the structure. */
+  message_box(self)+ mbox;
+}
+
+/* A non-null pointer to a task refering to itself. */
+type task_ptr = \exists taskid:task(taskid)+. (task(taskid)+ with self == taskid)
+
+void main(task_ptr task);
+
+					   
+
+/* Local Variables: */
+/* mode: c */
+/* End: */
