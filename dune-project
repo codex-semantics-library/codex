@@ -55,9 +55,8 @@
     (ppxlib (>= 0.35.0))
     (zarith (>= 1.14))
     (patricia-tree (>= 0.11.0))
-    ; (ocaml (< "5.0"))
     ;; base64 should not be a dependency i think
-    base64
+    (base64 (>= 3.5.0))
     cudd
     (odoc :with-doc)
     (sherlodoc :with-doc)
