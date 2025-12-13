@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Use OCaml 5.3
         uses: ocaml/setup-ocaml@v3
@@ -30,7 +30,7 @@ jobs:
   #   runs-on: ubuntu-latest
   #   steps:
   #     - name: Checkout code
-  #       uses: actions/checkout@v5
+  #       uses: actions/checkout@v6
   # 
   #     - name: Use OCaml 5.3
   #       uses: ocaml/setup-ocaml@v3
@@ -65,7 +65,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Use OCaml 5.3
         uses: ocaml/setup-ocaml@v3
@@ -81,7 +81,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Use OCaml 5.3
         uses: ocaml/setup-ocaml@v3
