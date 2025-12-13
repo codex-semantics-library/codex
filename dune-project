@@ -55,6 +55,8 @@
     (ppxlib (>= 0.35.0))
     (zarith (>= 1.14))
     (patricia-tree (>= 0.11.0))
+    (js_of_ocaml (>= 6.0.0))
+    (ppx_deriving (>= 5.2.1))
     ;; base64 should not be a dependency i think
     (base64 (>= 3.5.0))
     cudd
