@@ -50,7 +50,8 @@ end
 let check_log2_untaggued x log2x =
   (* Printf.printf "CHECK_LOG2_UNTAGGUED: %d %d\n%!" x log2x; *)
   if(x > 0) then assert(log2x = Int_builtins_zarith.log2 x);
-  if x = 0 then assert(log2x = 1)
+  if x = 0 then ()   (* Do no test: you cannot use log2(0),
+                          and different implementation may return different things. *)
   else begin
     let log2x = if x < 0 then log2x - 1  else log2x in
     let _ = (1 lsl log2x) in
