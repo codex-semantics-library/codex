@@ -37,6 +37,7 @@
   codex.units
   codex.emit_alarm
   zarith
+  str
   codex.union_find
   codex.syntax_tree
   codex.binarytrace))
