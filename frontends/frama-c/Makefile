@@ -37,8 +37,8 @@ all: build
 
 plugin:  ## Build the Frama-C/Codex plugin
 # Dune to the plugin environment? dune does not automatically build these dependencies.
-	cd ../../utils/patricia-tree && dune build @install
-	cd ../../utils/cudd.ml && dune build @install
+	cd ../../utils/patricia-tree && [-f dune-project ] && dune build @install
+	cd ../../utils/cudd.ml && [-f dune-project ] && dune build @install
 	cd ../.. && dune build frama_c_codex.install --display=short
 .PHONY: plugin
 
