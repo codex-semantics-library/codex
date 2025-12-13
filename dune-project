@@ -42,18 +42,18 @@
 (package
    (name codex)
    (synopsis "The Codex library for static analysis")
-   (version "1.0-rc1")
+   (version "1.0-rc4")
    ;; Note: older versions may probably be used.
    (depends
     dune
-    (fmt (>= "0.9.0"))
+    (fmt (>= "0.11.0"))
     (bheap (>= "2.0.0"))
     (camlp-streams (>= "5.0.1"))
     (qcheck-core (>= "0.21.2"))
     (pacomb (>= "1.3"))
     (ppx_inline_test (>= "v0.16.0"))
-    (zarith (>= "1.13"))
-    (patricia-tree (>= "0.10.0"))
+    (zarith (>= "1.14"))
+    (patricia-tree (>= "0.11.0"))
     ; (ocaml (< "5.0"))
     ;; base64 should not be a dependency i think
     base64
