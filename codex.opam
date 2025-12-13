@@ -7,10 +7,13 @@ authors: [
   "Matthieu Lemerre"
   "Julien Simonnet"
   "Olivier Nicole"
+  "Paul Robert"
   "Dorian Lesbre"
   "Iker Canut"
   "Corentin Gendreau"
   "Guillaume Girol"
+  "Charles Babu"
+  "Jérôme Faucheux"
 ]
 license: "LGPL-2.1-or-later"
 homepage: "https://codex.top"
@@ -23,6 +26,7 @@ depends: [
   "qcheck-core" {>= "0.21.2"}
   "pacomb" {>= "1.3"}
   "ppx_inline_test" {>= "v0.16.0"}
+  "ppxlib" {>= "0.35.0"}
   "zarith" {>= "1.14"}
   "patricia-tree" {>= "0.11.0"}
   "base64"

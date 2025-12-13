@@ -9,10 +9,13 @@ authors: [
   "Matthieu Lemerre"
   "Julien Simonnet"
   "Olivier Nicole"
+  "Paul Robert"
   "Dorian Lesbre"
   "Iker Canut"
   "Corentin Gendreau"
   "Guillaume Girol"
+  "Charles Babu"
+  "Jérôme Faucheux"
 ]
 license: "LGPL-2.1-or-later"
 homepage: "https://codex.top"
@@ -21,6 +24,9 @@ depends: [
   "dune" {>= "3.14"}
   "frama-c" {= "31.0"}
   "codex" {>= "1.0-rc1"}
+  "fmt" {>= "0.11.0"}
+  "patricia-tree" {>= "0.11.0"}
+  "zarith" {>= "1.14"}
   "odoc" {with-doc}
 ]
 build: [

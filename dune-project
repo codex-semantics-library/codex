@@ -32,8 +32,8 @@
 ;; Common to all packages.
 (maintainers "Matthieu Lemerre <matthieu.lemerre@cea.fr>")
 (authors "Matthieu Lemerre" "Julien Simonnet" "Olivier Nicole"
-	 "Dorian Lesbre" "Iker Canut" "Corentin Gendreau"
-	 "Guillaume Girol")
+	 "Paul Robert" "Dorian Lesbre" "Iker Canut" "Corentin Gendreau"
+	 "Guillaume Girol" "Charles Babu" "Jérôme Faucheux")
 (license "LGPL-2.1-or-later")
 (bug_reports "https://github.com/codex-semantics-library/codex/issues")
 (source (github codex-semantics-library/codex))
@@ -46,15 +46,15 @@
    ;; Note: older versions may probably be used.
    (depends
     dune
-    (fmt (>= "0.11.0"))
-    (bheap (>= "2.0.0"))
-    (camlp-streams (>= "5.0.1"))
-    (qcheck-core (>= "0.21.2"))
-    (pacomb (>= "1.3"))
-    (ppx_inline_test (>= "v0.16.0"))
-    (ppxlib (>= "0.35.0"))
-    (zarith (>= "1.14"))
-    (patricia-tree (>= "0.11.0"))
+    (fmt (>= 0.11.0))
+    (bheap (>= 2.0.0))
+    (camlp-streams (>= 5.0.1))
+    (qcheck-core (>= 0.21.2))
+    (pacomb (>= 1.3))
+    (ppx_inline_test (>= v0.16.0))
+    (ppxlib (>= 0.35.0))
+    (zarith (>= 1.14))
+    (patricia-tree (>= 0.11.0))
     ; (ocaml (< "5.0"))
     ;; base64 should not be a dependency i think
     base64
@@ -78,7 +78,9 @@ as a plugin which works on patched versions of Frama_C")
     dune
     ("frama-c" (= 31.0))
     (codex (>= "1.0-rc1"))
-    ))
+    (fmt (>= 0.11.0))
+    (patricia-tree (>= 0.11.0))
+    (zarith (>= 1.14))))
 
 (package
    (name binsec_codex)
@@ -86,8 +88,8 @@ as a plugin which works on patched versions of Frama_C")
    (depends
     dune
     ("binsec" (>= 0.7))
-    ("ocamlgraph" (>= "2.2.0")) 
-    ("zarith" (>= "1.14")) 
+    ("ocamlgraph" (>= 2.2.0)) 
+    ("zarith" (>= 1.14)) 
     (codex (>= "1.0-rc1"))
     "ocaml-embed-file"
     "js_of_ocaml-ppx"

@@ -6,10 +6,13 @@ authors: [
   "Matthieu Lemerre"
   "Julien Simonnet"
   "Olivier Nicole"
+  "Paul Robert"
   "Dorian Lesbre"
   "Iker Canut"
   "Corentin Gendreau"
   "Guillaume Girol"
+  "Charles Babu"
+  "Jérôme Faucheux"
 ]
 license: "LGPL-2.1-or-later"
 homepage: "https://codex.top"
@@ -17,6 +20,8 @@ bug-reports: "https://github.com/codex-semantics-library/codex/issues"
 depends: [
   "dune" {>= "3.14"}
   "binsec" {>= "0.7"}
+  "ocamlgraph" {>= "2.2.0"}
+  "zarith" {>= "1.14"}
   "codex" {>= "1.0-rc1"}
   "ocaml-embed-file"
   "js_of_ocaml-ppx"
