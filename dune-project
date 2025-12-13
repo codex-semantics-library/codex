@@ -52,6 +52,7 @@
     (qcheck-core (>= "0.21.2"))
     (pacomb (>= "1.3"))
     (ppx_inline_test (>= "v0.16.0"))
+    (ppxlib (>= "0.35.0"))
     (zarith (>= "1.14"))
     (patricia-tree (>= "0.11.0"))
     ; (ocaml (< "5.0"))
@@ -85,6 +86,8 @@ as a plugin which works on patched versions of Frama_C")
    (depends
     dune
     ("binsec" (>= 0.7))
+    ("ocamlgraph" (>= "2.2.0")) 
+    ("zarith" (>= "1.14")) 
     (codex (>= "1.0-rc1"))
     "ocaml-embed-file"
     "js_of_ocaml-ppx"
