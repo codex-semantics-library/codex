@@ -57,6 +57,7 @@
     (patricia-tree (>= 0.11.0))
     (js_of_ocaml (>= 6.0.0))
     (js_of_ocaml-ppx (>= 6.0.0))
+    (ocaml-embed-file (>= v0.16.0))
     (vdom (>= 0.3))
     (ppx_deriving (>= 5.2.1))
     ;; base64 should not be a dependency i think
@@ -92,9 +93,6 @@
     ("ocamlgraph" (>= 2.2.0)) 
     ("zarith" (>= 1.14)) 
     (codex (>= "1.0-rc4"))
-    "ocaml-embed-file"
-    "js_of_ocaml-ppx"
-    "vdom"
     ))
 
 (generate_opam_files)
