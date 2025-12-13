@@ -86,7 +86,7 @@ as a plugin which works on patched versions of Frama_C")
    (synopsis "A BINSEC version built with the BINSEC/Codex plugin")
    (depends
     dune
-    ("binsec" (>= 0.7))
+    ("binsec" (>= 0.10))
     ("ocamlgraph" (>= 2.2.0)) 
     ("zarith" (>= 1.14)) 
     (codex (>= "1.0-rc1"))
