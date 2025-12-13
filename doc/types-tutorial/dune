@@ -24,7 +24,10 @@
 
 (mdx
   (files *.mld)
-  (deps (package codex) (package frama_c_codex) (package binsec_codex)))
+  (deps (package codex) (package frama_c_codex) (package binsec_codex))
+  ;; MacOS does not use the real (GNU) objdump
+  (enabled_if
+     (= %{system} "linux")))
 
 ; Generate HTML files and compare them to the comitted ones
 ; Frama-C generation. Also allows checking for CLI interface change

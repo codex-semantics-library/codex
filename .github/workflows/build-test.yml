@@ -51,6 +51,8 @@ jobs:
       - name: run test
         run: opam exec -- dune runtest
 
+        # This tests building the project with lower bounds.
+        
       - run: opam install . --deps-only --with-test --criteria='+removed,+count[version-lag,solution]' --solver=builtin-0install
 
       - name: build project with lower bounds
