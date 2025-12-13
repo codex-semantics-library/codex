@@ -45,8 +45,14 @@ jobs:
 
       - run: opam install . --deps-only --with-test
 
-      - name: build project
+      - name: build Codex
         run: opam exec -- dune build
+
+      - name: build Binsec/Codex
+        run: opam exec -- make frontends/binsec
+
+      - name: build Frama-C/Codex
+        run: opam exec -- make frontends/frama-c
 
       - name: run test
         run: opam exec -- dune runtest
