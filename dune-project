@@ -41,7 +41,7 @@
 
 (package
    (name codex)
-   (synopsis "The Codex library for static analysis")
+   (synopsis "The Codex library for building static analysers based on abstract interpretation.")
    (version "1.0-rc4")
    ;; Note: older versions may probably be used.
    (depends
@@ -67,9 +67,7 @@
 
 (package
    (name frama_c_codex)
-   (synopsis "The Frama-C/Codex plugin for modular static analysis of C.
-The package contains both a standalone frama_c_codex executable, as well
-as a plugin which works on patched versions of Frama_C")
+   (synopsis "A modular static analyser of C programs, based on abstract interpretation. The package contains both a standalone frama_c_codex executable, as well as a Frama-C plugin.")
    ;; Note: older versions of frama-c may probably also be used.
    ;; Note: frama-c 28.0 has a bug that impacts production of cdump files,
    ;; so we want to skip it.
@@ -83,7 +81,7 @@ as a plugin which works on patched versions of Frama_C")
 
 (package
    (name binsec_codex)
-   (synopsis "A BINSEC version built with the BINSEC/Codex plugin")
+   (synopsis "A modular static analyser for machine code program based on abstract interpretation.")
    (depends
     dune
     ("binsec" (>= 0.10))
