@@ -23,7 +23,7 @@ bug-reports: "https://github.com/codex-semantics-library/codex/issues"
 depends: [
   "dune" {>= "3.14"}
   "frama-c" {= "31.0"}
-  "codex" {>= "1.0-rc1"}
+  "codex" {>= "1.0-rc4"}
   "fmt" {>= "0.11.0"}
   "patricia-tree" {>= "0.11.0"}
   "zarith" {>= "1.14"}

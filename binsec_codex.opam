@@ -22,7 +22,7 @@ depends: [
   "binsec" {>= "0.10"}
   "ocamlgraph" {>= "2.2.0"}
   "zarith" {>= "1.14"}
-  "codex" {>= "1.0-rc1"}
+  "codex" {>= "1.0-rc4"}
   "ocaml-embed-file"
   "js_of_ocaml-ppx"
   "vdom"

@@ -76,7 +76,7 @@ as a plugin which works on patched versions of Frama_C")
    (depends
     dune
     ("frama-c" (= 31.0))
-    (codex (>= "1.0-rc1"))
+    (codex (>= "1.0-rc4"))
     (fmt (>= 0.11.0))
     (patricia-tree (>= 0.11.0))
     (zarith (>= 1.14))))
@@ -89,7 +89,7 @@ as a plugin which works on patched versions of Frama_C")
     ("binsec" (>= 0.10))
     ("ocamlgraph" (>= 2.2.0)) 
     ("zarith" (>= 1.14)) 
-    (codex (>= "1.0-rc1"))
+    (codex (>= "1.0-rc4"))
     "ocaml-embed-file"
     "js_of_ocaml-ppx"
     "vdom"
