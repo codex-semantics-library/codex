@@ -36,6 +36,7 @@ depends: [
   "vdom" {>= "0.3"}
   "ppx_deriving" {>= "5.2.1"}
   "base64" {>= "3.5.0"}
+  "conf-npm"
   "cudd"
   "odoc" {with-doc}
   "sherlodoc" {with-doc}

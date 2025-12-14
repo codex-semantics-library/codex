@@ -62,6 +62,7 @@
     (ppx_deriving (>= 5.2.1))
     ;; base64 should not be a dependency i think
     (base64 (>= 3.5.0))
+    conf-npm				; For the GUI
     cudd
     (odoc :with-doc)
     (sherlodoc :with-doc)
