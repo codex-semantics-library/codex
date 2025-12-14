@@ -19,7 +19,10 @@
 #                                                                        #
 ##########################################################################
 
-all: tailwind4.1.5.css graphviz.umd.js js/bundle-output.js
+
+EXTRA_SOURCE_FILES = tailwind4.1.5.css graphviz.umd.js js/bundle-output.js
+
+all: $(EXTRA_SOURCE_FILES) ../../../codex.opam.template
 
 tailwind4.1.5.css:
 	curl -sSLo $@ https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.1.5 
@@ -34,3 +37,18 @@ js/bundle-output.js: js/node_modules js/rollup.config.js js/bundle-input.js js/n
 #  ; update this by doing npm update -y in the current dir, then remove node_modules
 js/node_modules:   js/package.json
 	cd js && npm install
+
+../../../codex.opam.template: $(EXTRA_SOURCE_FILES)
+	@echo "" > $@
+	@for file in $(EXTRA_SOURCE_FILES); do \
+		SHA256=$$(sha256sum $$file | cut -d' ' -f1); \
+		MD5=$$(md5sum $$file | cut -d' ' -f1); \
+		echo "extra-source \"$$file\" {" >> $@; \
+		echo "  src: \"https://github.com/codex-semantics-library/codex/releases/download/%{version}%/$$(basename $$file)\"" >> $@; \
+		echo "  checksum: [" >> $@; \
+		echo "    \"sha256=$$SHA256\"" >> $@; \
+		echo "    \"md5=$$MD5\"" >> $@; \
+		echo "  ]" >> $@; \
+		echo "}" >> $@; \
+		echo "" >> $@; \
+	done
