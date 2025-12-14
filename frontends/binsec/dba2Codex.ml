@@ -151,17 +151,17 @@ module Create ()  = struct
       with module Scalar = Numeric) =
     M.Value_union_concatenation.Make (Wholified)
 
-  and Block_smashing_domain :
-    (Domains.Memory_sig.BLOCK
-     with module Scalar = Numeric) =
-    M.Block_smashing.Make (Value_union_concatenation_domain.Address) (Offset)
+  (* and Block_smashing_domain : *)
+  (*   (Domains.Memory_sig.BLOCK *)
+  (*    with module Scalar = Numeric) = *)
+  (*   M.Block_smashing.Make (Value_union_concatenation_domain.Address) (Offset) *)
 
   and Flexible_array_member_domain :
     (Domains.Memory_sig.COMPLETE_DOMAIN
       with module Scalar = Numeric) =
     M.Flexible_array_member.MakeComplete
       (Value_union_concatenation_domain)
-      (M.Block_smashing.Make (Value_union_concatenation_domain.Address) (Offset))
+      (M.Block_smashing.Make (Value_union_concatenation_domain.Address) (Value_union_concatenation_domain.Offset))
 
   (* module Numeric_OV : Codex.Memory_sig.Operable_Value_Whole = Wholified *)
   module Numeric_OV = Flexible_array_member_domain.Value

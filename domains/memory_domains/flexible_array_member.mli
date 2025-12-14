@@ -36,7 +36,9 @@ module MakeComplete
     (Sub : Memory_sig.WHOLE_MEMORY_DOMAIN)
     (Block : Memory_sig.BLOCK
      with module Scalar = Sub.Scalar
+      and module Offset = Sub.Offset
       and  module Value = Sub.Address)
 : Memory_sig.COMPLETE_DOMAIN
   with module Scalar = Sub.Scalar
    and module Value.Context = Sub.Address.Scalar.Context and module Value.Scalar = Sub.Address.Scalar
+   (* and module Block.Offset = Block.Offset *)

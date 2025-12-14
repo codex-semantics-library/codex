@@ -68,6 +68,16 @@ before_script:
     expire_in: 1 hour
     paths: ["_build","utils/gui/deps"]
 
+
+//build:warnings:
+  stage: build-codex
+  tags: ["nix-v2"]
+  needs:
+    - //deps
+  allow_failure: true
+  script:
+    - $NIX_SHELL_PREFIX 'OCAMLPARAM="_,warn-error=+a" dune build -p codex'
+
 frontends/frama-c//build:
   stage: build
   tags: ["nix-v2"]

@@ -817,7 +817,7 @@ module MakePrev(BR:OFFSET) = struct
 
   module Memory
       (AddressBlock:Memory_sig.BLOCK with module Scalar = Scalar and  module Offset = BR)
-      (Block: Memory_sig.BLOCK with module Scalar = Scalar and  module Value = AddressBlock.Value)
+      (Block: Memory_sig.BLOCK with module Scalar = Scalar and  module Value = AddressBlock.Value and module Offset = BR)
     : Memory_sig.MEMORY
       with module Scalar = Scalar
        and module Address = Operable_Value
@@ -1067,16 +1067,18 @@ end
 module Make
     (Sub:Memory_sig.OFFSET_AND_MAKE_BLOCK) :
   Memory_sig.WHOLE_MEMORY_DOMAIN
-  with module Scalar = Sub.Scalar =
+  with module Scalar = Sub.Scalar 
+  and module Offset = Sub.Offset =
 struct
 
   module M = MakePrev(Sub.Offset)
+  module Offset = Sub.Offset
   module Address = M.Operable_Value
   module Scalar = Sub.Offset.Scalar
   type address = Address.binary
 
   module Make_Memory
-      (Block:Memory_sig.BLOCK with module Scalar = Scalar)
+      (Block:Memory_sig.BLOCK with module Scalar = Scalar and module Offset = Offset)
     :Memory_sig.MEMORY
       with module Scalar = Block.Scalar
        and module Address = Address

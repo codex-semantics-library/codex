@@ -30,4 +30,4 @@ module Make
     (Sub:Memory_sig.ADDRESS_AND_MAKE_MEMORY)
     (_:Memory_sig.FIXED_SIZE_VALUE_DOMAIN with module Scalar = Sub.Address.Scalar)
   : Memory_sig.ADDRESS_AND_MAKE_MEMORY
-    with module Scalar = Sub.Scalar
+    with module Scalar = Sub.Scalar and module Offset = Sub.Offset

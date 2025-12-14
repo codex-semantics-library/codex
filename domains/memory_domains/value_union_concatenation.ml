@@ -2413,15 +2413,17 @@ end
 module Make (Sub:Memory_sig.WHOLE_MEMORY_DOMAIN)
   : Memory_sig.WHOLE_MEMORY_DOMAIN
     with module Scalar = Sub.Scalar
+     and module Offset = Sub.Offset
      and module Address.Context = Sub.Address.Context
      and module Address.Scalar = Sub.Address.Scalar
 = struct
   module Scalar = Sub.Address.Scalar
+  module Offset = Sub.Offset
   module Address = MakeAddressOnly(Sub.Address)
   type address = Address.binary
 
   module Make_Memory
-      (Block:Memory_sig.BLOCK with module Scalar = Scalar)
+      (Block:Memory_sig.BLOCK with module Scalar = Scalar and module Offset = Offset)
     :Memory_sig.MEMORY
       with module Scalar = Scalar
        and module Address = Address

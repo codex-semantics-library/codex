@@ -756,17 +756,21 @@ module MakeComplete
     (Sub : Memory_sig.WHOLE_MEMORY_DOMAIN)
     (Block : Memory_sig.BLOCK
      with module Scalar = Sub.Scalar
+      and module Offset = Sub.Offset
       and module Value = Sub.Address)
 : Memory_sig.COMPLETE_DOMAIN
   with module Scalar = Sub.Scalar
-   and  module Value.Context = Sub.Address.Scalar.Context and module Value.Scalar = Sub.Address.Scalar
+  and module Offset = Sub.Offset
+  and  module Value.Context = Sub.Address.Scalar.Context and module Value.Scalar = Sub.Address.Scalar
 = struct
   module Scalar = Sub.Scalar
+  module Offset = Sub.Offset
   module Address = Sub.Address
   module Value = Sub.Address
   module Block : Memory_sig.BLOCK
     with module Scalar = Sub.Scalar
-     and module Value = Value
+    and module Offset = Offset
+    and module Value = Value
   = (* Block *) Make (Value)(Block)
 
   module Memory : Memory_sig.MEMORY

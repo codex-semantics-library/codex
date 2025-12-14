@@ -43,6 +43,7 @@ module MakeFromAddress
    the domain given as an argument. *)
 module Make (Sub:Memory_sig.WHOLE_MEMORY_DOMAIN):sig     (* Memory_sig.WHOLE_MEMORY_DOMAIN *)
   include Memory_sig.WHOLE_MEMORY_DOMAIN with module Scalar = Sub.Scalar
+                                          and module Offset = Sub.Offset
                                           and module Address.Context = Sub.Address.Context
                                           and module Address.Scalar = Sub.Address.Scalar
 end

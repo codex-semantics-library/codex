@@ -22,5 +22,5 @@
 (library
  (public_name "codex.smtbackend")
  (name Smtbackend)
- (libraries zarith codex.codex_log codex.codex_config)
+ (libraries zarith codex.codex_log codex.codex_config unix)
 )

@@ -305,7 +305,7 @@ let build_domain ~use_type_domain :(module Memory.With_focusing.S_with_types) =
                  (Value_union_concatenation_domain)
                  (Memory.Block_smashing.Make
                     (Value_union_concatenation_domain.Address)
-                    (Offset_and_Mk_Block.Offset))
+                    (Value_union_concatenation_domain.Offset))
 
              module MemD = Flexible_array_member_domain
              module Value = MemD.Value

@@ -31,4 +31,5 @@ module Make (Sub : Memory_sig.ADDRESS_AND_MAKE_MEMORY) : sig
   include
     Memory_sig.WHOLE_MEMORY_DOMAIN
     with module Scalar = Sub.Scalar
+    and module Offset = Sub.Offset
 end

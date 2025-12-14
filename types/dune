@@ -44,6 +44,6 @@
  (public_name "codex.types.parser")
  (name Type_parser)
  (modules Type_parser)
- (libraries pacomb zarith codex.types.type_parse_tree tracelog)
+ (libraries pacomb zarith codex.types.type_parse_tree tracelog unix)
  (preprocess
   (pps pacomb.ppx)))

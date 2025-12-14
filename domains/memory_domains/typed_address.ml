@@ -1814,6 +1814,7 @@ module Make
   module Sub = Sub
   module Symb = Symb
   module Scalar = Sub.Scalar
+  module Offset = Sub.Offset
 
   type binary = Sub.Address.binary
 
@@ -1829,7 +1830,7 @@ module Make
   type address = Address.binary
 
   module Make_Memory
-      (Block: Memory_sig.BLOCK with module Scalar = Scalar )
+      (Block: Memory_sig.BLOCK with module Scalar = Scalar and module Offset = Offset )
     : Memory_sig.MEMORY
       with module Scalar = Scalar
        and module Address = Address

@@ -26,3 +26,4 @@
 module Make (Sub:Memory_sig.OFFSET_AND_MAKE_BLOCK)
   :Memory_sig.WHOLE_MEMORY_DOMAIN
     with module Scalar = Sub.Scalar
+    and module Offset = Sub.Offset

@@ -464,8 +464,9 @@ end
     {!MEMORY} cells contain. *)
 module type ADDRESS_AND_MAKE_MEMORY = sig
   module Scalar:Sig.BASE
+  module Offset:OFFSET with module Scalar = Scalar
   module Address:ADDRESS with module Scalar = Scalar
-  module Make_Memory(Block:BLOCK with module Scalar = Scalar):MEMORY
+  module Make_Memory(Block:BLOCK with module Scalar = Scalar and module Offset = Offset):MEMORY
     with module Scalar = Scalar
      and module Address := Address
      and module Block := Block
@@ -478,9 +479,10 @@ end
 (* TODO: Rename to Value_and_Memory. Not sure if it is useful. *)
 module type WHOLE_MEMORY_DOMAIN = sig
   module Scalar:Sig.BASE
+  module Offset: OFFSET with module Scalar = Scalar
   module Address:FIXED_SIZE_VALUE_DOMAIN with module Scalar = Scalar
   module Make_Memory
-      (Block:BLOCK with module Scalar = Scalar)
+      (Block:BLOCK with module Scalar = Scalar and module Offset = Offset)
     :MEMORY
       with module Scalar = Scalar
        and module Address := Address
@@ -493,8 +495,10 @@ end
     [Dba2Codex] *)
 module type COMPLETE_DOMAIN = sig
   module Scalar: Sig.BASE
+  module Offset : OFFSET with module Scalar = Scalar
   module Value: FIXED_SIZE_VALUE_DOMAIN with module Scalar = Scalar
   module Block: BLOCK with module Scalar = Scalar
+                       and module Offset = Offset
                        and module Value = Value
   module Memory:MEMORY
     with module Scalar = Scalar

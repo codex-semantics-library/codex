@@ -30,7 +30,7 @@ module Pane = struct
     | CFG_pane
     (* | Values_pane *)
     (* | SSA_pane *)
-  [@@deriving eq,ord]
+  [@@deriving ord]
 
   let name = function
     | Trace_pane        -> "Trace"

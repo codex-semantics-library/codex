@@ -26,5 +26,5 @@ module Make
     (Value : Memory_sig.FIXED_SIZE_VALUE_DOMAIN)
     (Offset : Memory_sig.OFFSET with module Scalar = Value.Scalar)
 : Memory_sig.BLOCK with module Scalar = Value.Scalar
-                    and  module Value = Value
+                    and module Value = Value
                     and module Offset = Offset

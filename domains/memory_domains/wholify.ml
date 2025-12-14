@@ -1390,12 +1390,13 @@ end
 module Make(Sub : Memory_sig.ADDRESS_AND_MAKE_MEMORY) =
 struct
   module Scalar = Sub.Address.Scalar
+  module Offset = Sub.Offset
   module Address = MakeAddressOnly (Sub.Address) 
 
   type address = Address.binary
 
   module Make_Memory
-      (Block : Memory_sig.BLOCK with module Scalar = Scalar):
+      (Block : Memory_sig.BLOCK with module Scalar = Scalar and module Offset = Offset):
     Memory_sig.MEMORY
     with module Scalar = Scalar
      and module Address = Address
