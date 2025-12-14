@@ -59,3 +59,13 @@ build: [
   ["dune" "install" "-p" name "--create-install-files" name]
 ]
 dev-repo: "git+https://github.com/codex-semantics-library/codex.git"
+extra-source "utils/gui/deps/js/bundle-output.js" {
+  src:
+    "https://github.com/codex-semantics-library/codex/releases/download/1.0-rc4/bundle-output.js"
+  checksum: [
+    "sha256=e6240883caa8625cae154797e6c423278ffc87faa4c079f52e6fb4c11948f30f"
+    "md5=51738d1345c24849a597d1a3bf26282c"
+  ]
+}
+
+
