@@ -1,0 +1,35 @@
+name: Build GUI deps and publish bundle
+
+# Build the GUI only for tags.
+on:
+  push:
+    tags:
+      - "*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: utils/gui/deps/js/package-lock.json
+
+      - name: Build bundle using Makefile
+        run: |
+          make -C utils/gui/deps js/bundle-output.js
+
+      - name: Create GitHub release and upload bundle
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            utils/gui/deps/js/bundle-output.js
