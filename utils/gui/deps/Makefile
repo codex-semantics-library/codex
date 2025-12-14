@@ -52,7 +52,7 @@ $(info VERSION=$(VERSION))
 	@for file in $(EXTRA_SOURCE_FILES); do \
 		SHA256=$$(sha256sum $$file | cut -d' ' -f1); \
 		MD5=$$(md5sum $$file | cut -d' ' -f1); \
-		echo "extra-source \"$$file\" {" >> $@; \
+		echo "extra-source \"utils/gui/deps/$$file\" {" >> $@; \
 		echo "  src: \"https://github.com/codex-semantics-library/codex/releases/download/$(VERSION)/$$(basename $$file)\"" >> $@; \
 		echo "  checksum: [" >> $@; \
 		echo "    \"sha256=$$SHA256\"" >> $@; \
