@@ -27,12 +27,14 @@
   (deps (package codex) (package frama_c_codex) (package binsec_codex))
   ;; MacOS does not use the real (GNU) objdump
   (enabled_if
-     (= %{system} "linux")))
+     (and (= %{profile} dev)
+	  (= %{system} "linux"))))
 
 ; Generate HTML files and compare them to the comitted ones
 ; Frama-C generation. Also allows checking for CLI interface change
 (rule
-  (alias runtest)
+  (alias runtest) 
+  (enabled_if (= %{profile} dev))
   (deps (package codex) (package frama_c_codex) example.c example.typedc)
   (targets zeros_buffer.html zeros_buffer.webapp.html)
   (action
@@ -72,6 +74,7 @@
 ; will fail if the CLI interface changes
 (rule
   (alias runtest)
+  (enabled_if (= %{profile} dev))
   (deps (package codex) (package binsec_codex) example.exe example.typedc)
   (targets bin_output.gen.html result_webapp.html)
   (action 

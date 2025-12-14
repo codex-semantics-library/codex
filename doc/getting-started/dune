@@ -24,6 +24,7 @@
 
 (mdx
  (files *.mld)
+ (enabled_if (= %{profile} dev))
  (deps
   (package codex)
   (package frama_c_codex)))
