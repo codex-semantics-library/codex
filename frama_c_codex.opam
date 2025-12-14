@@ -25,6 +25,7 @@ depends: [
   "fmt" {>= "0.11.0"}
   "patricia-tree" {>= "0.11.0"}
   "zarith" {>= "1.14"}
+  "mdx" {with-test}
   "odoc" {with-doc}
 ]
 build: [

@@ -82,7 +82,9 @@
     (codex (>= "1.0-rc4"))
     (fmt (>= 0.11.0))
     (patricia-tree (>= 0.11.0))
-    (zarith (>= 1.14))))
+    (zarith (>= 1.14))
+    (mdx :with-test)
+    ))
 
 (package
    (name binsec_codex)
@@ -93,6 +95,7 @@
     ("ocamlgraph" (>= 2.2.0)) 
     ("zarith" (>= 1.14)) 
     (codex (>= "1.0-rc4"))
+    (mdx :with-test)
     ))
 
 (generate_opam_files)
