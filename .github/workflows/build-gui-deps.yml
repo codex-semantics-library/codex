@@ -24,10 +24,12 @@ jobs:
 
       - name: Build bundle using Makefile
         run: |
-          make -C utils/gui/deps js/bundle-output.js
+          make -C utils/gui/deps js/bundle-output.js tailwind4.1.5.css graphviz.umd.js
 
       - name: Create GitHub release and upload bundle
         uses: softprops/action-gh-release@v2
         with:
           files: |
             utils/gui/deps/js/bundle-output.js
+            utils/gui/deps/tailwind4.1.5.css
+            utils/gui/deps/graphviz.umd.js

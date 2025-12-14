@@ -19,8 +19,7 @@
 #                                                                        #
 ##########################################################################
 
-# all: tailwind4.1.5.css graphviz.umd.js js/bundle-output.js
-all: js/bundle-output.js
+all: tailwind4.1.5.css graphviz.umd.js js/bundle-output.js
 
 tailwind4.1.5.css:
 	curl -sSLo $@ https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.1.5 
