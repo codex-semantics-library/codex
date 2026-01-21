@@ -91,7 +91,7 @@
    (synopsis "A modular static analyser for machine code program based on abstract interpretation")
    (depends
     dune
-    ("binsec" (>= 0.10))
+    ("binsec" (= 0.10.1))
     ("ocamlgraph" (>= 2.2.0)) 
     ("zarith" (>= 1.14)) 
     (codex (>= "1.0~rc4"))

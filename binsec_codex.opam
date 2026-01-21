@@ -20,7 +20,7 @@ homepage: "https://codex.top"
 bug-reports: "https://github.com/codex-semantics-library/codex/issues"
 depends: [
   "dune" {>= "3.14"}
-  "binsec" {>= "0.10"}
+  "binsec" {= "0.10.1"}
   "ocamlgraph" {>= "2.2.0"}
   "zarith" {>= "1.14"}
   "codex" {>= "1.0~rc4"}
