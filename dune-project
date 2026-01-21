@@ -42,7 +42,7 @@
 (package
    (name codex)
    (synopsis "The Codex library for building static analysers based on abstract interpretation")
-   (version "1.0-rc4")
+   (version "1.0~rc4")
    ;; Note: older versions may probably be used.
    (depends
     dune
@@ -79,7 +79,7 @@
    (depends
     dune
     ("frama-c" (= 31.0))
-    (codex (>= "1.0-rc4"))
+    (codex (>= "1.0~rc4"))
     (fmt (>= 0.11.0))
     (patricia-tree (>= 0.11.0))
     (zarith (>= 1.14))
@@ -94,7 +94,7 @@
     ("binsec" (>= 0.10))
     ("ocamlgraph" (>= 2.2.0)) 
     ("zarith" (>= 1.14)) 
-    (codex (>= "1.0-rc4"))
+    (codex (>= "1.0~rc4"))
     (mdx :with-test)
     ))
 
