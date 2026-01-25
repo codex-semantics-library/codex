@@ -25,10 +25,10 @@ EXTRA_SOURCE_FILES = tailwind4.1.5.css graphviz.umd.js js/bundle-output.js
 all: $(EXTRA_SOURCE_FILES) ../../../codex.opam.template
 
 tailwind4.1.5.css:
-	curl -sSLo $@ https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.1.5 
+#	curl -sSLo $@ https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.1.5 
 
 graphviz.umd.js:
-	curl -sSLo $@ https://unpkg.com/@hpcc-js/wasm@2.22.4/dist/graphviz.umd.js
+#	curl -sSLo $@ https://unpkg.com/@hpcc-js/wasm@2.22.4/dist/graphviz.umd.js
 
 js/bundle-output.js: js/node_modules js/rollup.config.js js/bundle-input.js js/node_modules
 	cd js && npx rollup -c
