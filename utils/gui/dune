@@ -20,22 +20,28 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule
-  (targets binsec_webapp_string.ml binsec_webapp_string.mli)
-  (deps js/binsec_webapp.bc.js)
-  (action
-    (run ocaml-embed-file %{deps} -output binsec_webapp_string)))
+ (with-stdout-to
+     binsec_webapp_string.ml
+   (progn
+     (echo "let binsec_webapp_dot_bc_dot_js = {codexembed|")
+     (cat js/binsec_webapp.bc.js)
+     (echo "|codexembed}"))))
 
 (rule
-  (targets tailwindcss_string.ml tailwindcss_string.mli)
-  (deps deps/tailwind4.1.5.css)
-  (action
-    (run ocaml-embed-file %{deps} -output tailwindcss_string)))
+ (with-stdout-to
+     tailwindcss_string.ml
+   (progn
+     (echo "let tailwind4_dot_1_dot_5_dot_css = {codexembed|")
+     (cat deps/tailwind4.1.5.css)
+     (echo "|codexembed}"))))
 
 (rule
-  (targets graphviz_string.ml graphviz_string.mli)
-  (deps deps/graphviz.umd.js)
-  (action
-    (run ocaml-embed-file %{deps} -output graphviz_string)))
+ (with-stdout-to
+     graphviz_string.ml
+   (progn
+     (echo "let graphviz_dot_umd_dot_js = {codexembed|")
+     (cat deps/graphviz.umd.js)
+     (echo "|codexembed}"))))
 
 ; (rule
 ;   (targets d3_string.ml d3_string.mli)
@@ -50,13 +56,13 @@
 ;     (run ocaml-embed-file %{deps} -output d3_graphviz_string)))
 
 
-
 (rule
-  (targets bundle_string.ml bundle_string.mli)
-  (deps deps/js/bundle-output.js)
-  (action
-    (run ocaml-embed-file %{deps} -output bundle_string)))
-
+ (with-stdout-to
+     bundle_string.ml
+   (progn
+     (echo "let bundle_output_dot_js = {codexembed|")
+     (cat deps/js/bundle-output.js)
+     (echo "|codexembed}"))))
 
 ; (rule
 ;   (targets clusterizecss_string.ml clusterizecss_string.mli)

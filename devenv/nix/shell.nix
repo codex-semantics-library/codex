@@ -76,7 +76,6 @@ let
       myocamlpackage.ocaml
       myocamlpackage.dune_3
       myocamlpackage.qcheck-core
-      myocamlpackage.ocaml-embed-file
       myocamlpackage.js_of_ocaml
       myocamlpackage.js_of_ocaml-ppx
       myocamlpackage.vdom
