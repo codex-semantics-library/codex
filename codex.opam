@@ -77,8 +77,8 @@ extra-source "utils/gui/deps/graphviz.umd.js" {
 extra-source "utils/gui/deps/js/bundle-output.js" {
   src: "https://github.com/codex-semantics-library/codex/releases/download/1.0-rc4/bundle-output.js"
   checksum: [
-    "sha256=e6240883caa8625cae154797e6c423278ffc87faa4c079f52e6fb4c11948f30f"
-    "md5=51738d1345c24849a597d1a3bf26282c"
+    "sha256=cd82890ddbb97e4679d9e1330c1ba4ea64b2c733033160dab4aff29e5a63536a"
+    "md5=221336dc68618f952dbb5c88970abe24"
   ]
 }
 
