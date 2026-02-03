@@ -41,7 +41,7 @@ js/node_modules:   js/package.json
 # Interpolation of the version by opam does not seem to work. 
 VERSION := "%{version}%"
 # Get version number from dune-project file.
-VERSION := $(shell sed -n 's/ *(version *"\([^"]*\)")/\1/p' ../../../dune-project)
+VERSION := $(shell echo $(shell sed -n 's/ *(version *"\([^"]*\)")/\1/p' ../../../dune-project) | sed s/~/-/g)
 
 $(info VERSION=$(VERSION))
 
@@ -60,4 +60,6 @@ $(info VERSION=$(VERSION))
 		echo "  ]" >> $@; \
 		echo "}" >> $@; \
 		echo "" >> $@; \
-	done
+	done; \
+	echo "#Remove 32-bit architectures and windows" >> $@;\
+	echo "available: [os-family != \"windows\" & arch != \"arm32\" & arch != \"x86_32\" & arch != \"s390x\"]" >> $@
