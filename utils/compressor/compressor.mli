@@ -42,8 +42,8 @@
         write_bool compress true;;
       - : unit = ()
 
-      # let bytes = to_bytes compress;;
-      val bytes : bytes = Bytes.of_string "a*\000\000\000hello\005"
+      # let bytes : bytes = to_bytes compress;;
+      ...
 
       # let decompress = of_bytes bytes;;
       val decompress : decompress = <abstr>
