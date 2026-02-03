@@ -82,5 +82,5 @@ extra-source "utils/gui/deps/js/bundle-output.js" {
   ]
 }
 
-
-available: [os-family != "windows" & arch != "arm32" & arch != "x86_32" ]
+#Remove 32-bit architectures and windows
+available: [os-family != "windows" & arch != "arm32" & arch != "x86_32" & arch != "s390x"]
