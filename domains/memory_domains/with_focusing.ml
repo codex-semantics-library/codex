@@ -21,8 +21,8 @@
 
 
 module Log = Tracelog.Make(struct let category = "Domains.With_focusing" end);;
-module TypedC = Types.TypedC
-module Type_check_tree = Types.Type_check_tree
+module TypedC = Codex_types.TypedC
+module Type_check_tree = Codex_types.Type_check_tree
 module In_bits = Units.In_bits
 
 module type BASE_WITH_TYPES = sig

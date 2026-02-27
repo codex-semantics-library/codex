@@ -27,7 +27,7 @@
 
 (library
  (public_name "codex.types")
- (name types)
+ (name Codex_types)
  (libraries
   codex.codex_config
   zarith

@@ -19,7 +19,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-module TypedC = Types.TypedC
+module TypedC = Codex_types.TypedC
 open Units
 
 module type BASE_WITH_TYPES = sig

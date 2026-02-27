@@ -90,7 +90,7 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.Memory_domains.W
 
   (* Analyze a function interproceduraly using only a function type (signature)
      this is used by function pointer and for analyzing specified function interproceduraly *)
-  val analyze_summary: Types.TypedC.typ -> (In_bits.t * Domain.binary) list -> state -> (In_bits.t * Domain.binary) option * state
+  val analyze_summary: Codex_types.TypedC.typ -> (In_bits.t * Domain.binary) list -> state -> (In_bits.t * Domain.binary) option * state
 
 
   (* Allocate and assign the formal arguments of a function, given a list of real
@@ -138,7 +138,7 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.Memory_domains.W
       root calling context, and returns the initial state, the
       arguments and the expected return type. *)
   val initial_state_ret: Kernel_function.t -> CallingContext.t ->
-    state option * (In_bits.t * Domain.binary) list * Types.TypedC.typ
+    state option * (In_bits.t * Domain.binary) list * Codex_types.TypedC.typ
 
   (* Pretty-print the current state. *)
   val pretty_state: Format.formatter -> state -> unit

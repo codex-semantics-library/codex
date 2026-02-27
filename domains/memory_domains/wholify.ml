@@ -49,8 +49,8 @@ module Log = Tracelog.Make (struct
   let category = "Domains.Wholify"
 end)
 
-module TypedC = Types.TypedC
-module Type_check_tree = Types.Type_check_tree
+module TypedC = Codex_types.TypedC
+module Type_check_tree = Codex_types.Type_check_tree
 module In_bits = Units.In_bits
 module In_bytes = Units.In_bytes
 

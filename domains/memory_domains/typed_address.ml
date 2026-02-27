@@ -20,8 +20,8 @@
 (**************************************************************************)
 
 module Log = Tracelog.Make(struct let category = "Typed_address" end);;
-module TypedC = Types.TypedC
-module Type_check_tree = Types.Type_check_tree
+module TypedC = Codex_types.TypedC
+module Type_check_tree = Codex_types.Type_check_tree
 module In_bits = Units.In_bits
 module In_bytes = Units.In_bytes
 
@@ -1770,7 +1770,7 @@ module Scalar = Sub.Scalar
           | StructureFAM _ ->
             let _, elem_size, _ = Type.to_flexible ptyp in elem_size
           | _ -> In_bytes.one
-        with Types.TypedC.Undefined_type_constructor _ -> In_bytes.one
+        with Codex_types.TypedC.Undefined_type_constructor _ -> In_bytes.one
       in
       assume_ptr_type ~size ctx value
         Type.{ptyp=pointed; idx = zero; elem_size=(elem_size:>int); ofs = zero}
@@ -1778,7 +1778,7 @@ module Scalar = Sub.Scalar
     let type_of ~size ctx (value,addr) =
       let binder (Type.{ptyp; idx; elem_size; ofs}) =
         if Type.index_is_zero ctx idx && Type.index_is_zero ctx ofs
-        then Some Types.TypedC.(Build.ptr ptyp Pred.true_)
+        then Some Codex_types.TypedC.(Build.ptr ptyp Pred.true_)
         else None
       in Option.bind addr binder
 

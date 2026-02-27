@@ -46,8 +46,8 @@
 *)
 
 module Log = Tracelog.Make(struct let category = "Domains.Value_union_concatenation" end);;
-module TypedC = Types.TypedC
-module Type_check_tree = Types.Type_check_tree
+module TypedC = Codex_types.TypedC
+module Type_check_tree = Codex_types.Type_check_tree
 module In_bits = Units.In_bits
 module In_bytes = Units.In_bytes
 
@@ -588,8 +588,8 @@ module MakeAddressOnly(Sub:Memory_sig.FIXED_SIZE_VALUE_DOMAIN) = struct
           and type boolean := boolean
           and type binary := binary
 
-      val binary_of_expr : size:In_bits.t -> Context.t -> self:binary -> Types.TypedC.Pred.expr -> binary
-      val cond_of_pred : size:In_bits.t -> Context.t -> Types.TypedC.Pred.t -> self:binary -> boolean
+      val binary_of_expr : size:In_bits.t -> Context.t -> self:binary -> Codex_types.TypedC.Pred.expr -> binary
+      val cond_of_pred : size:In_bits.t -> Context.t -> Codex_types.TypedC.Pred.t -> self:binary -> boolean
       val discriminated : size:In_bits.t -> Context.t -> binary -> binary
       val evaluate_cases : size:In_bits.t -> Context.t -> enum -> (binary * boolean) list -> (binary * boolean) list
       val binpred_to_operation : size:In_bits.t -> Context.t -> binpred -> binary -> binary -> boolean
@@ -1299,7 +1299,7 @@ module MakeAddressOnly(Sub:Memory_sig.FIXED_SIZE_VALUE_DOMAIN) = struct
       | And(p1, p2) ->
           let localpred1, globalpred1 = split_predicate p1 in
           let localpred2, globalpred2 = split_predicate p2 in
-          let conjunction = Types.TypedC.Pred.conjunction in
+          let conjunction = Codex_types.TypedC.Pred.conjunction in
           conjunction localpred1 localpred2,
           conjunction globalpred1 globalpred2
       | Mutval (mut,p) -> let p1,p2 = split_predicate p in Mutval(mut,p1),Mutval(mut,p2)

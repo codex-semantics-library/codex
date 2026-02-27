@@ -30,7 +30,7 @@ end)
 module Make(State:Dba2Codex.StateS)(Record_cfg:Record_cfg.S) = struct
   module State = State
   module Record_cfg = Record_cfg
-  module TypedC = Types.TypedC;;
+  module TypedC = Codex_types.TypedC;;
   module Domain= State.Domain
 
   type skip_type = NotWhenInterpreting | Always
@@ -50,9 +50,9 @@ module Make(State:Dba2Codex.StateS)(Record_cfg:Record_cfg.S) = struct
         of iterations. *)
     | EndPath
     (** End this trace *)
-    | Return of Types.TypedC.typ option
+    | Return of Codex_types.TypedC.typ option
     (** End this trace and check the return type if given *)
-    | EntryCall of string * Types.TypedC.typ
+    | EntryCall of string * Codex_types.TypedC.typ
     (** Used during interprocedural analysis to enter the entry function, but should be replaced the first time it is encountered *)
 
   let unoption msg = function

@@ -58,7 +58,7 @@ module Domain
   include Assert_false_domain.Domain
 
   module Types = struct
-    include Types
+    include Codex_types
     type memory = unit
     type offset = unit
     type block = unit

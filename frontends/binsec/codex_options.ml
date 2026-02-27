@@ -23,7 +23,7 @@
    Note: must be called after the types and image are loaded. *)
 
 (** Parses a type from a string *)
-let type_of_string = Types.Parse_ctypes.type_of_string
+let type_of_string = Codex_types.Parse_ctypes.type_of_string
 
 (* Parse an address or a symbol. *)
 let address_of_string s =

@@ -38,7 +38,7 @@ type jump_target =
   | Jump_Dynamic              (* TODO *)
 
 open Codex
-module TypedC = Types.TypedC
+module TypedC = Codex_types.TypedC
 
 module Logger = Codex_logger
 
