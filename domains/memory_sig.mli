@@ -87,10 +87,10 @@ module type VALUE = sig
   val binary_unknown: size:In_bits.t -> Context.t -> binary
 
   (** Returns an unknown value with a given type. *)
-  val binary_unknown_typed : size:In_bits.t -> Context.t -> Types.TypedC.typ -> binary
+  val binary_unknown_typed : size:In_bits.t -> Context.t -> Codex_types.TypedC.typ -> binary
 
   (** Type check a binary value *)
-  val check_type : size:In_bits.t -> Context.t -> Types.TypedC.typ -> binary -> binary Types.Type_check_tree.t
+  val check_type : size:In_bits.t -> Context.t -> Codex_types.TypedC.typ -> binary -> binary Codex_types.Type_check_tree.t
 
   (** Serialize functions also return their de-serializer. *)
   val serialize: widens:bool -> size:In_bits.t -> Context.t -> binary -> Context.t -> binary ->
@@ -235,10 +235,10 @@ module type WITH_ADDRESS = sig
   val beq: size:In_bits.t -> Scalar.Context.t -> binary -> binary -> boolean
 
   val binary_unknown : size:In_bits.t -> Scalar.Context.t -> binary
-  val binary_unknown_typed: size:In_bits.t -> Scalar.Context.t -> Types.TypedC.typ -> binary
+  val binary_unknown_typed: size:In_bits.t -> Scalar.Context.t -> Codex_types.TypedC.typ -> binary
 
   (** Type check a {!binary} value *)
-  val check_type : size:In_bits.t -> Scalar.Context.t -> Types.TypedC.typ -> binary -> binary Types.Type_check_tree.t
+  val check_type : size:In_bits.t -> Scalar.Context.t -> Codex_types.TypedC.typ -> binary -> binary Codex_types.Type_check_tree.t
   (* This should have a better name. I think it is returning the
      bitvector representation of the pointer (containing the numerical
      information about the pointer), like alignment. We should
@@ -246,7 +246,7 @@ module type WITH_ADDRESS = sig
   val binary2scalar_binary : size:In_bits.t -> Scalar.Context.t -> binary -> Scalar.binary
 
   (** Returns the type of a function, or None if unknown.  *)
-  val type_of : size:In_bits.t -> Scalar.Context.t -> binary -> Types.TypedC.typ option
+  val type_of : size:In_bits.t -> Scalar.Context.t -> binary -> Codex_types.TypedC.typ option
 
   (** Check that all array indices operation are within bound. *)
   val within_bounds: size:In_bits.t -> Scalar.Context.t -> binary -> boolean
@@ -326,7 +326,7 @@ module type WITH_FIXED_SIZE_VALUE = sig
 
   (** Check for given typ being a function type and a list of pairs of (size * argument) that all the arguments are correct for the function
      and returns a boolean (true if all arguments are correct) and the appropriate return value with its size (size * ret) *)
-  val analyze_summary : Scalar.Context.t -> Types.TypedC.typ -> (In_bits.t * binary) list -> bool * (In_bits.t * binary) option
+  val analyze_summary : Scalar.Context.t -> Codex_types.TypedC.typ -> (In_bits.t * binary) list -> bool * (In_bits.t * binary) option
 
   val addresses_in_binary : size:In_bits.t -> Scalar.Context.t -> binary -> Scalar.Context.t -> binary -> (binary * binary) list
 
@@ -383,10 +383,10 @@ module type BLOCK = sig
   val block_empty: Context.t -> block
 
   (** Returns an unknown block value with a given type. *)
-  val block_unknown_typed: Context.t -> Types.TypedC.typ -> block
+  val block_unknown_typed: Context.t -> Codex_types.TypedC.typ -> block
 
   (** Type check a block value*)
-  val check_type: Context.t -> Types.TypedC.typ -> block -> block Types.Type_check_tree.t
+  val check_type: Context.t -> Codex_types.TypedC.typ -> block -> block Codex_types.Type_check_tree.t
 end
 
 
@@ -694,12 +694,12 @@ module type Base = sig
   val add_global_symbol : size:In_bits.t -> Context.t -> string -> binary -> unit
 
   (** Type check a binary value*)
-  val check_type : size:In_bits.t -> Context.t -> Types.TypedC.typ -> binary -> binary Types.Type_check_tree.t
+  val check_type : size:In_bits.t -> Context.t -> Codex_types.TypedC.typ -> binary -> binary Codex_types.Type_check_tree.t
 
   (** Retrieves the type of value (this only works if it is a pointer and should
       only be used when looking at function pointers) *)
-  val type_of : size:In_bits.t -> Context.t -> binary -> Types.TypedC.typ option
+  val type_of : size:In_bits.t -> Context.t -> binary -> Codex_types.TypedC.typ option
 
   (** Checks that a value has a given type *)
-  val analyze_summary : Context.t -> Types.TypedC.typ -> (In_bits.t * binary) list -> bool * (In_bits.t * binary) option
+  val analyze_summary : Context.t -> Codex_types.TypedC.typ -> (In_bits.t * binary) list -> bool * (In_bits.t * binary) option
 end

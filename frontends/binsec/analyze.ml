@@ -26,8 +26,8 @@ let in_bits = Units.In_bits.of_int
 
 
 open Codex
-module TypedC = Types.TypedC
-module Type_check_tree = Types.Type_check_tree
+module TypedC = Codex_types.TypedC
+module Type_check_tree = Codex_types.Type_check_tree
 
 module Logger = Codex_logger
 
@@ -1147,7 +1147,7 @@ let fresh_int =
 let fresh_symbol () = Format.sprintf "#f%d" (fresh_int ())
 
 let rec initial_function_args_ret_types funtyp ctx =
-  let open Types.TypedC in
+  let open Codex_types.TypedC in
   match (inlined funtyp).descr with
   | Function {ret; args} -> args, ret
   | Existential {bound_typ;bound_var;body}  ->
@@ -1260,7 +1260,7 @@ let initialize_codex () =
             | _ -> failwith "Cannot infer data model for this machin"
         end
       | _ -> failwith "Cannot analyze code with this bitwith yet"
-    in Types.Parse_ctypes.init ~data_model in
+    in Codex_types.Parse_ctypes.init ~data_model in
 
   (* Tracelog.set_verbosity_level `Debug ; *)
   Codex_log.register (module Codex_logger.Codex_logger);

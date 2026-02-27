@@ -572,7 +572,7 @@ module Analyze(Domain:With_focusing.S_with_types) = struct
 
     let rec funcall':C2Codex.funcall = fun kf args state ->
       let open C2Codex in
-      let open Types.TypedC in
+      let open Codex_types.TypedC in
       match function_definition_of_name @@ Kernel_function.get_name kf with
       | Some {funtyp;inline=false} ->
         let ret, state = analyze_summary funtyp args state in
@@ -600,9 +600,9 @@ module Analyze(Domain:With_focusing.S_with_types) = struct
 
     and funcall kf args stat = funcall' kf args stat
 
-    let entryfuncall = fun kf args state (rtyp : Types.TypedC.typ) ->
+    let entryfuncall = fun kf args state (rtyp : Codex_types.TypedC.typ) ->
       let open C2Codex in
-      let open Types.TypedC in
+      let open Codex_types.TypedC in
       (* Codex_log.feedback "Calling function %a" Kernel_function.pretty kf; *)
       let inline =
         match function_definition_of_name @@ Kernel_function.get_name kf with
@@ -629,7 +629,7 @@ module Analyze(Domain:With_focusing.S_with_types) = struct
             | Some (size,value), Some state, typ ->
               Log.debug (fun p -> p "Checking that the returned value has the expected type.");
               Domain.check_type ~size state.context.ctx typ value
-              |> Types.Type_check_tree.save
+              |> Codex_types.Type_check_tree.save
             | None, _, _ ->
               Log.debug (fun p -> p "Expected a return value, but the function does not return one.");
               Emit_alarm.emit_alarm Operator.Alarm.Incompatible_return_type
@@ -660,7 +660,7 @@ module Analyze(Domain:With_focusing.S_with_types) = struct
       (* Frama_c_alarms.current_kinstr := None ; *)
       retval, state
 
-    let entryfuncall kf args state (rtyp : Types.TypedC.typ) =
+    let entryfuncall kf args state (rtyp : Codex_types.TypedC.typ) =
       inside_function kf (fun () -> entryfuncall kf args state rtyp)
 
 
@@ -809,8 +809,8 @@ module Analyze(Domain:With_focusing.S_with_types) = struct
     let print_function fmt name =
       Printf.fprintf fmt "<td>Func</td> <td>%s</td> <td>%s</td>"
         name
-        (match Types.TypedC.function_of_name name with
-         | Some typ -> Format.asprintf "%a" Types.TypedC.pp typ
+        (match Codex_types.TypedC.function_of_name name with
+         | Some typ -> Format.asprintf "%a" Codex_types.TypedC.pp typ
          | None -> "undefined type")
     in
     Printhtml.print file print_expinfo print_lvalinfo print_function print_alarms

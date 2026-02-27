@@ -23,8 +23,8 @@ module Log = Tracelog.Make (struct
   let category = "Post_analysis"
 end)
 
-module TypedC = Types.TypedC
-module Type_check_tree = Types.Type_check_tree
+module TypedC = Codex_types.TypedC
+module Type_check_tree = Codex_types.Type_check_tree
 
 type c_function = Frama_c_kernel.Kernel_function.t
 

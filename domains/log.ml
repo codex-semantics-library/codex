@@ -157,7 +157,7 @@ struct
     fun () -> Sub.binary_unknown ~size ctx
   let binary_unknown_typed ~size ctx typ =
     Log.trace (fun p -> p "binary_unknown_typed ~size:%d typ:%a"
-                  (In_bits.to_int size) Types.TypedC.pp typ)
+                  (In_bits.to_int size) Codex_types.TypedC.pp typ)
     ~pp_ret:(Sub.binary_pretty ~size ctx) @@
     fun () -> Sub.binary_unknown_typed ~size ctx typ
 

@@ -234,7 +234,7 @@ module type With_Types = sig
   type binary
 
   (** Returns an unknown value with a given type. *)
-  val binary_unknown_typed : size:In_bits.t -> Context.t -> Types.TypedC.typ -> binary
+  val binary_unknown_typed : size:In_bits.t -> Context.t -> Codex_types.TypedC.typ -> binary
 end
 
 (****************************************************************)

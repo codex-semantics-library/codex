@@ -911,7 +911,7 @@ module MakePrev(BR:OFFSET) = struct
     ;;
 
     let typed_load ~size ctx mem at typ =
-      Log.debug (fun p -> p "Region_separation.typed_load of type %a" Types.TypedC.pp typ);
+      Log.debug (fun p -> p "Region_separation.typed_load of type %a" Codex_types.TypedC.pp typ);
       let r = Operable_Value.fold ctx at (fun addr offset acc ->
           (* Codex_log.feedback "load addr %a"  (Operable_Value.binary_pretty ~size ctx) at; *)
           let v =
@@ -981,7 +981,7 @@ module MakePrev(BR:OFFSET) = struct
         result
 
       with Not_found ->
-        Value.check_type ~size ctx typ value |> Types.Type_check_tree.save ;
+        Value.check_type ~size ctx typ value |> Codex_types.Type_check_tree.save ;
         (* This should not be done here *)
         mem
 

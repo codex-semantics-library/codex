@@ -55,13 +55,13 @@ module Compile_type = struct
   let being_built = Cil_datatype.Typ.Hashtbl.create 17;;
 
   let has_definition constr =
-    let module TypedC = Codex.Types.TypedC in
+    let module TypedC = Codex_types.TypedC in
     match TypedC.constr_of_name constr with Some _ -> true | None -> false
 
   let rec cil_type_to_ctype typ =
     (* Log.notice (fun p -> p "cil_type_to_ctype %a %a" Cil_datatype.Typ.pretty typ Cil_datatype.Typ.pretty (Ast_types.unroll typ)); *)
     let open Cil_types in
-    let module TypedC = Codex.Types.TypedC in
+    let module TypedC = Codex_types.TypedC in
     Cil_datatype.Typ.Hashtbl.replace being_built typ ();
     let t = Ast_types.unroll typ in
     match t.tnode with
@@ -186,7 +186,7 @@ module Compile_type = struct
           let bound_var = "len" in
           let descr = TypedC.Array(cil_type_to_ctype typ,Variable_length bound_var) in
           let body = TypedC.{descr;pred=Pred.true_} in
-          let bound_typ = Types.Parse_ctypes.type_of_string "int" in
+          let bound_typ = Codex_types.Parse_ctypes.type_of_string "int" in
           TypedC.{descr=Existential{bound_typ;bound_var;body};pred=Pred.true_}
       end
     | _ ->
@@ -221,7 +221,7 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.Memory_domains.W
   (* Overrides actual domain module for it to deal with function pointers *)
 
   let function_to_ctype kf =
-    let open Types.TypedC in
+    let open Codex_types.TypedC in
     let name = Kernel_function.get_name kf in
     match function_of_name name with
     | Some typ -> typ
@@ -455,9 +455,9 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.Memory_domains.W
     assert(not @@ VarMap.mem vi state.var_addresses);
     let ctx = state.context.ctx in
     let exception Function_Type in
-    let exception Global_Var of Types.TypedC.typ in
+    let exception Global_Var of Codex_types.TypedC.typ in
     let addr,mem = try
-        (match Types.TypedC.global_of_name vi.vname with
+        (match Codex_types.TypedC.global_of_name vi.vname with
         | Some typ -> raise (Global_Var typ)
         | None -> ());
         let malloc_size =
@@ -487,9 +487,9 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.Memory_domains.W
           let kf = Globals.Functions.get vi in
           let size = Codex_config.ptr_size() in
           let ptr =
-            match Types.TypedC.function_definition_of_name @@ Kernel_function.get_name kf with
+            match Codex_types.TypedC.function_definition_of_name @@ Kernel_function.get_name kf with
             | Some{funtyp;inline=false} ->
-              let ptyp = Types.TypedC.(Build.ptr funtyp Pred.(Cmp(NotEqual,Self,Const Z.zero))) in
+              let ptyp = Codex_types.TypedC.(Build.ptr funtyp Pred.(Cmp(NotEqual,Self,Const Z.zero))) in
               Domain.binary_unknown_typed ~size ctx ptyp
             | None | Some{inline=true} -> Domain.binary_unknown ~size ctx
           in
@@ -497,7 +497,7 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.Memory_domains.W
             ptr, state.mem
 
         | Global_Var typ ->
-          let malloc_size = Types.TypedC.sizeof typ in
+          let malloc_size = Codex_types.TypedC.sizeof typ in
           let size = In_bytes.in_bits malloc_size in
           let addr,mem = Domain.Memory_Forward.malloc ~id ~malloc_size ctx state.mem in
           let to_store = Domain.binary_unknown_typed ~size ctx typ in
@@ -1647,7 +1647,7 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.Memory_domains.W
 
 
     let malloc ret _f args instr_loc state =
-      let module TypedC = Codex.Types.TypedC in
+      let module TypedC = Codex_types.TypedC in
       (* let open Lang.Memory in *)
       let sizeexp = match args with
         | [x] -> x
@@ -1854,7 +1854,7 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.Memory_domains.W
     | Some _, Some _, None ->
       Codex_log.fatal "Expected a return value, but the function does not return one."
     | Some state, Some lvalue, Some (retsize,retval) ->
-      let expected_size = Types.TypedC.sizeof rtyp |> In_bytes.in_bits in
+      let expected_size = Codex_types.TypedC.sizeof rtyp |> In_bytes.in_bits in
       assert(retsize == expected_size);
       store_lvalue ~instr_loc lvalue retval retsize state
 
@@ -1886,8 +1886,8 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.Memory_domains.W
           let typ = Domain.type_of ~size:ptr_size state.context.ctx loaded in
           begin match typ with
             (* If there is a type: use it as a summary. *)
-            | Some {descr = Ptr {pointed}} when Types.TypedC.(match (inlined pointed).descr with Function _ -> true | _ -> false) ->
-              let funtyp = Types.TypedC.inlined pointed in
+            | Some {descr = Ptr {pointed}} when Codex_types.TypedC.(match (inlined pointed).descr with Function _ -> true | _ -> false) ->
+              let funtyp = Codex_types.TypedC.inlined pointed in
               let rtyp = match funtyp.descr with Function{ret} -> ret | _ -> assert false in
               (* = {descr = (Function {ret = rtyp})} as funtyp}} -> *)
               Log.debug (fun p -> p "Calling function summary from typed pointer %a" (Domain.binary_pretty ~size:ptr_size state.context.ctx) loaded);
@@ -2124,7 +2124,7 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.Memory_domains.W
 
     (* Compute the type of the argument to the function. *)
     let compute_initial_function_args kf ctx =
-      let open Types.TypedC in
+      let open Codex_types.TypedC in
       match function_of_name @@ Kernel_function.get_name kf with
       | Some type_kf -> begin
           (*Codex_log.debug "%a" pp type_kf;*)
@@ -2145,7 +2145,7 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.Memory_domains.W
     ;;
 
     let rec compute_initial_function_args_ret funtyp ctx =
-      let open Types.TypedC in
+      let open Codex_types.TypedC in
       match (inlined funtyp).descr with
       | Function {ret; args} ->
         List.map (fun t ->
@@ -2163,7 +2163,7 @@ module Make(CallingContext:CallingContext)(Domain:Codex.Domains.Memory_domains.W
 
 
     let compute_initial_function_args_ret kf ctx =
-      let open Types.TypedC in
+      let open Codex_types.TypedC in
       match function_of_name @@ Kernel_function.get_name kf with
       | Some funtyp -> compute_initial_function_args_ret funtyp ctx
       | None ->

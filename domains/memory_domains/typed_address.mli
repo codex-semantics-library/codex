@@ -19,7 +19,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-module TypedC = Types.TypedC
+module TypedC = Codex_types.TypedC
 
 module MakeAddressOnly
     (SubAddress:Memory_sig.ADDRESS)

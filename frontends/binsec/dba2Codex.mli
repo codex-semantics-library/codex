@@ -26,7 +26,7 @@ type jump_target =
   | Jump_Outer of Virtual_address.t (** Some instruction outside of the block. *)
   | Jump_Dynamic              (* TODO *)
 
-module TypedC = Types.TypedC
+module TypedC = Codex_types.TypedC
 
 module type Address_sig = sig
   type t

@@ -64,7 +64,7 @@ module CodexLibraryInitializer = struct
           | _ -> failwith "Unknown data model"
         end
       | _ -> failwith "Unknown data model"
-    in Types.Parse_ctypes.init ~data_model
+    in Codex_types.Parse_ctypes.init ~data_model
 
   let initialize_absolute_addresses () =
     (* Initialize the parts of memory that is directly accessible "absolute addresses" *)
@@ -402,7 +402,7 @@ let run () =
     Log.trace (fun p -> p "parce_ctypes") @@ fun () ->
     let file = Codex_options.TypeConfigurationFile.get() in
     let infer_spec = Codex_options.InferTypes.get () in
-    if file = "" then () else Types.Parse_ctypes.parse_file ~infer_spec file
+    if file = "" then () else Codex_types.Parse_ctypes.parse_file ~infer_spec file
   in
   if use_type_domain then parse_ctypes ();
   
@@ -447,7 +447,7 @@ let run () =
       if Kernel.MainFunction.is_set () then [ Kernel.MainFunction.get () ]
       else if Codex_options.AnalyzeFunctions.is_set () then
         Codex_options.AnalyzeFunctions.get ()
-      else Types.TypedC.get_function_names ()
+      else Codex_types.TypedC.get_function_names ()
     in
     match functions_to_analyze with
     | [] ->

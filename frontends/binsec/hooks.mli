@@ -38,9 +38,9 @@ module Make(State : Dba2Codex.StateS)(Record_cfg : Record_cfg.S):sig
         of iterations. *)
     | EndPath
     (** End this trace *)
-    | Return of Types.TypedC.typ option
+    | Return of Codex_types.TypedC.typ option
     (** End this trace and check the return type if given *)
-    | EntryCall of string * Types.TypedC.typ
+    | EntryCall of string * Codex_types.TypedC.typ
     (** Used during interprocedural analysis to enter the entry function, but should be replaced the first time it is encountered *)
 
   (** Finds a hook, or raise Not_found.  *)
@@ -56,16 +56,16 @@ module Make(State : Dba2Codex.StateS)(Record_cfg : Record_cfg.S):sig
 
   (** Add a hook to a function address to say that the function should return and just 
       return a value of some type. *)
-  val add_return_unknown: Virtual_address.t -> Types.TypedC.typ ->  unit
+  val add_return_unknown: Virtual_address.t -> Codex_types.TypedC.typ ->  unit
 
   (** Add a hook to a function address to say that the address does nothing, 
       instead it directly jumps to dest. *)
   val add_skip: Virtual_address.t -> dest:Virtual_address.t -> unit
 
-  val add_entrycall: name:string -> Virtual_address.t -> Types.TypedC.typ -> unit
+  val add_entrycall: name:string -> Virtual_address.t -> Codex_types.TypedC.typ -> unit
 
-  val add_function_hook : name:string -> Virtual_address.t -> Types.TypedC.typ -> unit
+  val add_function_hook : name:string -> Virtual_address.t -> Codex_types.TypedC.typ -> unit
 
-  val add_return: Virtual_address.t -> Types.TypedC.typ option -> unit
+  val add_return: Virtual_address.t -> Codex_types.TypedC.typ option -> unit
 
 end
