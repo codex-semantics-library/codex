@@ -29,48 +29,7 @@ module Make(Terms: Sig.TERMS) = struct
   let wraps ~(size:In_bits.t) x = Z.signed_extract x 0 (size:>int)
   let wrapu ~(size:In_bits.t) x = Z.extract x 0 (size:>int)
 
-  (* For binaries, we return a Z whose last size bits correspond to
-     the requested bitvector. *)
-  let rec binary x = match x with
-    | Terms.(Binary{term=T0{tag=TC.Biconst(size,k)}}) -> k
-    | Terms.(Binary{term=T1{tag;a};size}) -> begin match tag with
-        | TC.Bextract{size;oldsize;index} ->
-          Z.extract (binary a) (index:>int) (size:>int)
-        | TC.Buext _ ->
-          let Terms.Binary{size=oldsize} = a in
-          wrapu ~size:oldsize (binary a)
-        | TC.Bsext _ ->
-          let Terms.Binary{size=oldsize} = a in
-          wraps ~size:oldsize (binary a)
-        | TC.Bofbool _ -> assert false
-        | TC.Bchoose _ -> binary a
-      end
-    | Terms.(Binary{term=T2{tag;a;b};size}) -> begin try
-          match tag with
-        | TC.Biadd _ -> Z.add (binary a) (binary b)
-        | TC.Bisub _ -> Z.sub (binary a) (binary b)
-        | TC.Bimul _ -> Z.mul (binary a) (binary b)
-        | TC.Biudiv _ -> Z.div (wrapu ~size @@ binary a) (wrapu ~size @@ binary b)
-        | TC.Bisdiv _ -> Z.div (wraps ~size @@ binary a) (wraps ~size @@ binary b)
-        | TC.Biumod _ -> Z.rem (wrapu ~size @@ binary a) (wrapu ~size @@ binary b)
-        | TC.Bismod _ -> Z.rem (wraps ~size @@ binary a) (wraps ~size @@ binary b)
-        | TC.Bshl _ ->  Z.shift_left (binary a) (Z.to_int @@ binary b)
-        | TC.Bashr _ -> Z.shift_right (wraps ~size @@ binary a) (Z.to_int @@ binary b)
-        | TC.Blshr _ -> Z.shift_right (wrapu ~size @@ binary a)  (Z.to_int @@ binary b)
-        | TC.Band _ -> Z.logand (binary a) (binary b)
-        | TC.Bor _ -> Z.logor (binary a) (binary b)
-        | TC.Bxor _ -> Z.logxor (binary a) (binary b)
-        | TC.Bunion _ -> assert false
-        | TC.Bconcat (size1,size2) ->
-          Z.logor (Z.shift_left (wrapu ~size:size1 @@ binary a) (size2:>int)) (wrapu ~size:size2 @@ binary b)
-        with Division_by_zero -> raise Empty
-      end
-    | Terms.(Binary{term=Empty}) -> raise Empty
-    | _ -> Codex_log.fatal "Const eval on %a" Terms.pretty x
-
-  and bitvector x = binary x
-
-  and integer x = match x with
+  let rec integer = function
     | Terms.(Integer{term=T0{tag=TC.Iconst k}}) -> k
     | Terms.(Integer{term=T1{tag;a}}) ->
       (* Codex_log.warning "A constant integer was not simplified: %a" Terms.pretty x; *)
@@ -97,9 +56,49 @@ module Make(Terms: Sig.TERMS) = struct
        | TC.Ixor -> Z.logxor (integer a) (integer b)
       )
     | Terms.(Integer{term=Empty}) -> raise Empty
-    | _ -> Codex_log.fatal "get const on %a" Terms.pretty x
+    | x -> Codex_log.fatal "get const on %a" Terms.pretty x
 
-  and boolean x = match x with
+  (* For binaries, we return a Z whose last size bits correspond to
+     the requested bitvector. *)
+  let rec binary : type a. a Terms.t -> Z.t = function
+    | Terms.(Binary{term=T0{tag=TC.Biconst(size,k)}}) -> k
+    | Terms.(Binary{term=T1{tag;a};size}) -> begin match tag with
+        | TC.Bextract{size;oldsize;index} ->
+          Z.extract (binary a) (index:>int) (size:>int)
+        | TC.Buext _ ->
+          let Terms.Binary{size=oldsize} = a in
+          wrapu ~size:oldsize (binary a)
+        | TC.Bsext _ ->
+          let Terms.Binary{size=oldsize} = a in
+          wraps ~size:oldsize (binary a)
+        | TC.Bofbool _size ->
+          if boolean a then Z.one else Z.zero
+        | TC.Bchoose _ -> binary a
+      end
+    | Terms.(Binary{term=T2{tag;a;b};size}) -> begin try
+          match tag with
+        | TC.Biadd _ -> Z.add (binary a) (binary b)
+        | TC.Bisub _ -> Z.sub (binary a) (binary b)
+        | TC.Bimul _ -> Z.mul (binary a) (binary b)
+        | TC.Biudiv _ -> Z.div (wrapu ~size @@ binary a) (wrapu ~size @@ binary b)
+        | TC.Bisdiv _ -> Z.div (wraps ~size @@ binary a) (wraps ~size @@ binary b)
+        | TC.Biumod _ -> Z.rem (wrapu ~size @@ binary a) (wrapu ~size @@ binary b)
+        | TC.Bismod _ -> Z.rem (wraps ~size @@ binary a) (wraps ~size @@ binary b)
+        | TC.Bshl _ ->  Z.shift_left (binary a) (Z.to_int @@ binary b)
+        | TC.Bashr _ -> Z.shift_right (wraps ~size @@ binary a) (Z.to_int @@ binary b)
+        | TC.Blshr _ -> Z.shift_right (wrapu ~size @@ binary a)  (Z.to_int @@ binary b)
+        | TC.Band _ -> Z.logand (binary a) (binary b)
+        | TC.Bor _ -> Z.logor (binary a) (binary b)
+        | TC.Bxor _ -> Z.logxor (binary a) (binary b)
+        | TC.Bunion _ -> assert false
+        | TC.Bconcat (size1,size2) ->
+          Z.logor (Z.shift_left (wrapu ~size:size1 @@ binary a) (size2:>int)) (wrapu ~size:size2 @@ binary b)
+        with Division_by_zero -> raise Empty
+      end
+    | Terms.(Binary{term=Empty}) -> raise Empty
+    | x -> Codex_log.fatal "Const eval on %a" Terms.pretty x
+
+  and boolean : type a. a Terms.t -> bool = function
     | Terms.(Bool{term=T0{tag=TC.True}}) -> true
     | Terms.(Bool{term=T0{tag=TC.False}}) -> false
     | Terms.(Bool{term=Empty}) -> raise Empty
@@ -123,10 +122,12 @@ module Make(Terms: Sig.TERMS) = struct
        | TC.Bisle size -> Z.leq (wraps ~size @@ binary a) (wraps ~size @@ binary b)
        | _ -> .
       )
-    | _ -> Codex_log.fatal "get const on %a" Terms.pretty x
+    | x -> Codex_log.fatal "get const on %a" Terms.pretty x
 
-  and enum x = match x with
+  let bitvector x = binary x
+
+  let enum = function
     | Terms.(Enum{term=Empty}) -> raise Empty
-    | _ -> Codex_log.fatal "get const on %a" Terms.pretty x
+    | x -> Codex_log.fatal "get const on %a" Terms.pretty x
 
 end
